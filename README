@@ -1,5 +1,5 @@
 ProxyChains ver 3.1 README
-======================
+==========================
 
 This is Unix version only.
 
@@ -40,9 +40,11 @@ Some cool features:
 
 Configuration:
 proxychains looks for config file in following order:
-1)	./proxychains.conf
-2)	$(HOME)/.proxychains/proxychains.conf
-3)	/etc/proxychains.conf  **
+1)	file listed in environment variable ${PROXYCHAINS_CONF_FILE} or
+	provided as a -f argument to proxychains script or binary.
+2)	./proxychains.conf
+3)	$(HOME)/.proxychains/proxychains.conf
+4)	/etc/proxychains.conf  **
 
 **see more in /etc/proxychains.conf
 
@@ -55,10 +57,15 @@ specified by proxychains.conf
 
 Usage Example:
 
+      	bash$ proxychains -f /etc/proxychains-other.conf targethost2.com
+
+in this example it will use different configuration file then proxychains.conf 
+to connect to targethost2.com host.
+
+Usage Example:
+
 	bash$ proxyresolv targethost.com
 
 in this example it will resolve targethost.com through proxy(or chained proxies)
 specified by proxychains.conf
 
-NOTE: 
-to run suid/sgid programs(like ssh) through proxychains you have to be root
