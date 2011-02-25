@@ -17,6 +17,7 @@
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
 #define BUFF_SIZE 8*1024  // used to read responses from proxies.
+#define     MAX_LOCALNET 1024
 /*error codes*/
 typedef enum
 {
@@ -33,6 +34,11 @@ typedef enum {HTTP_TYPE,SOCKS4_TYPE,SOCKS5_TYPE} proxy_type;
 typedef enum {DYNAMIC_TYPE,STRICT_TYPE,RANDOM_TYPE} chain_type;
 typedef enum {PLAY_STATE,DOWN_STATE,BLOCKED_STATE,BUSY_STATE} proxy_state;
 typedef enum {RANDOMLY,FIFOLY} select_type;
+
+typedef struct
+{
+	struct in_addr in_addr, netmask;
+} localaddr_arg;
 
 typedef struct
 {

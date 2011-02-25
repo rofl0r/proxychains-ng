@@ -52,12 +52,14 @@ int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
 int proxychains_resolver = 0;
 static int init_l = 0;
-static inline void get_chain_data(
-	proxy_data *pd,
-	unsigned int *proxy_count,
-	chain_type *ct);
+localaddr_arg localnet_addr[MAX_LOCALNET];
+size_t num_localnet_addr = 0;
 
-static void init_lib()
+static inline void get_chain_data(proxy_data *pd, unsigned int *proxy_count,
+	chain_type *ct);
+static void init_lib(void);
+
+static void init_lib(void)
 {
 //	proxychains_write_log("ProxyChains-"VERSION
 //			" (http://proxychains.sf.net)\n");
@@ -146,6 +148,7 @@ static inline void get_chain_data(
 
 	int count=0,port_n=0,list=0;
 	char buff[1024],type[1024],host[1024],user[1024];
+	char local_in_addr[16], local_netmask[16];
 	FILE* file;
 
 	if(proxychains_got_chain_data)
@@ -200,7 +203,34 @@ static inline void get_chain_data(
 					sscanf(buff,"%s %d",user,&tcp_read_time_out) ;
 				}else if(strstr(buff,"tcp_connect_time_out")){
 					sscanf(buff,"%s %d",user,&tcp_connect_time_out) ;
-				}else if(strstr(buff,"chain_len")){
+				}
+				else if(strstr(buff,"localnet"))
+				{
+					sscanf(buff,"%s %16[^/] %16s", user, local_in_addr, local_netmask) ;
+					PDEBUG("added localnet = %s%s\n", local_in_addr, local_netmask);
+					if (num_localnet_addr < MAX_LOCALNET)
+					{
+						int error;
+						error = inet_pton(AF_INET, local_in_addr, &localnet_addr[num_localnet_addr].in_addr);
+						if (error <= 0)
+						{
+							fprintf(stderr, "localnet address error\n");
+							exit(1);
+						}
+						error = inet_pton(AF_INET, local_netmask + 1, &localnet_addr[num_localnet_addr].netmask);
+						if (error <= 0)
+						{
+							fprintf(stderr, "localnet address error\n");
+							exit(1);
+						}
+						++num_localnet_addr;
+					}
+					else
+					{
+						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
+					}
+				}
+				else if(strstr(buff,"chain_len")){
 					char *pc;int len;
 					pc=strchr(buff,'=');
 					len=atoi(++pc);
@@ -223,6 +253,9 @@ static inline void get_chain_data(
 int connect (int sock, const struct sockaddr *addr, unsigned int len)
 {
 	int socktype=0,optlen=0,flags=0,ret=0;
+	char str[256];
+	struct in_addr *p_addr_in;
+	size_t i;
 
 	if(!init_l)
 		init_lib();
@@ -230,6 +263,22 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 	getsockopt(sock,SOL_SOCKET,SO_TYPE,&socktype,&optlen);
 	if (! (SOCKFAMILY(*addr)==AF_INET  && socktype==SOCK_STREAM))
 		return true_connect(sock,addr,len);
+
+	p_addr_in = &((struct sockaddr_in *)addr)->sin_addr;
+
+	//PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
+	//PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
+	//PDEBUG("target: %s\n", inet_ntop(AF_INET, p_addr_in, str, sizeof(str)));
+
+	for (i = 0; i < num_localnet_addr; i++) {
+		if ((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
+			== (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr))
+		{
+			PDEBUG("accessing localnet using true_connect\n");
+			return true_connect(sock,addr,len);
+		}
+	}
+
 	flags=fcntl(sock, F_GETFL, 0);
 	if(flags & O_NONBLOCK)
 	fcntl(sock, F_SETFL, !O_NONBLOCK);
@@ -308,8 +357,8 @@ int getnameinfo (const struct sockaddr * sa,
 	PDEBUG("getnameinfo: %s %s\n", host, serv);
 	return ret;
 }
-struct hostent *gethostbyaddr (const void *addr, socklen_t len,
-		                                      int type)
+
+struct hostent *gethostbyaddr (const void *addr, socklen_t len, int type)
 {
 	PDEBUG("TODO: gethostbyaddr hook\n"); 
 	if(!init_l)
