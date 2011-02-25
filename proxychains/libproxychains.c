@@ -136,16 +136,20 @@ static void init_lib()
 	init_l = 1;
 }
 
+/*
+ * XXX. Same thing is defined in proxychains main.c it
+ * needs to be changed, too.
+ */
+#define PROXYCHAINS_CONF_FILE "PROXYCHAINS_CONF_FILE"
 
 static inline void get_chain_data(
 			proxy_data *pd,
 			unsigned int *proxy_count,
 			chain_type *ct)
 {
-
-
 	int count=0,port_n=0,list=0;
 	char buff[1024],type[1024],host[1024],user[1024];
+	char *env;
 	FILE* file;
 
 	if(proxychains_got_chain_data)
@@ -156,8 +160,17 @@ static inline void get_chain_data(
 	tcp_connect_time_out=10*1000;
 	*ct=DYNAMIC_TYPE;
 
+	env = NULL;
+
+	/*
+	 * Get path to configuration file from env this file has priority
+	 * if it's defined.
+	 */
+	env = getenv(PROXYCHAINS_CONF_FILE);
+
 	snprintf(buff,256,"%s/.proxychains/proxychains.conf",getenv("HOME"));
 
+	if(!(file=fopen(env,"r")))
 	if(!(file=fopen("./proxychains.conf","r")))
 	if(!(file=fopen(buff,"r")))
 	if(!(file=fopen("/etc/proxychains.conf","r")))
