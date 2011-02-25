@@ -43,6 +43,33 @@ extern int proxychains_quiet_mode;
 
 static const char base64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+static int poll_retry(struct pollfd *fds, nfds_t nfsd, int timeout) 
+{
+  int ret;
+  int time_remain = timeout;
+  int time_elapsed = 0;
+
+  struct timeval start_time;
+  struct timeval tv;
+
+  gettimeofday(&start_time, NULL);
+
+  do 
+  {
+    //printf("Retry %d\n", time_remain);
+    ret = poll(fds, nfsd, time_remain);
+    gettimeofday(&tv, NULL);
+    time_elapsed =  ((tv.tv_sec - start_time.tv_sec) * 1000 + (tv.tv_usec - start_time.tv_usec) / 1000);
+    //printf("Time elapsed %d\n", time_elapsed);
+    time_remain = timeout - time_elapsed;
+  }
+  while (ret == -1 && errno == EINTR && time_remain > 0);
+  //if (ret == -1)
+  //printf("Return %d %d %s\n", ret, errno, strerror(errno));
+  return ret;
+}
+
+
 static void encode_base_64(char* src,char* dest,int max_len)
 {
 	int n,l,i;
@@ -123,7 +150,7 @@ static int read_line(int fd, char *buff, size_t size)
   for(i=0;i<size-1;i++)
   {
     pfd[0].revents=0;
-    ready=poll(pfd,1,tcp_read_time_out);
+    ready=poll_retry(pfd,1,tcp_read_time_out);
     if(ready!=1 || !(pfd[0].revents&POLLIN) || 1!=read(fd,&buff[i],1))
       return -1;
     else if(buff[i]=='\n')
@@ -142,10 +169,9 @@ static int read_n_bytes(int fd,char *buff, size_t size)
 
   pfd[0].fd=fd;
   pfd[0].events=POLLIN;
-  for(i=0;i<size;i++)
-  {
+  for(i=0; i < size; i++) {  
     pfd[0].revents=0;
-    ready=poll(pfd,1,tcp_read_time_out);
+    ready=poll_retry(pfd,1,tcp_read_time_out);
     if(ready!=1 || !(pfd[0].revents&POLLIN) || 1!=read(fd,&buff[i],1))
       return -1;
   }
@@ -162,31 +188,27 @@ static int timed_connect(int sock, const struct sockaddr *addr, unsigned int len
 	fcntl(sock, F_SETFL, O_NONBLOCK);
   	ret=true_connect(sock, addr,  len);
 //	printf("\nconnect ret=%d\n",ret);fflush(stdout);
-  	if(ret==-1 && errno==EINPROGRESS)
-   	{
-    		ret=poll(pfd,1,tcp_connect_time_out);
-//      		printf("\npoll ret=%d\n",ret);fflush(stdout);
-      		if(ret==1)
-        	{
+  	if(ret==-1 && errno==EINPROGRESS) {
+		ret=poll_retry(pfd,1,tcp_connect_time_out);
+		//printf("\npoll ret=%d\n",ret);fflush(stdout);
+      	if(ret == 1) {
            		value_len=sizeof(int);
              		getsockopt(sock,SOL_SOCKET,SO_ERROR,&value,&value_len) ;
-//             		printf("\nvalue=%d\n",value);fflush(stdout);
+					//printf("\nvalue=%d\n",value);fflush(stdout);
                	if(!value)
-               		ret=0;
+						ret=0;
                  	else
                   		ret=-1;
-           	}
-              else
+		} else {
               	ret=-1;
-       }
-       else if (ret==0)
-			;		
-		else
+		}
+	} else {
+		if (ret != 0)
 	       	ret=-1;
-       	
+	} 	
 
-       fcntl(sock, F_SETFL, !O_NONBLOCK);
-       return ret;
+	fcntl(sock, F_SETFL, !O_NONBLOCK);
+	return ret;
 }
 
 static int tunnel_to(int sock, unsigned int ip, unsigned short port, proxy_type pt,char *user,char *pass)
