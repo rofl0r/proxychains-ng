@@ -1,0 +1,13 @@
+ProxyChains ver 3.1 Installation
+=======================
+
+If you have installed other ver of proxychains  "make uninstall" before installing this distribution
+
+unpack the .tar.gz , 'cd' to distribution directory and
+run following commands (as root)
+-------------------------------------
+./configure
+make
+make install
+-------------------------------------
+that's all

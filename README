@@ -1,0 +1,64 @@
+ProxyChains ver 3.1 README
+======================
+
+This is Unix version only.
+
+How to mess with sources - How to Install : read INSTALL !!!!!!
+
+This program forces any tcp connection made by any given tcp client
+to follow through proxy (or proxy chain). It is a kind of proxifier.
+It acts like sockscap / permeo / eborder driver ( intercepts TCP calls )
+It is FREE.
+
+This version (3.x) introduces support for DNS resolving through proxy 
+it supports SOCKS4, SOCKS5 and HTTP CONNECT proxy servers.
+Auth-types: socks - "user/pass" , http - "basic".
+
+When to use it ?
+1) When the only way to get "outside" from your LAN is through proxy server.
+2) To get out from behind restrictive firewall which filters outgoing ports.
+3) To use two (or more) proxies in chain:
+	like: your_host <--> proxy1 <--> proxy2 <--> target_host
+4) To "proxify" some program with no proxy support built-in (like telnet)
+5) Access intranet from outside via proxy.
+5) To use DNS behind proxy.
+
+Some cool features:
+
+* This program can mix different proxy types in the same chain
+	like: your_host <-->socks5 <--> http <--> socks4 <--> target_host
+* Different chaining options supported
+	random order from the list ( user defined length of chain ).
+	exact order  (as they appear in the list )
+	dynamic order (smart exclude dead proxies from chain)
+* You can use it with any TCP client application, even network scanners
+	yes, yes - you can make portscan via proxy (or chained proxies)
+	for example with Nmap scanner by fyodor (www.insecire.org/nmap).
+	proxychains nmap -sT -PO -p 80 -iR  (find some webservers through proxy)
+* You can use it with servers, like squid, sendmail, or whatever.
+* DNS resolving through proxy.
+
+Configuration:
+proxychains looks for config file in following order:
+1)	./proxychains.conf
+2)	$(HOME)/.proxychains/proxychains.conf
+3)	/etc/proxychains.conf  **
+
+**see more in /etc/proxychains.conf
+
+Usage Example:
+
+	bash$ proxychains telnet targethost.com
+
+in this example it will run telnet through proxy(or chained proxies)
+specified by proxychains.conf
+
+Usage Example:
+
+	bash$ proxyresolv targethost.com
+
+in this example it will resolve targethost.com through proxy(or chained proxies)
+specified by proxychains.conf
+
+NOTE: 
+to run suid/sgid programs(like ssh) through proxychains you have to be root

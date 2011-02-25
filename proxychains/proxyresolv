@@ -1,0 +1,16 @@
+#!/bin/sh
+# This script is called by proxychains to resolve DNS names
+
+# DNS server used to resolve names
+DNS_SERVER=4.2.2.2
+
+
+if [ $# = 0 ] ; then
+	echo "	usage:"
+	echo "		proxyresolv <hostname> "
+	exit
+fi
+
+
+export LD_PRELOAD=libproxychains.so
+dig $1 @$DNS_SERVER +tcp | awk '/A.+[0-9]+\.[0-9]+\.[0-9]/{print $5;}'

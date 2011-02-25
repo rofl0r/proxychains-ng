@@ -1,0 +1,65 @@
+ProxyChains version history (public releases)
+====================
+
+ver 3.1
+
+changed:
+	* dns resolver script fix
+	* prototypes in core.h
+
+-------------------------------------------------------------------------
+ver 3.0
+
+added:
+	* new feature - DNS from behind proxy
+	* proxyresolv - stand alone command
+	* proxychains.conf - new option to enable/disable DNS support
+
+changed:
+	* bugfixes in core lib
+	* fixed strict chain
+	* fixed random chain
+	* output text
+	* autotools fix 
+
+-------------------------------------------------------------------------
+ver 2.1
+	* bugfuxes
+
+-------------------------------------------------------------------------
+ver 2.0
+	* major core rewrite
+	* new config options
+
+-------------------------------------------------------------------------
+
+ver 1.8.2
+	* minor bugfixes
+	* improved compilation on FreeBSD & OpenBSD sysems.
+	* improved compilation on Sun Solaris systems .
+	* cross platform (UNIX) issues
+
+-------------------------------------------------------------------------
+
+ver 1.8.0
+
+added:
+	* Socks5 protocol
+	* Socks4 protocol
+	* HTTP proxy auth basic
+	* Socks4 user auth
+	* Socks5 user/pass auth
+	* more chain options (random, strict, dynamic )
+	* configurable timeout for TCP connect.
+	* configurable timeout for TCP read.
+	* INSTALL file (explains how to install properly)
+
+changed:
+	* configuration file entries (proxychains.conf)
+	* configuration file lookup
+
+-------------------------------------------------------------------------
+
+ver 0.0.1
+	* TCP calls interception
+	* HTTP CONNECT proxy protocol.
