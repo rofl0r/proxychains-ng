@@ -1,0 +1,12 @@
+*.o
+*.so
+*.la
+*.lo
+.deps/
+.libs/
+
+# Autoconf stuff 
+libtool
+config.*
+Makefile
+stamp-h
