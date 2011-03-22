@@ -148,7 +148,8 @@ static inline void get_chain_data(
 
 	int count=0,port_n=0,list=0;
 	char buff[1024],type[1024],host[1024],user[1024];
-	char local_in_addr[16], local_netmask[16];
+	char local_in_addr_port[32];
+	char local_in_addr[32], local_in_port[32], local_netmask[32];
 	FILE* file;
 
 	if(proxychains_got_chain_data)
@@ -206,8 +207,23 @@ static inline void get_chain_data(
 				}
 				else if(strstr(buff,"localnet"))
 				{
-					sscanf(buff,"%s %16[^/] %16s", user, local_in_addr, local_netmask) ;
-					PDEBUG("added localnet = %s%s\n", local_in_addr, local_netmask);
+					if (sscanf(buff,"%s %21[^/]/%15s", user,
+						local_in_addr_port, local_netmask) < 3) {
+						fprintf(stderr, "localnet format error");
+						exit(1);
+					}
+					/* clean previously used buffer */
+					memset(local_in_port, 0,
+						sizeof(local_in_port) / sizeof(local_in_port[0]));
+
+					if (sscanf(local_in_addr_port, "%15[^:]:%5s",
+						local_in_addr, local_in_port) < 2) {
+					    PDEBUG("added localnet: netaddr=%s, port=%s\n",
+							local_in_addr, local_netmask);
+					} else {
+					    PDEBUG("added localnet: netaddr=%s, port=%s, netmask=%s\n",
+							local_in_addr, local_in_port, local_netmask);
+					}
 					if (num_localnet_addr < MAX_LOCALNET)
 					{
 						int error;
@@ -217,11 +233,16 @@ static inline void get_chain_data(
 							fprintf(stderr, "localnet address error\n");
 							exit(1);
 						}
-						error = inet_pton(AF_INET, local_netmask + 1, &localnet_addr[num_localnet_addr].netmask);
+						error = inet_pton(AF_INET, local_netmask, &localnet_addr[num_localnet_addr].netmask);
 						if (error <= 0)
 						{
-							fprintf(stderr, "localnet address error\n");
+							fprintf(stderr, "localnet netmask error\n");
 							exit(1);
+						}
+						if (local_in_port[0]) {
+							localnet_addr[num_localnet_addr].port = (short)atoi(local_in_port);
+						} else {
+							localnet_addr[num_localnet_addr].port = 0;
 						}
 						++num_localnet_addr;
 					}
@@ -255,6 +276,7 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 	int socktype=0,optlen=0,flags=0,ret=0;
 	char str[256];
 	struct in_addr *p_addr_in;
+	unsigned short port;
 	size_t i;
 
 	if(!init_l)
@@ -265,17 +287,20 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 		return true_connect(sock,addr,len);
 
 	p_addr_in = &((struct sockaddr_in *)addr)->sin_addr;
+	port = ntohs(((struct sockaddr_in *)addr)->sin_port);
 
 	//PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 	//PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
 	//PDEBUG("target: %s\n", inet_ntop(AF_INET, p_addr_in, str, sizeof(str)));
-
+	//PDEBUG("port: %d\n", port);
 	for (i = 0; i < num_localnet_addr; i++) {
 		if ((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
 			== (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr))
 		{
-			PDEBUG("accessing localnet using true_connect\n");
-			return true_connect(sock,addr,len);
+			if (localnet_addr[i].port && localnet_addr[i].port == port) {
+				PDEBUG("accessing localnet using true_connect\n");
+				return true_connect(sock,addr,len);
+			}
 		}
 	}
 

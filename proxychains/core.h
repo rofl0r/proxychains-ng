@@ -38,6 +38,7 @@ typedef enum {RANDOMLY,FIFOLY} select_type;
 typedef struct
 {
 	struct in_addr in_addr, netmask;
+	unsigned short port;
 } localaddr_arg;
 
 typedef struct
