@@ -2,8 +2,8 @@
                           core.c  -  description
                              -------------------
     begin                : Tue May 14 2002
-    copyright          :  netcreature (C) 2002
-    email                 : netcreature@users.sourceforge.net
+    copyright            :  netcreature (C) 2002
+    email                : netcreature@users.sourceforge.net
  ***************************************************************************/
 /*     GPL */
 /***************************************************************************
@@ -14,9 +14,6 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
 
 #include <stdio.h>
 #include <unistd.h>
@@ -34,6 +31,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
 #include <stdarg.h>
 #include "core.h"
 
@@ -180,7 +178,8 @@ static int read_n_bytes(int fd,char *buff, size_t size)
 
 static int timed_connect(int sock, const struct sockaddr *addr, unsigned int len)
 {
-	int ret,value,value_len;
+	int ret, value;
+	socklen_t value_len;
  	struct pollfd pfd[1];
 
 	pfd[0].fd=sock;
@@ -191,20 +190,20 @@ static int timed_connect(int sock, const struct sockaddr *addr, unsigned int len
   	if(ret==-1 && errno==EINPROGRESS) {
 		ret=poll_retry(pfd,1,tcp_connect_time_out);
 		//printf("\npoll ret=%d\n",ret);fflush(stdout);
-      	if(ret == 1) {
-           		value_len=sizeof(int);
-             		getsockopt(sock,SOL_SOCKET,SO_ERROR,&value,&value_len) ;
-					//printf("\nvalue=%d\n",value);fflush(stdout);
-               	if(!value)
-						ret=0;
-                 	else
-                  		ret=-1;
+	      	if(ret == 1) {
+			value_len=sizeof(socklen_t);
+			getsockopt(sock,SOL_SOCKET,SO_ERROR,&value,&value_len) ;
+			//printf("\nvalue=%d\n",value);fflush(stdout);
+        	       	if(!value)
+				ret=0;
+			else
+				ret=-1;
 		} else {
-              	ret=-1;
+        		      	ret=-1;
 		}
 	} else {
 		if (ret != 0)
-	       	ret=-1;
+			ret=-1;
 	} 	
 
 	fcntl(sock, F_SETFL, !O_NONBLOCK);
