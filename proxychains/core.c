@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include <errno.h>
 #include <netdb.h>
 
@@ -215,7 +215,7 @@ static int tunnel_to(int sock, unsigned int ip, unsigned short port, proxy_type 
 {
         int len;
         char buff[BUFF_SIZE];
-        bzero (buff,sizeof(buff));
+        memset (buff, 0, sizeof(buff));
         switch(pt)
         {
         	case HTTP_TYPE:
@@ -243,7 +243,7 @@ static int tunnel_to(int sock, unsigned int ip, unsigned short port, proxy_type 
 			        if(len!=send(sock,buff,len,0))
 			                return SOCKET_ERROR;
 			
-           			bzero(buff,sizeof(buff));
+           			memset(buff, 0, sizeof(buff));
                         len=0 ;
       			 // read header byte by byte.
 			       while(len<BUFF_SIZE)
@@ -410,7 +410,7 @@ static int start_chain(int *fd, proxy_data *pd, char* begin_mark)
 				inet_ntoa(*(struct in_addr*)&pd->ip),
 				htons(pd->port));
 	pd->ps=PLAY_STATE;
-	bzero(&addr,sizeof(addr));
+	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = pd->ip;
 	addr.sin_port = pd->port;
@@ -645,7 +645,7 @@ struct hostent* proxy_gethostbyname(const char *name)
 	if(!strcmp(buff,name))
 		goto got_buff;
 
-	bzero(buff,sizeof(buff));
+	memset(buff, 0, sizeof(buff));
 	
 	// TODO: this works only once, so cache it  ...
 	// 	 later
@@ -711,8 +711,8 @@ int proxy_getaddrinfo(const char *node, const char *service,
 	sockaddr_space = malloc(sizeof(struct sockaddr));
 	if(!sockaddr_space)
 		goto err2;
-	bzero(sockaddr_space, sizeof(*sockaddr_space));
-	bzero(addrinfo_space, sizeof(*addrinfo_space));
+	memset(sockaddr_space, 0, sizeof(*sockaddr_space));
+	memset(addrinfo_space, 0, sizeof(*addrinfo_space));
 	if (node &&
 	    !inet_aton(node,&((struct sockaddr_in*)sockaddr_space)->sin_addr)) {
 		hp = proxy_gethostbyname(node);

@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include <errno.h>
 #include <netdb.h>
 
@@ -29,7 +29,7 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <dlfcn.h>
 
 
@@ -186,7 +186,7 @@ static inline void get_chain_data(
 	while(fgets(buff,sizeof(buff),file)) {
 		if(buff[strspn(buff," ")]!='#') {
 			if(list) {
-				bzero(&pd[count], sizeof(proxy_data));
+				memset(&pd[count], 0, sizeof(proxy_data));
 				pd[count].ps=PLAY_STATE;
 				port_n=0;
 				sscanf(buff,"%s %s %d %s %s", type,host,&port_n,
@@ -378,7 +378,7 @@ void freeaddrinfo(struct addrinfo *res)
 int getnameinfo (const struct sockaddr * sa,
 			socklen_t salen, char * host,
 			socklen_t hostlen, char * serv,
-			socklen_t servlen, unsigned int flags)
+			socklen_t servlen, int flags)
 {
 	int ret = 0;
 	if(!init_l)
