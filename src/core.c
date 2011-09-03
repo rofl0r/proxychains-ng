@@ -126,57 +126,36 @@ int proxychains_write_log(char *str,...)
 
 static int write_n_bytes(int fd,char *buff,size_t size)
 {
-  int i=0,wrote=0;
-  for(;;)
-  {
-    i=write(fd,&buff[wrote],size-wrote);
-    if(i<=0)
-         return i;
-    wrote+=i;
-    if(wrote==size)
-         return wrote;
-  }
-}
-
-static int read_line(int fd, char *buff, size_t size)
-{
-  int i,ready;
-  struct pollfd pfd[1];
-
-  pfd[0].fd=fd;
-  pfd[0].events=POLLIN;
-  for(i=0;i<size-1;i++)
-  {
-    pfd[0].revents=0;
-    ready=poll_retry(pfd,1,tcp_read_time_out);
-    if(ready!=1 || !(pfd[0].revents&POLLIN) || 1!=read(fd,&buff[i],1))
-      return -1;
-    else if(buff[i]=='\n')
-    {
-        buff[i+1]=0;
-        return (i+1);
-    }
-  }
-  return -1;
+	int i=0;
+	size_t wrote=0;
+	for(;;)	{
+		i = write(fd,&buff[wrote],size-wrote);
+		if(i<=0)
+			return i;
+		wrote += i;
+		if(wrote==size)
+			return wrote;
+	}
 }
 
 static int read_n_bytes(int fd,char *buff, size_t size)
 {
-  int i,ready;
-  struct pollfd pfd[1];
+	int ready;
+	size_t i;
+	struct pollfd pfd[1];
 
-  pfd[0].fd=fd;
-  pfd[0].events=POLLIN;
-  for(i=0; i < size; i++) {  
-    pfd[0].revents=0;
-    ready=poll_retry(pfd,1,tcp_read_time_out);
-    if(ready!=1 || !(pfd[0].revents&POLLIN) || 1!=read(fd,&buff[i],1))
-      return -1;
-  }
-  return size;
+	pfd[0].fd=fd;
+	pfd[0].events=POLLIN;
+	for(i=0; i < size; i++) {  
+		pfd[0].revents = 0;
+		ready = poll_retry(pfd, 1, tcp_read_time_out);
+		if(ready != 1 || !(pfd[0].revents&POLLIN) || 1 != read(fd,&buff[i],1))
+			return -1;
+	}
+	return (int) size;
 }
 
-static int timed_connect(int sock, const struct sockaddr *addr, unsigned int len)
+static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len)
 {
 	int ret, value;
 	socklen_t value_len;
@@ -185,15 +164,24 @@ static int timed_connect(int sock, const struct sockaddr *addr, unsigned int len
 	pfd[0].fd=sock;
 	pfd[0].events=POLLOUT;	
 	fcntl(sock, F_SETFL, O_NONBLOCK);
-  	ret=true_connect(sock, addr,  len);
-//	printf("\nconnect ret=%d\n",ret);fflush(stdout);
+  	ret = true_connect(sock, addr,  len);
+#ifdef DEBUG
+	if(ret == -1) perror("true_connect");
+	printf("\nconnect ret=%d\n",ret);
+	
+	fflush(stdout);
+#endif
   	if(ret==-1 && errno==EINPROGRESS) {
 		ret=poll_retry(pfd,1,tcp_connect_time_out);
-		//printf("\npoll ret=%d\n",ret);fflush(stdout);
+#ifdef DEBUG
+		printf("\npoll ret=%d\n",ret);fflush(stdout);
+#endif
 	      	if(ret == 1) {
 			value_len=sizeof(socklen_t);
 			getsockopt(sock,SOL_SOCKET,SO_ERROR,&value,&value_len) ;
-			//printf("\nvalue=%d\n",value);fflush(stdout);
+#ifdef DEBUG
+			printf("\nvalue=%d\n",value);fflush(stdout);
+#endif
         	       	if(!value)
 				ret=0;
 			else
@@ -212,6 +200,9 @@ static int timed_connect(int sock, const struct sockaddr *addr, unsigned int len
 
 static int tunnel_to(int sock, unsigned int ip, unsigned short port, proxy_type pt,char *user,char *pass)
 {
+#ifdef DEBUG
+	PDEBUG("tunnel to\n");
+#endif	
         int len;
         char buff[BUFF_SIZE];
         memset (buff, 0, sizeof(buff));
@@ -428,60 +419,60 @@ error:
 }
 
 static proxy_data * select_proxy(select_type how, 
-		proxy_data *pd, int proxy_count, int *offset)
+		proxy_data *pd, unsigned int proxy_count, unsigned int *offset)
 {
-	int i=0,k=0;
-	if(*offset>=proxy_count)
+	unsigned int i=0, k=0;
+	if(*offset >= proxy_count)
 		return NULL;
 	switch(how) {
 		case RANDOMLY:
 			srand(time(NULL));
 			do {
 				k++;
-				i = 0 + (int) (proxy_count*1.0*rand()/
-						(RAND_MAX+1.0));
-			} while (pd[i].ps!=PLAY_STATE && k<proxy_count*100 );
+				i = 0 + (unsigned int) (proxy_count * 1.0 * rand()/
+						(RAND_MAX + 1.0));
+			} while (pd[i].ps != PLAY_STATE && k < proxy_count*100 );
 		break;
 		case FIFOLY:
-			for(i=*offset;i<proxy_count;i++) {
-				if(pd[i].ps==PLAY_STATE) {
-					*offset=i;
+			for(i=*offset; i<proxy_count; i++) {
+				if(pd[i].ps == PLAY_STATE) {
+					*offset = i;
 					break;
 				}
 			}
 		default:
 		break;
 	}
-	if (i>=proxy_count)
-		i=0;
-	return pd[i].ps==PLAY_STATE?&pd[i]:NULL;
+	if (i >= proxy_count)
+		i = 0;
+	return (pd[i].ps == PLAY_STATE)? &pd[i] : NULL;
 }
 
 
-static void release_all(proxy_data *pd, int proxy_count)
+static void release_all(proxy_data *pd, unsigned int proxy_count)
 {
-	int i;
-	for(i=0;i<proxy_count;i++)
-		pd[i].ps=PLAY_STATE;
+	unsigned int i;
+	for(i=0; i<proxy_count; i++)
+		pd[i].ps = PLAY_STATE;
 	return;
 }
 
-static void release_busy(proxy_data *pd, int proxy_count)
+static void release_busy(proxy_data *pd, unsigned int proxy_count)
 {
-	int i;
-	for(i=0;i<proxy_count;i++)
-		if(pd[i].ps==BUSY_STATE)
-			pd[i].ps=PLAY_STATE;
+	unsigned int i;
+	for(i=0; i<proxy_count; i++)
+		if(pd[i].ps == BUSY_STATE)
+			pd[i].ps = PLAY_STATE;
 	return;
 }
 
-static int calc_alive(proxy_data *pd, int proxy_count)
+static unsigned int calc_alive(proxy_data *pd, unsigned int proxy_count)
 {
-	int i;
+	unsigned int i;
 	int alive_count=0;
-	release_busy(pd,proxy_count);
-	for(i=0;i<proxy_count;i++)
-		if(pd[i].ps==PLAY_STATE)
+	release_busy(pd, proxy_count);
+	for(i=0; i<proxy_count; i++)
+		if(pd[i].ps == PLAY_STATE)
 			alive_count++;
 	return alive_count;
 }
@@ -490,6 +481,9 @@ static int calc_alive(proxy_data *pd, int proxy_count)
 static int chain_step(int ns, proxy_data *pfrom, proxy_data *pto)
 {
 	int retcode=-1;
+#ifdef DEBUG
+	PDEBUG("chain_step()\n");
+#endif
 	
 	proxychains_write_log("<>-%s:%d-", 
 			inet_ntoa(*(struct in_addr*)&pto->ip),
@@ -517,14 +511,14 @@ static int chain_step(int ns, proxy_data *pfrom, proxy_data *pto)
 
 int connect_proxy_chain( int sock, unsigned int target_ip, 
 		unsigned short target_port, proxy_data *pd, 
-		unsigned int proxy_count, chain_type ct, int max_chain )
+		unsigned int proxy_count, chain_type ct, unsigned int max_chain )
 {
 	proxy_data p4;
 	proxy_data *p1,*p2,*p3;
 	int ns=-1;
-	int offset=0;
-	int alive_count=0;
-	int curr_len=0;
+	unsigned int offset=0;
+	unsigned int alive_count=0;
+	unsigned int curr_len=0;
 
 #define TP "<>"
 #define DT "|D-chain|"
@@ -532,8 +526,12 @@ int connect_proxy_chain( int sock, unsigned int target_ip,
 #define RT "|R-chain|"
 	
 	p3=&p4;
-
+#ifdef DEBUG
+	PDEBUG("connect_proxy_chain\n");
+#endif
+	
 again:
+
 	switch(ct)  {
 		case DYNAMIC_TYPE:
 		alive_count=calc_alive(pd,proxy_count);
@@ -541,13 +539,17 @@ again:
 		do {
 			if(!(p1=select_proxy(FIFOLY,pd,proxy_count,&offset)))
 				goto error_more;
-		} while(SUCCESS!=start_chain(&ns,p1,DT) && offset<proxy_count);
+		} while(SUCCESS!=start_chain(&ns,p1,DT) && offset < proxy_count);
 		for(;;) {
 			p2=select_proxy(FIFOLY,pd,proxy_count,&offset);
 			if(!p2)
 				break;
-			if(SUCCESS!=chain_step(ns,p1,p2))
+			if(SUCCESS!=chain_step(ns,p1,p2)) {
+				#ifdef DEBUG
+				PDEBUG("GOTO AGAIN 1\n");
+				#endif
 				goto again;
+			}
 			p1=p2;
 		}
 		proxychains_write_log(TP);
@@ -558,17 +560,29 @@ again:
 		break;
 
 	case STRICT_TYPE:
-		alive_count=calc_alive(pd,proxy_count);
+		alive_count=calc_alive(pd, proxy_count);
 		offset=0;
-		if(!(p1=select_proxy(FIFOLY,pd,proxy_count,&offset)))
+		if(!(p1=select_proxy(FIFOLY, pd, proxy_count, &offset))) {
+			#ifdef DEBUG
+			PDEBUG("select_proxy failed\n");
+			#endif
 			goto error_strict;
-		if(SUCCESS!=start_chain(&ns,p1,ST))
+		}
+		if(SUCCESS!=start_chain(&ns, p1, ST)) {
+			#ifdef DEBUG
+			PDEBUG("start_chain failed\n");
+			#endif
 			goto error_strict;
-		while(offset<proxy_count) {
-			if(!(p2=select_proxy(FIFOLY,pd,proxy_count,&offset)))
+		}
+		while(offset < proxy_count) {
+			if(!(p2 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
 				break;
-			if(SUCCESS!=chain_step(ns,p1,p2))
+			if(SUCCESS!=chain_step(ns, p1, p2)) {
+				#ifdef DEBUG
+				PDEBUG("chain_step failed\n");
+				#endif
 				goto error_strict;
+			}
 			p1=p2;
 		}
 		proxychains_write_log(TP);
@@ -590,8 +604,12 @@ again:
 		while(++curr_len<max_chain) {
 			if(!(p2=select_proxy(RANDOMLY,pd,proxy_count,&offset)))
 				goto error_more;
-			if(SUCCESS!=chain_step(ns,p1,p2))
+			if(SUCCESS!=chain_step(ns,p1,p2)) {
+				#ifdef DEBUG
+				PDEBUG("GOTO AGAIN 2\n");
+				#endif
 				goto again;
+			}	
 			p1=p2;
 		}
 		proxychains_write_log(TP);
@@ -602,7 +620,6 @@ again:
 			
 	}
 
-done:
 	proxychains_write_log("<><>-OK\n");
 	dup2(ns,sock);
 	close(ns);
@@ -616,6 +633,9 @@ error:
 error_more:
 	proxychains_write_log("\n!!!need more proxies!!!\n");
 error_strict:
+	#ifdef DEBUG
+	PDEBUG("error\n");
+	#endif
 	release_all(pd,proxy_count);
 	if(ns!=-1)
 		close(ns);
@@ -648,7 +668,7 @@ struct hostent* proxy_gethostbyname(const char *name)
 	
 	// TODO: this works only once, so cache it  ...
 	// 	 later
-	while (hp=gethostent())
+	while ((hp=gethostent()))
 		if (!strcmp(hp->h_name,name)) 
 			return hp; 
 	
@@ -679,7 +699,7 @@ struct hostent* proxy_gethostbyname(const char *name)
 			close(pipe_fd[0]);
 got_buff:
 			addr = inet_addr(buff);
-			if (addr == -1)
+			if (addr == (in_addr_t) (-1))
 				goto err_dns;
 			memcpy(*(hostent_space.h_addr_list),
 						&addr ,sizeof(struct in_addr));
@@ -690,7 +710,8 @@ got_buff:
 			name, inet_ntoa(*(struct in_addr*)&addr));
 	return &hostent_space;
 err_dns:
-	proxychains_write_log("|DNS-response|: %s is not exist\n", name);
+	proxychains_write_log("|DNS-response|: %s does not exist\n", name);
+	perror("err_dns");
 err:
 	return NULL;
 }

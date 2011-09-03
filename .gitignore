@@ -8,5 +8,4 @@
 # Autoconf stuff 
 libtool
 config.*
-Makefile
 stamp-h

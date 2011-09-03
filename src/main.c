@@ -1,9 +1,9 @@
 /***************************************************************************
                           main.c  -  description
-   q							 -------------------
+
     begin                : Tue May 14 2002
-    copyright          :  netcreature (C) 2002
-    email                 : netcreature@users.sourceforge.net
+    copyright            :  netcreature (C) 2002
+    email                : netcreature@users.sourceforge.net
  ***************************************************************************/
  /*     GPL */
 /***************************************************************************
@@ -15,71 +15,73 @@
  *                                                                         *
  ***************************************************************************/
 
-
-/*
-* 	 well ... actually this file could be a shell script ... but C rulez :).
-*/
-
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
 extern char *optarg;
-extern int optind, opterr, optopt
+extern int optind, opterr, optopt;
 
-/*
- * XXX. Same thing is defined in proxychains main.c it
- * needs to be changed, too.
- */
-#define PROXYCHAINS_CONF_FILE "PROXYCHAINS_CONF_FILE"
+#define PROXYCHAINS_CONF_FILE "proxychains.conf"
 
-static usage(void)
-{
-
-		printf("\nUsage:	 %s [h] [f] config_file program_name [arguments]\n"
-       	   "\t for example : proxychains telnet somehost.com\n"
-										"More help in README file\n", argv[0], );
+static void usage(char** argv) {
+	printf("\nUsage:	 %s [h] [f] config_file program_name [arguments]\n"
+		"\t for example : proxychains telnet somehost.com\n"
+		"More help in README file\n", argv[0]);
 }
 
-int main(int argc, char *argv[])
-{
-		char *path;
+int main(int argc, char *argv[]) {
+	char *path = NULL;
+	char buf[256];
+	char pbuf[256];
+	int opt;
 
-		path = NULL;
+	while ((opt = getopt(argc, argv, "fh:")) != -1) {
+		switch (opt) {
+			case 'h':
+				usage(argv);
+				break;
+			case 'f':
+				path = (char *)optarg;
+				break;
+			default: /* '?' */
+				usage(argv);
+				exit(EXIT_FAILURE);
+			}
+	}
 
-		while ((opt = getopt(argc, argv, "fh:")) != -1) {
-				switch (opt) {
-						case 'h':
-								usage();
-								break;
-						case 'f':
-								path = (char *)optarg;
-								break;
-						default: /* '?' */
-								usage();
-								exit(EXIT_FAILURE);
-				}
-  }
+	if(!path) {
+		if(!(path = getenv("PROXYCHAINS_CONF_FILE")))
+			path = getcwd(buf, sizeof(buf));
+		else if(access(path, R_OK) != -1) goto have; 
+		if(!path ||
+			!snprintf(pbuf, sizeof(pbuf), "%s/%s", path, PROXYCHAINS_CONF_FILE) ||
+			access(pbuf, R_OK) == -1
+		) 
+			path = "/etc/proxychains.conf";
+		else 
+			path = pbuf;
+	}
+	if(access(path, R_OK) == -1) {
+		perror("couldnt find configuration file");
+		return 1;
+	}
+	have:
 
-		printf("Proxychains are going to use %s as config file.\n", path);
-		printf("argv = %s\n", argv[1]);
+	printf("Proxychains is going to use %s as config file.\n", path);
+	printf("argv = %s\n", argv[1]);
 
-		/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to
-			 use new config file. */
-		setenv(PROXYCHAINS_CONF_FILE, path, 1);
+	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
+	setenv("PROXYCHAINS_CONF_FILE", path, 1);
+	
+	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/libproxychains.so", LIB_DIR);
+	putenv(buf);
+	execvp(argv[1], &argv[1]);
+	perror("proxychains can't load process....");
 
-		/*XXX. proxychains might be installed in some different location */
-  putenv("LD_PRELOAD=/usr/lib/libproxychains.so");
-  execvp(argv[1],&argv[1]);
-  perror("proxychains can't load process....");
-
-  return EXIT_SUCCESS;
+	return EXIT_SUCCESS;
 }

@@ -41,18 +41,16 @@ typedef struct
 	unsigned short port;
 } localaddr_arg;
 
-typedef struct
-{
-unsigned int ip;
-unsigned short port;
-proxy_type pt;
-proxy_state ps;
-char user[256];
-char pass[256];
+typedef struct {
+	unsigned int ip;
+	unsigned short port;
+	proxy_type pt;
+	proxy_state ps;
+	char user[256];
+	char pass[256];
 } proxy_data;
 
-typedef struct
-{
+typedef struct {
 	proxy_data *pd;
  	chain_type ct;
   	unsigned int proxy_count;
@@ -68,7 +66,7 @@ int connect_proxy_chain (
 		proxy_data * pd,
 		unsigned int proxy_count,
 		chain_type ct,
-		int max_chain );
+		unsigned int max_chain );
 
 int proxychains_write_log(char *str,...);
 struct hostent* proxy_gethostbyname(const char *name);
@@ -103,10 +101,10 @@ int proxy_getaddrinfo(const char *node, const char *service,
 
 struct hostent* proxy_gethostbyname(const char *name);
 
-#if 0
-#define PDEBUG(fmt, args...) fprintf(stderr,"DEBUG:"fmt, ## args)
+#ifdef DEBUG
+# define PDEBUG(fmt, args...) fprintf(stderr,"DEBUG:"fmt, ## args)
 #else
-#define PDEBUG(fmt, args...)
+# define PDEBUG(fmt, args...)
 #endif
 
 #endif 
