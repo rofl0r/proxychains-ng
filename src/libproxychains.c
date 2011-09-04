@@ -61,7 +61,7 @@ static void init_lib(void);
 
 static void init_lib(void)
 {
-	proxychains_write_log("ProxyChains-3.1 (http://proxychains.sf.net)\n");
+	proxychains_write_log("ProxyChains-3.2 (http://github.com/rofl0r/proxychains)\n");
 	
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 	true_connect = (connect_t) dlsym(RTLD_NEXT, "connect");
@@ -359,9 +359,11 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 
 struct hostent *gethostbyname(const char *name)
 {
-	PDEBUG("gethostbyname: %s\n",name);
 	if(!init_l)
 		init_lib();
+	
+	PDEBUG("gethostbyname: %s\n",name);
+	
 	if(proxychains_resolver)
 		return proxy_gethostbyname(name);
 	else
@@ -375,9 +377,12 @@ int getaddrinfo(const char *node, const char *service,
 		struct addrinfo **res)
 {
 	int ret = 0;
-	PDEBUG("getaddrinfo: %s %s\n",node ,service);
+	
 	if(!init_l)
 		init_lib();
+	
+	PDEBUG("getaddrinfo: %s %s\n",node ,service);
+	
 	if(proxychains_resolver)
 		ret = proxy_getaddrinfo(node, service, hints, res);
 	else
@@ -388,9 +393,11 @@ int getaddrinfo(const char *node, const char *service,
 
 void freeaddrinfo(struct addrinfo *res)
 {
-	PDEBUG("freeaddrinfo %p \n",res);
 	if(!init_l)
 		init_lib();
+	
+	PDEBUG("freeaddrinfo %p \n",res);
+	
 	if(!proxychains_resolver)
 		true_freeaddrinfo(res);
 	else {
@@ -413,9 +420,12 @@ int getnameinfo (const struct sockaddr * sa,
 #endif
 {
 	int ret = 0;
-	PDEBUG("getnameinfo: %s %s\n", host, serv);
+	
 	if(!init_l)
 		init_lib();
+	
+	PDEBUG("getnameinfo: %s %s\n", host, serv);
+	
 	if(!proxychains_resolver) {
 		ret = true_getnameinfo(sa,salen,host,hostlen,
 				serv,servlen,flags);
@@ -456,12 +466,17 @@ struct hostent *gethostbyaddr (const void *addr, socklen_t len, int type)
 	static char ipv4[4];
 	static char* list[2];
 	static struct hostent he;
-	PDEBUG("TODO: proper gethostbyaddr hook\n");
+	
 	if(!init_l)
 		init_lib();
+	
+	PDEBUG("TODO: proper gethostbyaddr hook\n");
+	
 	if(!proxychains_resolver)
 		return true_gethostbyaddr(addr,len,type);
 	else {
+		
+		PDEBUG("len %u\n", len);
 		if(len != 4) return NULL;
 		he.h_name = buf;
 		memcpy(ipv4, addr, 4);

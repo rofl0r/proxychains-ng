@@ -72,8 +72,8 @@ int main(int argc, char *argv[]) {
 	}
 	have:
 
-	printf("Proxychains is going to use %s as config file.\n", path);
-	printf("argv = %s\n", argv[1]);
+	printf("using config file: %s\n", path);
+	//printf("argv = %s\n", argv[1]);
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 	setenv("PROXYCHAINS_CONF_FILE", path, 1);

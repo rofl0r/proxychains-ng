@@ -201,7 +201,7 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len)
 static int tunnel_to(int sock, unsigned int ip, unsigned short port, proxy_type pt,char *user,char *pass)
 {
 #ifdef DEBUG
-	PDEBUG("tunnel to\n");
+	PDEBUG("tunnel_to()\n");
 #endif	
         int len;
         char buff[BUFF_SIZE];
