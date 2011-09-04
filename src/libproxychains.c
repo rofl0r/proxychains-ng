@@ -406,8 +406,9 @@ void freeaddrinfo(struct addrinfo *res)
 	}
 	return;
 }
-
-#ifdef __GLIBC__
+// work around a buggy prototype in GLIBC. according to the bugtracker it has been fixed in git at 02 May 2011.
+// 2.14 came out in June 2011 so that should be the first fixed version
+#if defined(__GLIBC__) && (__GLIBC__ < 3) && (__GLIBC_MINOR__ < 14)
 int getnameinfo (const struct sockaddr * sa,
                         socklen_t salen, char * host,
                         socklen_t hostlen, char * serv,
