@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
 	char buf[256];
 	char pbuf[256];
 	int opt;
+	int start_argv = 1;
 
 	while ((opt = getopt(argc, argv, "fh:")) != -1) {
 		switch (opt) {
@@ -52,6 +53,11 @@ int main(int argc, char *argv[]) {
 				break;
 			case 'f':
 				path = (char *)optarg;
+				if(!path) {
+					printf("error: no path supplied.");
+					return(EXIT_FAILURE);
+				}
+				start_argv = 3;
 				break;
 			default: /* '?' */
 				usage(argv);
@@ -93,7 +99,7 @@ int main(int argc, char *argv[]) {
 	
 	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/libproxychains.so", LIB_DIR);
 	putenv(buf);
-	execvp(argv[1], &argv[1]);
+	execvp(argv[start_argv], &argv[start_argv]);
 	perror("proxychains can't load process....");
 
 	return EXIT_FAILURE;
