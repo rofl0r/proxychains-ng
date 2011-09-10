@@ -38,8 +38,8 @@ all: $(ALL_LIBS) $(ALL_TOOLS)
 
 #install: $(ALL_LIBS:lib/%=$(DESTDIR)$(libdir)/%) $(DESTDIR)$(LDSO_PATHNAME)
 install: 
-	install -D -m 644 proxychains $(bindir)
-	install -D -m 644 src/proxyresolv $(bindir)
+	install -D -m 755 proxychains $(bindir)
+	install -D -m 755 src/proxyresolv $(bindir)
 	install -D -m 644 libproxychains.so $(libdir)
 	install -D -m 644 src/proxychains.conf /etc
 	ln -sf $(libdir)/libproxychains.so $(libdir)/libproxychains.so.3
