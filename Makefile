@@ -11,7 +11,6 @@ bindir = $(exec_prefix)/bin
 prefix = /usr/local/
 includedir = $(prefix)/include
 libdir = $(prefix)/lib
-syslibdir = /lib
 
 SRCS = $(sort $(wildcard src/*.c))
 OBJS = $(SRCS:.c=.o)
