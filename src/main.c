@@ -26,12 +26,17 @@
 extern char *optarg;
 extern int optind, opterr, optopt;
 
-#define PROXYCHAINS_CONF_FILE "proxychains.conf"
+#include "common.h"
 
 static void usage(char** argv) {
 	printf("\nUsage:	 %s [h] [f] config_file program_name [arguments]\n"
 		"\t for example : proxychains telnet somehost.com\n"
 		"More help in README file\n", argv[0]);
+}
+
+int check_path(char* path) {
+	if(!path) return 0;
+	return access(path, R_OK) != -1;
 }
 
 int main(int argc, char *argv[]) {
@@ -54,34 +59,42 @@ int main(int argc, char *argv[]) {
 			}
 	}
 
+	/* check if path of config file has not been passed via command line */
 	if(!path) {
-		if(!(path = getenv("PROXYCHAINS_CONF_FILE")))
-			path = getcwd(buf, sizeof(buf));
-		else if(access(path, R_OK) != -1) goto have; 
-		if(!path ||
-			!snprintf(pbuf, sizeof(pbuf), "%s/%s", path, PROXYCHAINS_CONF_FILE) ||
-			access(pbuf, R_OK) == -1
-		) 
-			path = "/etc/proxychains.conf";
-		else 
-			path = pbuf;
-	}
-	if(access(path, R_OK) == -1) {
+		// priority 1: env var PROXYCHAINS_CONF_FILE
+		path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
+		if(check_path(path)) goto have;
+		
+		// priority 2; proxychains conf in actual dir
+		path = getcwd(buf, sizeof(buf));
+		snprintf(pbuf, sizeof(pbuf), "%s/%s", path, PROXYCHAINS_CONF_FILE);
+		path = pbuf;
+		if(check_path(path)) goto have;
+		
+		// priority 3; $HOME/.proxychains/proxychains.conf
+		path = getenv("HOME");
+		snprintf(pbuf, sizeof(pbuf), "%s/.proxychains/%s", path, PROXYCHAINS_CONF_FILE);
+		path = pbuf;
+		if(check_path(path)) goto have;
+		
+		// priority 4: /etc/proxychains.conf
+		path = "/etc/proxychains.conf";
+		if(check_path(path)) goto have;
 		perror("couldnt find configuration file");
 		return 1;
 	}
+	
 	have:
 
-	printf("using config file: %s\n", path);
-	//printf("argv = %s\n", argv[1]);
+	printf("[proxychains config] %s\n", path);
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
-	setenv("PROXYCHAINS_CONF_FILE", path, 1);
+	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
 	
 	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/libproxychains.so", LIB_DIR);
 	putenv(buf);
 	execvp(argv[1], &argv[1]);
 	perror("proxychains can't load process....");
 
-	return EXIT_SUCCESS;
+	return EXIT_FAILURE;
 }

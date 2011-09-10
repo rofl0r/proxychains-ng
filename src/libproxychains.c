@@ -34,6 +34,7 @@
 
 
 #include "core.h"
+#include "common.h"
 
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
 #define     SOCKADDR(x)     (satosin(x)->sin_addr.s_addr)
@@ -61,7 +62,7 @@ static void init_lib(void);
 
 static void init_lib(void)
 {
-	proxychains_write_log("ProxyChains-3.2 (http://github.com/rofl0r/proxychains)\n");
+	proxychains_write_log("[proxychains v3.2] DLL init\n");
 	
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 	true_connect = (connect_t) dlsym(RTLD_NEXT, "connect");
@@ -156,12 +157,6 @@ static void init_lib(void)
 	init_l = 1;
 }
 
-/*
- * XXX. Same thing is defined in proxychains main.c it
- * needs to be changed, too.
- */
-#define PROXYCHAINS_CONF_FILE "PROXYCHAINS_CONF_FILE"
-
 static inline void get_chain_data(
 			proxy_data *pd,
 			unsigned int *proxy_count,
@@ -188,7 +183,7 @@ static inline void get_chain_data(
 	 * Get path to configuration file from env this file has priority
 	 * if it's defined.
 	 */
-	env = getenv(PROXYCHAINS_CONF_FILE);
+	env = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
 
 	snprintf(buff,256,"%s/.proxychains/proxychains.conf",getenv("HOME"));
 

@@ -18,6 +18,7 @@
 #define __CORE_HEADER
 #define BUFF_SIZE 8*1024  // used to read responses from proxies.
 #define     MAX_LOCALNET 1024
+
 /*error codes*/
 typedef enum
 {
