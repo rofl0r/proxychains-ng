@@ -46,15 +46,15 @@ int main(int argc, char *argv[]) {
 	int opt;
 	int start_argv = 1;
 
-	while ((opt = getopt(argc, argv, "fh:")) != -1) {
+	while ((opt = getopt(argc, argv, "hf:")) != -1) {
 		switch (opt) {
 			case 'h':
 				usage(argv);
-				break;
+				return EXIT_SUCCESS;
 			case 'f':
 				path = (char *)optarg;
 				if(!path) {
-					printf("error: no path supplied.");
+					printf("error: no path supplied.\n");
 					return(EXIT_FAILURE);
 				}
 				start_argv = 3;
