@@ -42,6 +42,7 @@ install:
 	install -D -m 644 proxychains $(bindir)
 	install -D -m 644 src/proxyresolv $(bindir)
 	install -D -m 644 lib/libproxychains.so $(libdir)
+	install -D -m 644 src/proxychains.conf /etc
 	ln -sf $(libdir)/libproxychains.so $(libdir)/libproxychains.so.3
 
 clean:
