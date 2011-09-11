@@ -1,0 +1,59 @@
+#!/bin/sh
+
+prefix=/usr/local
+
+spliteq() {
+	arg=$1
+	echo "${arg#*=}"
+	#alternatives echo "$arg" | cut -d= -f2-
+	# or echo "$arg" | sed 's/[^=]*=//'
+}
+
+parsearg() {
+	case "$1" in
+	--prefix=*) prefix=$(spliteq "$1");;
+	--exec_prefix=*) exec_prefix=`spliteq $1`;;
+	--bindir=*) bindir=`spliteq $1`;;
+	--libdir=*) libdir=`spliteq $1`;;
+	--includedir=*) includedir=`spliteq $1`;;
+	esac
+}
+
+while true ; do
+	case $1 in
+	-*) parsearg "$1"; shift;;
+	*) break ;;
+	esac
+done
+
+if [ ! $exec_prefix ] ; then
+	exec_prefix=$prefix
+fi
+
+if [ ! $libdir ] ; then
+	libdir=$prefix/lib
+fi
+
+if [ ! $includedir ] ; then
+	includedir=$prefix/include
+fi
+
+if [ ! $bindir ] ; then
+	bindir=$exec_prefix/bin
+fi
+
+if [ ! $CC ] ; then
+	CC=cc
+fi
+
+echo CC=$CC>config.mak
+echo CPPFLAGS=$CPPFLAGS>>config.mak
+echo CFLAGS=$CFLAGS>>config.mak
+echo prefix=$prefix>>config.mak
+echo exec_prefix=$exec_prefix>>config.mak
+echo bindir=$bindir>>config.mak
+echo libdir=$libdir>>config.mak
+echo includedir=$includedir>>config.mak
+
+echo done, now run make \&\& make install
+
