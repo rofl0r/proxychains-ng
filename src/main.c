@@ -39,6 +39,18 @@ int check_path(char* path) {
 	return access(path, R_OK) != -1;
 }
 
+static const char* dll_name = "libproxychains4.so";
+
+static const char* dll_dirs[] = {
+	".",
+	LIB_DIR,
+	"/lib",
+	"/usr/lib",
+	"/usr/local/lib",
+	"/lib64",
+	NULL
+};
+
 int main(int argc, char *argv[]) {
 	char *path = NULL;
 	char buf[256];
@@ -92,12 +104,33 @@ int main(int argc, char *argv[]) {
 	
 	have:
 
-	printf("[proxychains config] %s\n", path);
+	printf(LOG_PREFIX "config file found: %s\n", path);
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
+
+
+	// search DLL
+	size_t i = 0;
+	const char* prefix = NULL;
+
+	while(dll_dirs[i]) {
+		snprintf(buf, sizeof(buf), "%s/%s", dll_dirs[i], dll_name);
+		if(access(buf, R_OK) != -1) {
+			prefix = dll_dirs[i];
+			break;
+		}
+		i++;
+	}
+
+	if(!prefix) {
+		printf("couldnt locate %s\n", dll_name);
+		return EXIT_FAILURE;
+	}
+	printf(LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
 	
-	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/libproxychains.so", LIB_DIR);
+	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/%s", prefix, dll_name);
+
 	putenv(buf);
 	execvp(argv[start_argv], &argv[start_argv]);
 	perror("proxychains can't load process....");
