@@ -23,11 +23,13 @@ PIC     = -fPIC -O0
 AR      = $(CROSS_COMPILE)ar
 RANLIB  = $(CROSS_COMPILE)ranlib
 
-SHARED_LIBS = libproxychains.so
-ALL_LIBS = $(SHARED_LIBS)
-ALL_TOOLS = proxychains
+LDSO_PATHNAME = libproxychains4.so
 
-LDSO_PATHNAME = libproxychains.so.3
+SHARED_LIBS = $(LDSO_PATHNAME)
+ALL_LIBS = $(SHARED_LIBS)
+PXCHAINS = proxychains4
+ALL_TOOLS = $(PXCHAINS)
+
 
 -include config.mak
 
@@ -38,11 +40,9 @@ all: $(ALL_LIBS) $(ALL_TOOLS)
 
 #install: $(ALL_LIBS:lib/%=$(DESTDIR)$(libdir)/%) $(DESTDIR)$(LDSO_PATHNAME)
 install: 
-	install -D -m 755 proxychains $(bindir)
-	install -D -m 755 src/proxyresolv $(bindir)
-	install -D -m 644 libproxychains.so $(libdir)
-	install -D -m 644 src/proxychains.conf /etc
-	ln -sf $(libdir)/libproxychains.so $(libdir)/libproxychains.so.3
+	install -D -m 755 $(PXCHAINS) $(bindir)/$(PXCHAINS)
+	install -D -m 644 $(LDSO_PATHNAME) $(libdir)
+	install -D -m 644 src/proxychains.conf $(prefix)/etc
 
 clean:
 	rm -f $(OBJS)
@@ -55,16 +55,11 @@ clean:
 %.lo: %.c
 	$(CC) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<
 
-libproxychains.so: $(LOBJS)
-	$(CC) $(LDFLAGS) -Wl,-soname=libproxychains.so -o $@ $(LOBJS) -lgcc
+$(LDSO_PATHNAME): $(LOBJS)
+	$(CC) $(LDFLAGS) -Wl,-soname=$(LDSO_PATHNAME) -o $@ $(LOBJS)
 
 $(ALL_TOOLS): $(OBJS)
-	$(CC) src/main.o -o proxychains
+	$(CC) src/main.o -o $(PXCHAINS)
 
-$(DESTDIR)$(libdir)/%.so: %.so
-	install -D -m 755 $< $@
-
-$(DESTDIR)$(LDSO_PATHNAME): libproxychains.so
-	ln -sf $(libdir)/libproxychains.so $@ || true
 
 .PHONY: all clean install
