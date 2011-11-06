@@ -368,7 +368,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 		 		goto err;
 			
       			if (buff[0] != 5 || (buff[1] != 0 && buff[1] != 2)) {
-        			if(buff[0] == 5 && buff[1] ==(char)0xFF)
+        			if(buff[0] == 5 && buff[1] == 0xFF)
              				return BLOCKED;
 				else
 					goto err;
