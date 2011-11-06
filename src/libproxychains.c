@@ -62,6 +62,9 @@ static void init_lib(void);
 
 static void init_lib(void)
 {
+#ifdef THREAD_SAFE
+	pthread_mutex_init(&internal_ips_lock, NULL);
+#endif
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
 	
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);

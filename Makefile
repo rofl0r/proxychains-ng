@@ -16,8 +16,8 @@ SRCS = $(sort $(wildcard src/*.c))
 OBJS = $(SRCS:.c=.o)
 LOBJS = $(OBJS:.o=.lo)
 
-CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe 
-LDFLAGS = -shared -fPIC -ldl
+CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe -DTHREAD_SAFE
+LDFLAGS = -shared -fPIC -ldl -lpthread
 INC     = 
 PIC     = -fPIC -O0
 AR      = $(CROSS_COMPILE)ar

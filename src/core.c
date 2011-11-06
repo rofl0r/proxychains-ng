@@ -4,9 +4,9 @@
     begin                : Tue May 14 2002
     copyright            :  netcreature (C) 2002
     email                : netcreature@users.sourceforge.net
- ***************************************************************************/
-/*     GPL */
-/***************************************************************************
+ ***************************************************************************
+ *     GPL *
+ ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -33,6 +33,11 @@
 #include <time.h>
 #include <sys/time.h>
 #include <stdarg.h>
+#ifdef THREAD_SAFE
+#include <pthread.h>
+pthread_mutex_t internal_ips_lock;
+#endif
+
 #include "core.h"
 #include "common.h"
 
@@ -58,6 +63,20 @@ uint32_t index_from_internal_ip(ip_type internalip) {
 	ret = tmp.octet[3] + (tmp.octet[2] << 8) + (tmp.octet[1] << 16);
 	ret -= 1;
 	return ret;
+}
+
+char* string_from_internal_ip(ip_type internalip) {
+	char* res = NULL;
+#ifdef THREAD_SAFE
+	pthread_mutex_lock(&internal_ips_lock);
+#endif
+	uint32_t index = index_from_internal_ip(internalip);
+	if(index < internal_ips.counter)
+		res = internal_ips.list[index]->string;
+#ifdef THREAD_SAFE
+	pthread_mutex_unlock(&internal_ips_lock);
+#endif
+	return res;
 }
 
 in_addr_t make_internal_ip(uint32_t index) {
@@ -234,7 +253,6 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 #ifdef DEBUG
 	PDEBUG("tunnel_to()\n");
 #endif	
-	uint32_t index = INVALID_INDEX;
 	char* dns_name = NULL;
 	size_t dns_len = 0;
 	
@@ -242,9 +260,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
 	// the results returned from gethostbyname et al.)
 	if(ip.octet[0] == 224) {
-		index = index_from_internal_ip(ip);
-		if(index > internal_ips.counter) goto err;
-		dns_name = internal_ips.list[index]->string;
+		dns_name = string_from_internal_ip(ip);
 		if(!dns_name) goto err;
 		dns_len = strlen(dns_name);
 		if(!dns_len) goto err;
@@ -560,10 +576,8 @@ static int chain_step(int ns, proxy_data *pfrom, proxy_data *pto)
 	PDEBUG("chain_step()\n");
 #endif
 	if(pto->ip.octet[0] == 224) {
-		index = index_from_internal_ip(pto->ip);
-		if(index < internal_ips.counter)
-			hostname = internal_ips.list[index]->string;
-		else goto usenumericip;
+		hostname = string_from_internal_ip(pto->ip);
+		if(!hostname) goto usenumericip;
 	} else {
 		usenumericip:
 		hostname = inet_ntoa(*(struct in_addr*)&pto->ip);
@@ -722,7 +736,7 @@ error_strict:
 	return -1;
 }
 
-
+// TODO: all those buffers aren't threadsafe, but since no memory allocation happens there shouldnt be any segfaults
 static struct hostent hostent_space;
 static in_addr_t resolved_addr;
 static char* resolved_addr_p[2];
@@ -732,6 +746,7 @@ struct hostent* proxy_gethostbyname(const char *name)
 {
 	char buff[256];
 	uint32_t i, hash;
+	// yep, new_mem never gets freed. once you passed a fake ip to the client, you can't "retreat" it
 	void* new_mem;
 	size_t l;
 
@@ -762,34 +777,42 @@ struct hostent* proxy_gethostbyname(const char *name)
 	
 	hash = dalias_hash((char*) name);
 	
+#ifdef THREAD_SAFE
+	pthread_mutex_lock(&internal_ips_lock);
+#endif
+	
 	if(internal_ips.counter) {
 		for( i = 0; i < internal_ips.counter; i++) {
 			if(internal_ips.list[i]->hash == hash) {
 				resolved_addr = make_internal_ip(i);
+				printf("got cached ip for %s\n", name);
 				goto have_ip;
 			}
 		}
 	}
 	
 	if(internal_ips.capa < internal_ips.counter + 1) {
-		new_mem = realloc(internal_ips.list, internal_ips.capa + 16);
+		printf("realloc\n");
+		new_mem = realloc(internal_ips.list, (internal_ips.capa + 16) * sizeof(void*));
 		if(new_mem) {
 			internal_ips.capa += 16;
 			internal_ips.list = new_mem;
 		} else {
 			oom:
 			proxychains_write_log("out of mem\n");
-			goto err;
+			goto err_plus_unlock;
 		}
 	}
 	
 	resolved_addr = make_internal_ip(internal_ips.counter);
-	if(resolved_addr == (in_addr_t) -1) goto err;
+	if(resolved_addr == (in_addr_t) -1) goto err_plus_unlock;
 
 	l = strlen(name);
 	new_mem = malloc(sizeof(string_hash_tuple) + l + 1);
 	if(!new_mem) 
 		goto oom;
+	
+	printf("creating new entry %d for ip of %s\n", (int) internal_ips.counter, name);
 	
 	internal_ips.list[internal_ips.counter] = new_mem;
 	internal_ips.list[internal_ips.counter]->hash = hash;
@@ -801,16 +824,21 @@ struct hostent* proxy_gethostbyname(const char *name)
 	
 	have_ip:
 	
-	//strncpy(addr_name, name, sizeof(addr_name));
+#ifdef THREAD_SAFE
+	pthread_mutex_unlock(&internal_ips_lock);
+#endif
+
+	
+	strncpy(addr_name, name, sizeof(addr_name));
 	
 	hostent_space.h_name = addr_name;
 	hostent_space.h_length = sizeof (in_addr_t);
 	return &hostent_space;
-	
-err_dns:
-	proxychains_write_log("|DNS-response|: %s does not exist\n", name);
-	perror("err_dns");
-err:
+
+err_plus_unlock:
+#ifdef THREAD_SAFE
+	pthread_mutex_unlock(&internal_ips_lock);
+#endif
 	return NULL;
 }
 int proxy_getaddrinfo(const char *node, const char *service,

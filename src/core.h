@@ -37,6 +37,10 @@ typedef struct {
 } internal_ip_lookup_table;
 
 extern internal_ip_lookup_table internal_ips;
+#ifdef THREAD_SAFE
+#include <pthread.h>
+extern pthread_mutex_t internal_ips_lock;
+#endif
 
 /*error codes*/
 typedef enum {
