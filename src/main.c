@@ -41,8 +41,10 @@ int check_path(char* path) {
 
 static const char* dll_name = "libproxychains4.so";
 
+static char own_dir[256];
 static const char* dll_dirs[] = {
 	".",
+	own_dir,
 	LIB_DIR,
 	"/lib",
 	"/usr/lib",
@@ -50,6 +52,17 @@ static const char* dll_dirs[] = {
 	"/lib64",
 	NULL
 };
+
+static void set_own_dir(const char* argv0) {
+	size_t l = strlen(argv0);
+	while(l && argv0[l - 1] != '/') l--;
+	if(l == 0)
+		memcpy(own_dir, ".", 2);
+	else {
+		memcpy(own_dir, argv0, l - 1);
+		own_dir[l] = 0;
+	}
+}
 
 int main(int argc, char *argv[]) {
 	char *path = NULL;
@@ -113,6 +126,8 @@ int main(int argc, char *argv[]) {
 	// search DLL
 	size_t i = 0;
 	const char* prefix = NULL;
+
+	set_own_dir(argv[0]);
 
 	while(dll_dirs[i]) {
 		snprintf(buf, sizeof(buf), "%s/%s", dll_dirs[i], dll_name);
