@@ -342,7 +342,10 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 				memcpy(&buff[4], &ip, 4); // dest host
 				len = ulen + 1; // username
     				if(len > 1)
-         				memcpy(&buff[8], user, ulen + 1);
+         				memcpy(&buff[8], user, len);
+				else {
+					buff[8] = 0;
+				}
 				
 				// do socksv4a dns resolution on the server
 				if(dns_len) {
