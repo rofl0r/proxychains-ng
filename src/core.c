@@ -276,10 +276,10 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 	switch(pt) {
 		case HTTP_TYPE: {
 			if(!dns_len)
-				snprintf(buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n",
+				snprintf((char*)buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n",
 					inet_ntoa( * (struct in_addr *) &ip.as_int), ntohs(port));
 			else 
-				snprintf(buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name, ntohs(port));
+				snprintf((char*)buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name, ntohs(port));
 			
 			if (user[0])
 			{
@@ -291,23 +291,22 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 				src[ulen + 1 + passlen] = 0;
 				
 				encode_base_64(src,dst,512);
-				strcat(buff,"Proxy-Authorization: Basic ");
-				strcat(buff,dst);
-				strcat(buff,"\r\n\r\n");
+				strcat((char*)buff,"Proxy-Authorization: Basic ");
+				strcat((char*)buff,dst);
+				strcat((char*)buff,"\r\n\r\n");
 			}
 			else
-				strcat(buff,"\r\n");
+				strcat((char*)buff,"\r\n");
 		
-			len = strlen(buff);
+			len = strlen((char*)buff);
 
 			if(len != send(sock, buff, len, 0))
 				goto err;
 		
-			memset(buff, 0, sizeof(buff));
 			len = 0 ;
 			// read header byte by byte.
 			while(len < BUFF_SIZE) {
-				if(1 == read_n_bytes(sock, buff+len, 1))
+				if(1 == read_n_bytes(sock, (char*) (buff + len), 1))
 					len++;
 				else
 					goto err;
@@ -351,10 +350,10 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 					len += dns_len + 1;
 				}
 				
-				if((len + 8) != write_n_bytes(sock, buff, (8+len)))
+				if((len + 8) != write_n_bytes(sock, (char*) buff, (8+len)))
 					goto err;
 
- 				if(8 != read_n_bytes(sock,buff,8))
+ 				if(8 != read_n_bytes(sock, (char*)buff, 8))
 					goto err;
             	
 				if (buff[0] != 0 || buff[1] != 90)
@@ -369,18 +368,18 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 				buff[1]=2;	//nomber of methods
 				buff[2]=0;   // no auth method
 	    			buff[3]=2;  /// auth method -> username / password
-				if(4!=write_n_bytes(sock,buff,4))
+				if(4!=write_n_bytes(sock, (char*)buff, 4))
 					goto err;
        			}
             		else {
             			buff[0]=5;   //version
 				buff[1]=1;	//nomber of methods
 				buff[2]=0;   // no auth method
-				if(3 != write_n_bytes(sock, buff, 3))
+				if(3 != write_n_bytes(sock, (char*) buff, 3))
 					goto err;
        			}
 
-			if(2 != read_n_bytes(sock, buff, 2))
+			if(2 != read_n_bytes(sock, (char*) buff, 2))
 		 		goto err;
 			
       			if (buff[0] != 5 || (buff[1] != 0 && buff[1] != 2)) {
@@ -438,10 +437,10 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 			buff_iter += 2;
 			
 
-			if(buff_iter != write_n_bytes(sock, buff, buff_iter))
+			if(buff_iter != write_n_bytes(sock, (char*)buff, buff_iter))
 				goto err;
 	
-			if(4 != read_n_bytes(sock,buff,4))
+			if(4 != read_n_bytes(sock, (char*)buff, 4))
 				goto err;
 
 			if (buff[0] != 5 || buff[1] != 0)
@@ -459,7 +458,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 					goto err;
 			}
 
-			if(len + 2 != read_n_bytes(sock, buff, len+2))
+			if(len + 2 != read_n_bytes(sock, (char*) buff, len+2))
 				goto err;
 
 			return SUCCESS;
@@ -571,7 +570,6 @@ static int chain_step(int ns, proxy_data *pfrom, proxy_data *pto)
 {
 	int retcode=-1;
 	char* hostname;
-	uint32_t index;
 #ifdef DEBUG
 	PDEBUG("chain_step()\n");
 #endif
@@ -741,7 +739,7 @@ static struct hostent hostent_space;
 static in_addr_t resolved_addr;
 static char* resolved_addr_p[2];
 static char addr_name[1024*8];
-static const ip_type local_host = {127, 0, 0, 1};
+static const ip_type local_host = {{127, 0, 0, 1}};
 struct hostent* proxy_gethostbyname(const char *name)
 {
 	char buff[256];
@@ -751,7 +749,7 @@ struct hostent* proxy_gethostbyname(const char *name)
 	size_t l;
 
 	struct hostent* hp;
-
+	
 	resolved_addr_p[0] = (char*) &resolved_addr;
 	resolved_addr_p[1] = NULL;
 	
@@ -785,14 +783,14 @@ struct hostent* proxy_gethostbyname(const char *name)
 		for( i = 0; i < internal_ips.counter; i++) {
 			if(internal_ips.list[i]->hash == hash) {
 				resolved_addr = make_internal_ip(i);
-				printf("got cached ip for %s\n", name);
+				PDEBUG("got cached ip for %s\n", name);
 				goto have_ip;
 			}
 		}
 	}
 	
 	if(internal_ips.capa < internal_ips.counter + 1) {
-		printf("realloc\n");
+		PDEBUG("realloc\n");
 		new_mem = realloc(internal_ips.list, (internal_ips.capa + 16) * sizeof(void*));
 		if(new_mem) {
 			internal_ips.capa += 16;
@@ -812,7 +810,7 @@ struct hostent* proxy_gethostbyname(const char *name)
 	if(!new_mem) 
 		goto oom;
 	
-	printf("creating new entry %d for ip of %s\n", (int) internal_ips.counter, name);
+	PDEBUG("creating new entry %d for ip of %s\n", (int) internal_ips.counter, name);
 	
 	internal_ips.list[internal_ips.counter] = new_mem;
 	internal_ips.list[internal_ips.counter]->hash = hash;

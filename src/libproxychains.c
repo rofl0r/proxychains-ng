@@ -223,7 +223,7 @@ static inline void get_chain_data(
 					continue;
 				
 				if(pd[count].ip.as_int && port_n &&
-				   (int) pd[count].ip.as_int != (uint32_t) -1)
+				   pd[count].ip.as_int != (uint32_t) -1)
 					if(++count==MAX_CHAIN)
 						break;
 			 } else {
