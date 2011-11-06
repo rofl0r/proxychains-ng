@@ -5,6 +5,7 @@
     copyright          :  netcreature (C) 2002
     email                 : netcreature@users.sourceforge.net
  ***************************************************************************/
+#include <stdint.h>
  /*     GPL */
 /***************************************************************************
  *                                                                         *
@@ -19,31 +20,66 @@
 #define BUFF_SIZE 8*1024  // used to read responses from proxies.
 #define     MAX_LOCALNET 1024
 
+typedef union {
+	unsigned char octet[4];
+	uint32_t as_int;
+} ip_type;
+
+typedef struct {
+	uint32_t hash;
+	char* string;
+} string_hash_tuple;
+
+typedef struct {
+	uint32_t counter;
+	uint32_t capa;
+	string_hash_tuple** list;
+} internal_ip_lookup_table;
+
+extern internal_ip_lookup_table internal_ips;
+
 /*error codes*/
-typedef enum
-{
- SUCCESS=0,
- MEMORY_FAIL,        // malloc failed
- SOCKET_ERROR,  // look errno for more
- CHAIN_DOWN,    // no proxy in chain responds to tcp
- CHAIN_EMPTY,   //  if proxy_count = 0
- BLOCKED  //  target's port blocked on last proxy in the chain
+typedef enum {
+	SUCCESS=0,
+	MEMORY_FAIL,        // malloc failed
+	SOCKET_ERROR,  // look errno for more
+	CHAIN_DOWN,    // no proxy in chain responds to tcp
+	CHAIN_EMPTY,   //  if proxy_count = 0
+	BLOCKED  //  target's port blocked on last proxy in the chain
 } ERR_CODE;
 
 
-typedef enum {HTTP_TYPE,SOCKS4_TYPE,SOCKS5_TYPE} proxy_type;
-typedef enum {DYNAMIC_TYPE,STRICT_TYPE,RANDOM_TYPE} chain_type;
-typedef enum {PLAY_STATE,DOWN_STATE,BLOCKED_STATE,BUSY_STATE} proxy_state;
-typedef enum {RANDOMLY,FIFOLY} select_type;
+typedef enum {
+	HTTP_TYPE,
+	SOCKS4_TYPE,
+	SOCKS5_TYPE
+} proxy_type;
 
-typedef struct
-{
+typedef enum {
+	DYNAMIC_TYPE,
+	STRICT_TYPE,
+	RANDOM_TYPE}
+chain_type;
+
+typedef enum {
+	PLAY_STATE,
+	DOWN_STATE,
+	BLOCKED_STATE,
+	BUSY_STATE
+} proxy_state;
+
+typedef enum {
+	RANDOMLY,
+	FIFOLY
+} select_type;
+
+typedef struct {
 	struct in_addr in_addr, netmask;
 	unsigned short port;
 } localaddr_arg;
 
 typedef struct {
-	unsigned int ip;
+	ip_type ip;
 	unsigned short port;
 	proxy_type pt;
 	proxy_state ps;
@@ -53,21 +89,21 @@ typedef struct {
 
 typedef struct {
 	proxy_data *pd;
- 	chain_type ct;
-  	unsigned int proxy_count;
-   	int sock;
-    	struct sockaddr addr;
-      int flags;
+	chain_type ct;
+	unsigned int proxy_count;
+	int sock;
+	struct sockaddr addr;
+	int flags;
 } thread_arg;
 
 int connect_proxy_chain (
-		int sock,
-		unsigned int target_ip,
-		unsigned short target_port,
-		proxy_data * pd,
-		unsigned int proxy_count,
-		chain_type ct,
-		unsigned int max_chain );
+	int sock,
+	ip_type target_ip,
+	unsigned short target_port,
+	proxy_data * pd,
+	unsigned int proxy_count,
+	chain_type ct,
+	unsigned int max_chain );
 
 int proxychains_write_log(char *str,...);
 struct hostent* proxy_gethostbyname(const char *name);

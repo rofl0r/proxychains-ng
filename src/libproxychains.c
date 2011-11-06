@@ -62,7 +62,7 @@ static void init_lib(void);
 
 static void init_lib(void)
 {
-	proxychains_write_log("[proxychains v3.2] DLL init\n");
+	proxychains_write_log(LOG_PREFIX "DLL init\n");
 	
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 	true_connect = (connect_t) dlsym(RTLD_NEXT, "connect");
@@ -200,21 +200,27 @@ static inline void get_chain_data(
 		if(buff[0] != '\n' && buff[strspn(buff," ")]!='#') {
 			if(list) {
 				memset(&pd[count], 0, sizeof(proxy_data));
-				pd[count].ps=PLAY_STATE;
-				port_n=0;
-				sscanf(buff,"%s %s %d %s %s", type,host,&port_n,
-					pd[count].user,pd[count].pass);
-				pd[count].ip=inet_addr(host);
-				pd[count].port=htons((unsigned short)port_n);
-				if(!strcmp(type,"http")) {
-					pd[count].pt=HTTP_TYPE;
-				}else if(!strcmp(type,"socks4")) {
-					pd[count].pt=SOCKS4_TYPE;
-				}else if(!strcmp(type,"socks5")) {
-					pd[count].pt=SOCKS5_TYPE;
-				}else continue;
 				
-				if( pd[count].ip && (int) pd[count].ip != -1 && port_n)
+				pd[count].ps = PLAY_STATE;
+				port_n = 0;
+				
+				sscanf(buff,"%s %s %d %s %s", type, host, &port_n,
+					pd[count].user, pd[count].pass);
+				
+				pd[count].ip.as_int = (uint32_t) inet_addr(host);
+				pd[count].port = htons((unsigned short)port_n);
+				
+				if(!strcmp(type,"http")) {
+					pd[count].pt = HTTP_TYPE;
+				} else if(!strcmp(type,"socks4")) {
+					pd[count].pt = SOCKS4_TYPE;
+				} else if(!strcmp(type,"socks5")) {
+					pd[count].pt = SOCKS5_TYPE;
+				} else 
+					continue;
+				
+				if(pd[count].ip.as_int && port_n &&
+				   (int) pd[count].ip.as_int != (uint32_t) -1)
 					if(++count==MAX_CHAIN)
 						break;
 			 } else {
@@ -226,13 +232,11 @@ static inline void get_chain_data(
 					*ct=STRICT_TYPE;
 				} else if(strstr(buff,"dynamic_chain")) {
 					*ct=DYNAMIC_TYPE;
-				}else if(strstr(buff,"tcp_read_time_out")){
+				} else if(strstr(buff,"tcp_read_time_out")){
 					sscanf(buff,"%s %d",user,&tcp_read_time_out) ;
-				}else if(strstr(buff,"tcp_connect_time_out")){
+				} else if(strstr(buff,"tcp_connect_time_out")){
 					sscanf(buff,"%s %d",user,&tcp_connect_time_out) ;
-				}
-				else if(strstr(buff,"localnet"))
-				{
+				} else if(strstr(buff,"localnet")) {
 					if (sscanf(buff,"%s %21[^/]/%15s", user,
 						local_in_addr_port, local_netmask) < 3) {
 						fprintf(stderr, "localnet format error");
@@ -276,15 +280,14 @@ static inline void get_chain_data(
 					{
 						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
 					}
-				}
-				else if(strstr(buff,"chain_len")){
+				} else if(strstr(buff,"chain_len")){
 					char *pc;int len;
 					pc=strchr(buff,'=');
 					len=atoi(++pc);
 					proxychains_max_chain=(len?len:1);
-				}else if(strstr(buff,"quiet_mode")){
+				} else if(strstr(buff,"quiet_mode")){
 					proxychains_quiet_mode=1;
-				}else if(strstr(buff,"proxy_dns")){
+				} else if(strstr(buff,"proxy_dns")){
 					proxychains_resolver=1;
 				}
 			}
@@ -301,6 +304,7 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 {
 	int socktype=0, flags=0, ret=0;
 	socklen_t optlen = 0;
+	ip_type dest_ip;
 #ifdef DEBUG
 	char str[256];
 #endif
@@ -335,20 +339,24 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 		}
 	}
 
-	flags=fcntl(sock, F_GETFL, 0);
+	flags = fcntl(sock, F_GETFL, 0);
 	if(flags & O_NONBLOCK)
 	fcntl(sock, F_SETFL, !O_NONBLOCK);
-	ret=connect_proxy_chain(
+	
+	dest_ip.as_int = SOCKADDR(*addr);
+	
+	ret = connect_proxy_chain(
 		sock,
-		SOCKADDR(*addr),
+		dest_ip,
 		SOCKPORT(*addr),
 		proxychains_pd,
 		proxychains_proxy_count,
 		proxychains_ct,
 		proxychains_max_chain );
+	
 	fcntl(sock, F_SETFL, flags);
-	if(ret!=SUCCESS)
-	errno=ECONNREFUSED;
+	if(ret != SUCCESS)
+	errno = ECONNREFUSED;
 	return ret;
 }
 
