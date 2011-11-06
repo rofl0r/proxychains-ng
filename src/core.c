@@ -55,12 +55,14 @@ uint32_t dalias_hash(char* s) {
 uint32_t index_from_internal_ip(ip_type internalip) {
 	ip_type tmp = internalip;
 	uint32_t ret;
-	ret = tmp.octet[3] + tmp.octet[2] << 8 + tmp.octet[1] << 16;
+	ret = tmp.octet[3] + (tmp.octet[2] << 8) + (tmp.octet[1] << 16);
+	ret -= 1;
 	return ret;
 }
 
 in_addr_t make_internal_ip(uint32_t index) {
 	ip_type ret;
+	index++; // so we can start at .0.0.1
 	if(index > 0xFFFFFF) return (in_addr_t) -1;
 	ret.octet[0] = 224;
 	ret.octet[1] = (index & 0xFF0000) >> 16;
