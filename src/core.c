@@ -782,9 +782,10 @@ struct hostent* proxy_gethostbyname(const char *name)
 	pthread_mutex_lock(&internal_ips_lock);
 #endif
 	
+	// see if we already have this dns entry saved.
 	if(internal_ips.counter) {
 		for( i = 0; i < internal_ips.counter; i++) {
-			if(internal_ips.list[i]->hash == hash) {
+			if(internal_ips.list[i]->hash == hash && !strcmp(name, internal_ips.list[i]->string)) {
 				resolved_addr = make_internal_ip(i);
 				PDEBUG("got cached ip for %s\n", name);
 				goto have_ip;
@@ -792,6 +793,7 @@ struct hostent* proxy_gethostbyname(const char *name)
 		}
 	}
 	
+	// grow list if needed.
 	if(internal_ips.capa < internal_ips.counter + 1) {
 		PDEBUG("realloc\n");
 		new_mem = realloc(internal_ips.list, (internal_ips.capa + 16) * sizeof(void*));
