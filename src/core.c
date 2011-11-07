@@ -269,6 +269,11 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 	size_t ulen = strlen(user);
 	size_t passlen = strlen(pass);
 	
+	if(ulen > 0xFF || passlen > 0xFF || dns_len > 0xFF) {
+		proxychains_write_log(LOG_PREFIX "error: maximum size of 255 for user/pass or domain name!\n");
+		goto err;
+	}
+	
         int len;
         unsigned char buff[BUFF_SIZE];
         //memset (buff, 0, sizeof(buff));
@@ -276,27 +281,29 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 	switch(pt) {
 		case HTTP_TYPE: {
 			if(!dns_len)
-				snprintf((char*)buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n",
-					inet_ntoa( * (struct in_addr *) &ip.as_int), ntohs(port));
-			else 
-				snprintf((char*)buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name, ntohs(port));
+				dns_name = inet_ntoa( * (struct in_addr *) &ip.as_int);
+			
+			snprintf((char*)buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name, ntohs(port));
 			
 			if (user[0])
 			{
-				char src[256];
-				char dst[512];
+				#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1)
+				// 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator.
+				char src[HTTP_AUTH_MAX];
+				char dst[(4 * HTTP_AUTH_MAX)];
+				
 				memcpy(src, user, ulen);
 				memcpy(src + ulen, ":", 1);
 				memcpy(src + ulen + 1, pass, passlen);
 				src[ulen + 1 + passlen] = 0;
 				
-				encode_base_64(src,dst,512);
+				encode_base_64(src, dst, sizeof(dst));
 				strcat((char*)buff,"Proxy-Authorization: Basic ");
-				strcat((char*)buff,dst);
-				strcat((char*)buff,"\r\n\r\n");
+				strcat((char*)buff, dst);
+				strcat((char*)buff, "\r\n\r\n");
 			}
 			else
-				strcat((char*)buff,"\r\n");
+				strcat((char*)buff, "\r\n");
 		
 			len = strlen((char*)buff);
 
