@@ -1,5 +1,14 @@
-ProxyChains ver 3.1 README
+ProxyChains ver 4.0 README
 ==========================
+
+*********** ATTENTION ***********
+
+this program works only on dynamically linked programs.
+also both proxychains and the program to call must use
+the same dynamic linker (i.e. same libc)
+
+*********************************
+
 
 This is Unix version only.
 
@@ -10,7 +19,19 @@ to follow through proxy (or proxy chain). It is a kind of proxifier.
 It acts like sockscap / permeo / eborder driver ( intercepts TCP calls )
 It is FREE.
 
-This version (3.x) introduces support for DNS resolving through proxy 
+Changelog:
+----------
+
+Version (4.x) removes the dnsresolver script which required a dynamically
+linked "dig" binary to be present with remote DNS lookup.
+this speeds up any operation involving DNS, as the old script had to use TCP.
+additionally it allows to use .onion urls when used with TOR.
+also it removed the broken autoconf build system with a simple Makefile.
+there's a ./configure script though for convenience.
+it also adds support for a config file passed via command line switches/
+environment variables.
+
+Version (3.x) introduces support for DNS resolving through proxy 
 it supports SOCKS4, SOCKS5 and HTTP CONNECT proxy servers.
 Auth-types: socks - "user/pass" , http - "basic".
 
@@ -38,7 +59,10 @@ Some cool features:
 * You can use it with servers, like squid, sendmail, or whatever.
 * DNS resolving through proxy.
 
+
 Configuration:
+--------------
+
 proxychains looks for config file in following order:
 1)	file listed in environment variable ${PROXYCHAINS_CONF_FILE} or
 	provided as a -f argument to proxychains script or binary.
