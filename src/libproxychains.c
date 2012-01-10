@@ -338,7 +338,7 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 		if ((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
 			== (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr))
 		{
-			if (localnet_addr[i].port && localnet_addr[i].port == port) {
+			if (localnet_addr[i].port || localnet_addr[i].port == port) {
 				PDEBUG("accessing localnet using true_connect\n");
 				return true_connect(sock,addr,len);
 			}
