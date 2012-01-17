@@ -48,7 +48,8 @@ extern int proxychains_quiet_mode;
 internal_ip_lookup_table internal_ips = {0, 0, NULL};
 
 
-uint32_t dalias_hash(char* s) {
+uint32_t dalias_hash(char* s0) {
+	unsigned char* s = (void*) s0;
 	uint_fast32_t h = 0;
 	while (*s) {
 		h = 16*h + *s++;
