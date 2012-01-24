@@ -46,9 +46,9 @@ if [ ! $CC ] ; then
 	CC=cc
 fi
 
-echo CC=$CC>config.mak
-echo CPPFLAGS=$CPPFLAGS>>config.mak
-[ -z "$CFLAGS" ] || echo CFLAGS=$CFLAGS>>config.mak
+echo CC?=$CC>config.mak
+[ -z "$CPPFLAGS" ] || echo CPPFLAGS?=$CPPFLAGS>>config.mak
+[ -z "$CFLAGS" ] || echo USER_CFLAGS?=$CFLAGS>>config.mak
 echo prefix=$prefix>>config.mak
 echo exec_prefix=$exec_prefix>>config.mak
 echo bindir=$bindir>>config.mak
