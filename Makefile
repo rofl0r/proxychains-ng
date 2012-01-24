@@ -14,12 +14,12 @@ libdir = $(prefix)/lib
 
 SRCS = $(sort $(wildcard src/*.c))
 OBJS = $(SRCS:.c=.o)
-LOBJS = $(OBJS:.o=.lo)
+LOBJS = src/core.o src/libproxychains.o
 
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe -DTHREAD_SAFE
 LDFLAGS = -shared -fPIC -ldl -lpthread
 INC     = 
-PIC     = -fPIC -O0
+PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
 RANLIB  = $(CROSS_COMPILE)ranlib
 
@@ -30,9 +30,9 @@ ALL_LIBS = $(SHARED_LIBS)
 PXCHAINS = proxychains4
 ALL_TOOLS = $(PXCHAINS)
 
-
 -include config.mak
 
+CFLAGS+=$(USER_CFLAGS)
 CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\"
 
 
@@ -40,19 +40,16 @@ all: $(ALL_LIBS) $(ALL_TOOLS)
 
 #install: $(ALL_LIBS:lib/%=$(DESTDIR)$(libdir)/%) $(DESTDIR)$(LDSO_PATHNAME)
 install: 
-	install -D -m 755 $(PXCHAINS) $(bindir)/$(PXCHAINS)
-	install -D -m 644 $(LDSO_PATHNAME) $(libdir)
-	install -D -m 644 src/proxychains.conf $(prefix)/etc
+	install -D -m 755 $(ALL_TOOLS) $(bindir)/
+	install -D -m 644 $(ALL_LIBS) $(libdir)/
+	install -D -m 644 src/proxychains.conf $(prefix)/etc/
 
 clean:
+	rm -f $(ALL_LIBS)
+	rm -f $(ALL_TOOLS)
 	rm -f $(OBJS)
-	rm -f $(LOBJS)
-	rm -f $(ALL_LIBS) lib/*.[ao] lib/*.so
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(CFLAGS_MAIN) $(INC) -c -o $@ $<
-
-%.lo: %.c
 	$(CC) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<
 
 $(LDSO_PATHNAME): $(LOBJS)
