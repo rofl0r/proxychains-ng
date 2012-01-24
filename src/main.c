@@ -31,10 +31,13 @@ extern int optind, opterr, optopt;
 
 #include "common.h"
 
-static void usage(char** argv) {
-	printf("\nUsage:	 %s [h] [f] config_file program_name [arguments]\n"
-		"\t for example : proxychains telnet somehost.com\n"
-		"More help in README file\n", argv[0]);
+static int usage(char** argv) {
+	printf( "\nUsage:\t%s -q -f config_file program_name [arguments]\n"
+		"\t-q makes proxychains quiet - this overrides the config setting\n"
+		"\t-t allows to manually specify a configfile to use\n"
+		"\tfor example : proxychains telnet somehost.com\n"
+		"More help in README file\n\n", argv[0]);
+	return EXIT_FAILURE;
 }
 
 int check_path(char* path) {
@@ -73,25 +76,30 @@ int main(int argc, char *argv[]) {
 	char pbuf[256];
 	int opt;
 	int start_argv = 1;
+	int quiet = 0;
+	
+	if(argc == 1) return usage(argv);
 
-	while ((opt = getopt(argc, argv, "hf:")) != -1) {
+	while ((opt = getopt(argc, argv, "qf:")) != -1) {
 		switch (opt) {
-			case 'h':
-				usage(argv);
-				return EXIT_SUCCESS;
+			case 'q':
+				quiet = 1;
+				start_argv++;
+				break;
 			case 'f':
 				path = (char *)optarg;
 				if(!path) {
-					printf("error: no path supplied.\n");
-					return(EXIT_FAILURE);
+					fprintf(stderr, "error: no path supplied.\n");
+					return EXIT_FAILURE;
 				}
-				start_argv = 3;
+				start_argv += 2;
 				break;
 			default: /* '?' */
-				usage(argv);
-				exit(EXIT_FAILURE);
+				return usage(argv);
 			}
 	}
+	
+	if(start_argv >= argc) return usage(argv);
 
 	/* check if path of config file has not been passed via command line */
 	if(!path) {
@@ -120,10 +128,12 @@ int main(int argc, char *argv[]) {
 	
 	have:
 
-	printf(LOG_PREFIX "config file found: %s\n", path);
+	if(!quiet) fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
+	
+	if(quiet) setenv(PROXYCHAINS_QUIET_MODE_ENV_VAR, "1", 1);
 
 
 	// search DLL
@@ -142,10 +152,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	if(!prefix) {
-		printf("couldnt locate %s\n", dll_name);
+		fprintf(stderr, "couldnt locate %s\n", dll_name);
 		return EXIT_FAILURE;
 	}
-	printf(LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
+	if(!quiet) fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
 	
 	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/%s", prefix, dll_name);
 

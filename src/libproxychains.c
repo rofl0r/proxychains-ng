@@ -65,9 +65,11 @@ static void init_lib(void)
 #ifdef THREAD_SAFE
 	pthread_mutex_init(&internal_ips_lock, NULL);
 #endif
+	/* read the config file */
+	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
+	
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
 	
-	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 	true_connect = (connect_t) dlsym(RTLD_NEXT, "connect");
 
 	if (!true_connect) {
@@ -180,8 +182,6 @@ static inline void get_chain_data(
 	tcp_connect_time_out = 10*1000;
 	*ct = DYNAMIC_TYPE;
 
-	env = NULL;
-
 	/*
 	 * Get path to configuration file from env this file has priority
 	 * if it's defined.
@@ -190,7 +190,7 @@ static inline void get_chain_data(
 
 	snprintf(buff,256,"%s/.proxychains/proxychains.conf",getenv("HOME"));
 
-	if(!(file=fopen(env,"r")))
+	if(!env || (!(file=fopen(env,"r"))))
 	if(!(file=fopen("./proxychains.conf","r")))
 	if(!(file=fopen(buff,"r")))
 	if(!(file=fopen("/etc/proxychains.conf","r")))
@@ -198,6 +198,9 @@ static inline void get_chain_data(
 		perror("Can't locate proxychains.conf");
 		exit(1);
 	}
+	
+	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
+	if(env && *env == '1') proxychains_quiet_mode = 1;
 
 	while(fgets(buff,sizeof(buff),file)) {
 		if(buff[0] != '\n' && buff[strspn(buff," ")]!='#') {
