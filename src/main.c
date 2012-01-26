@@ -26,9 +26,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-extern char *optarg;
-extern int optind, opterr, optopt;
-
 #include "common.h"
 
 static int usage(char** argv) {
@@ -74,31 +71,33 @@ int main(int argc, char *argv[]) {
 	char *path = NULL;
 	char buf[256];
 	char pbuf[256];
-	int opt;
 	int start_argv = 1;
 	int quiet = 0;
+	size_t i;
+	const char* prefix = NULL;
 	
-	if(argc == 1) return usage(argv);
-
-	while ((opt = getopt(argc, argv, "qf:")) != -1) {
-		switch (opt) {
-			case 'q':
+	for(i = 0; i < 2; i++) {
+		if(start_argv < argc && argv[start_argv][0] == '-') {
+			if(argv[start_argv][1] == 'q') {
 				quiet = 1;
 				start_argv++;
-				break;
-			case 'f':
-				path = (char *)optarg;
+			} else if(argv[start_argv][1] == 'f') {
+				
+				if(start_argv + 1 < argc) 
+					path = argv[start_argv + 1];
+				else 
+					return usage(argv);
+				
 				if(!path) {
 					fprintf(stderr, "error: no path supplied.\n");
 					return EXIT_FAILURE;
 				}
 				start_argv += 2;
-				break;
-			default: /* '?' */
-				return usage(argv);
 			}
+		} else 
+			break;
 	}
-	
+
 	if(start_argv >= argc) return usage(argv);
 
 	/* check if path of config file has not been passed via command line */
@@ -137,8 +136,6 @@ int main(int argc, char *argv[]) {
 
 
 	// search DLL
-	size_t i = 0;
-	const char* prefix = NULL;
 
 	set_own_dir(argv[0]);
 
