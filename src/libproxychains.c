@@ -55,6 +55,7 @@ int proxychains_resolver = 0;
 static int init_l = 0;
 localaddr_arg localnet_addr[MAX_LOCALNET];
 size_t num_localnet_addr = 0;
+unsigned int remote_dns_subnet = 224;
 
 static inline void get_chain_data(proxy_data *pd, unsigned int *proxy_count,
 	chain_type *ct);
@@ -232,18 +233,24 @@ static inline void get_chain_data(
 			 } else {
 				if(strstr(buff,"[ProxyList]")) {
 					list=1;
-				} else if(strstr(buff,"random_chain")) {
+				} else if(strstr(buff, "random_chain")) {
 					*ct=RANDOM_TYPE;
-				} else if(strstr(buff,"strict_chain")) {
+				} else if(strstr(buff, "strict_chain")) {
 					*ct=STRICT_TYPE;
-				} else if(strstr(buff,"dynamic_chain")) {
+				} else if(strstr(buff, "dynamic_chain")) {
 					*ct=DYNAMIC_TYPE;
 				} else if(strstr(buff,"tcp_read_time_out")){
-					sscanf(buff,"%s %d",user,&tcp_read_time_out) ;
+					sscanf(buff, "%s %d", user, &tcp_read_time_out);
 				} else if(strstr(buff,"tcp_connect_time_out")){
-					sscanf(buff,"%s %d",user,&tcp_connect_time_out) ;
-				} else if(strstr(buff,"localnet")) {
-					if (sscanf(buff,"%s %21[^/]/%15s", user,
+					sscanf(buff, "%s %d", user, &tcp_connect_time_out);
+				} else if(strstr(buff,"remote_dns_subnet")){
+					sscanf(buff, "%s %d", user, &remote_dns_subnet);
+					if(remote_dns_subnet >= 256) {
+						fprintf(stderr, "remote_dns_subnet: invalid value. requires a number between 0 and 255.\n");
+						exit(1);
+					}
+				} else if(strstr(buff, "localnet")) {
+					if (sscanf(buff, "%s %21[^/]/%15s", user,
 						local_in_addr_port, local_netmask) < 3) {
 						fprintf(stderr, "localnet format error");
 						exit(1);

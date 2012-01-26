@@ -44,6 +44,7 @@ pthread_mutex_t internal_ips_lock;
 extern int tcp_read_time_out;
 extern int tcp_connect_time_out;
 extern int proxychains_quiet_mode;
+extern unsigned int remote_dns_subnet;
 
 internal_ip_lookup_table internal_ips = {0, 0, NULL};
 
@@ -84,7 +85,7 @@ in_addr_t make_internal_ip(uint32_t index) {
 	ip_type ret;
 	index++; // so we can start at .0.0.1
 	if(index > 0xFFFFFF) return (in_addr_t) -1;
-	ret.octet[0] = 224;
+	ret.octet[0] = remote_dns_subnet & 0xFF;
 	ret.octet[1] = (index & 0xFF0000) >> 16;
 	ret.octet[2] = (index & 0xFF00) >> 8;
 	ret.octet[3] = index & 0xFF;
@@ -260,7 +261,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt,ch
 	// we use ip addresses with 224.* to lookup their dns name in our table, to allow remote DNS resolution
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
 	// the results returned from gethostbyname et al.)
-	if(ip.octet[0] == 224) {
+	// the hardcoded number 224 can now be changed using the config option remote_dns_subnet to i.e. 127
+	if(ip.octet[0] == remote_dns_subnet) {
 		dns_name = string_from_internal_ip(ip);
 		if(!dns_name) goto err;
 		dns_len = strlen(dns_name);
@@ -584,7 +586,7 @@ static int chain_step(int ns, proxy_data *pfrom, proxy_data *pto)
 #ifdef DEBUG
 	PDEBUG("chain_step()\n");
 #endif
-	if(pto->ip.octet[0] == 224) {
+	if(pto->ip.octet[0] == remote_dns_subnet) {
 		hostname = string_from_internal_ip(pto->ip);
 		if(!hostname) goto usenumericip;
 	} else {
