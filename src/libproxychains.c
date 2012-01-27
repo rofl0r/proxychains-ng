@@ -61,9 +61,7 @@ static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, ch
 static void init_lib(void);
 
 static void init_lib(void) {
-#ifdef THREAD_SAFE
-	pthread_mutex_init(&internal_ips_lock, NULL);
-#endif
+	MUTEX_INIT(&internal_ips_lock, NULL);
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 

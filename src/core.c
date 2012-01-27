@@ -69,15 +69,11 @@ uint32_t index_from_internal_ip(ip_type internalip) {
 
 char *string_from_internal_ip(ip_type internalip) {
 	char *res = NULL;
-#ifdef THREAD_SAFE
-	pthread_mutex_lock(&internal_ips_lock);
-#endif
 	uint32_t index = index_from_internal_ip(internalip);
+	MUTEX_LOCK(&internal_ips_lock);
 	if(index < internal_ips.counter)
 		res = internal_ips.list[index]->string;
-#ifdef THREAD_SAFE
-	pthread_mutex_unlock(&internal_ips_lock);
-#endif
+	MUTEX_UNLOCK(&internal_ips_lock);
 	return res;
 }
 
@@ -790,9 +786,7 @@ struct hostent *proxy_gethostbyname(const char *name) {
 
 	hash = dalias_hash((char *) name);
 
-#ifdef THREAD_SAFE
-	pthread_mutex_lock(&internal_ips_lock);
-#endif
+	MUTEX_LOCK(&internal_ips_lock);
 
 	// see if we already have this dns entry saved.
 	if(internal_ips.counter) {
@@ -839,10 +833,7 @@ struct hostent *proxy_gethostbyname(const char *name) {
 
 	have_ip:
 
-#ifdef THREAD_SAFE
-	pthread_mutex_unlock(&internal_ips_lock);
-#endif
-
+	MUTEX_UNLOCK(&internal_ips_lock);
 
 	strncpy(addr_name, name, sizeof(addr_name));
 
@@ -851,9 +842,7 @@ struct hostent *proxy_gethostbyname(const char *name) {
 	return &hostent_space;
 
 	err_plus_unlock:
-#ifdef THREAD_SAFE
-	pthread_mutex_unlock(&internal_ips_lock);
-#endif
+	MUTEX_UNLOCK(&internal_ips_lock);
 	return NULL;
 }
 int proxy_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
