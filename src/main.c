@@ -167,9 +167,14 @@ int main(int argc, char *argv[]) {
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
 
+#ifndef IS_MAC
 	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/%s", prefix, dll_name);
-
 	putenv(buf);
+#else
+	snprintf(buf, sizeof(buf), "DYLD_INSERT_LIBRARIES=%s/%s", prefix, dll_name);
+	putenv(buf);
+	putenv("DYLD_FORCE_FLAT_NAMESPACE=1");
+#endif
 	execvp(argv[start_argv], &argv[start_argv]);
 	perror("proxychains can't load process....");
 

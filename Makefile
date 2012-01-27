@@ -24,6 +24,8 @@ AR      = $(CROSS_COMPILE)ar
 RANLIB  = $(CROSS_COMPILE)ranlib
 
 LDSO_SUFFIX = so
+LD_SET_SONAME = -Wl,-soname=
+INSTALL_FLAGS = -D -m
 
 -include config.mak
 
@@ -35,7 +37,7 @@ PXCHAINS = proxychains4
 ALL_TOOLS = $(PXCHAINS)
 
 
-CFLAGS+=$(USER_CFLAGS)
+CFLAGS+=$(USER_CFLAGS) $(MAC_CFLAGS)
 CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DINSTALL_PREFIX=\"$(prefix)\" -DDLL_NAME=\"$(LDSO_PATHNAME)\"
 
 
@@ -43,9 +45,9 @@ all: $(ALL_LIBS) $(ALL_TOOLS)
 
 #install: $(ALL_LIBS:lib/%=$(DESTDIR)$(libdir)/%) $(DESTDIR)$(LDSO_PATHNAME)
 install: 
-	install -D -m 755 $(ALL_TOOLS) $(bindir)/
-	install -D -m 644 $(ALL_LIBS) $(libdir)/
-	install -D -m 644 src/proxychains.conf $(prefix)/etc/
+	install $(INSTALL_FLAGS) 755 $(ALL_TOOLS) $(bindir)/
+	install $(INSTALL_FLAGS) 644 $(ALL_LIBS) $(libdir)/
+	install $(INSTALL_FLAGS) 644 src/proxychains.conf $(prefix)/etc/
 
 clean:
 	rm -f $(ALL_LIBS)
@@ -56,7 +58,7 @@ clean:
 	$(CC) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<
 
 $(LDSO_PATHNAME): $(LOBJS)
-	$(CC) $(LDFLAGS) -Wl,-soname=$(LDSO_PATHNAME) -o $@ $(LOBJS)
+	$(CC) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -o $@ $(LOBJS)
 
 $(ALL_TOOLS): $(OBJS)
 	$(CC) src/main.o -o $(PXCHAINS)

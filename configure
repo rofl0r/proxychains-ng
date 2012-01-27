@@ -60,6 +60,9 @@ echo libdir=$libdir>>config.mak
 echo includedir=$includedir>>config.mak
 if ismac ; then
 	echo LDSO_SUFFIX=dylib>>config.mak
+	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
+	echo LD_SET_SONAME=-Wl,-install_name,>>config.mak
+	echo INSTALL_FLAGS=-m>>config.mak
 fi
 
 echo done, now run make \&\& make install
