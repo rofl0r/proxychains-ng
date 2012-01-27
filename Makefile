@@ -23,14 +23,17 @@ PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
 RANLIB  = $(CROSS_COMPILE)ranlib
 
-LDSO_PATHNAME = libproxychains4.so
+LDSO_SUFFIX = so
+
+-include config.mak
+
+LDSO_PATHNAME = libproxychains4.$(LDSO_SUFFIX)
 
 SHARED_LIBS = $(LDSO_PATHNAME)
 ALL_LIBS = $(SHARED_LIBS)
 PXCHAINS = proxychains4
 ALL_TOOLS = $(PXCHAINS)
 
--include config.mak
 
 CFLAGS+=$(USER_CFLAGS)
 CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DINSTALL_PREFIX=\"$(prefix)\" -DDLL_NAME=\"$(LDSO_PATHNAME)\"
