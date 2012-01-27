@@ -88,10 +88,6 @@ int main(int argc, char *argv[]) {
 				else 
 					return usage(argv);
 				
-				if(!path) {
-					fprintf(stderr, "error: no path supplied.\n");
-					return EXIT_FAILURE;
-				}
 				start_argv += 2;
 			}
 		} else 
