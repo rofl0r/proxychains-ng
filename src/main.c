@@ -28,24 +28,24 @@
 
 #include "common.h"
 
-static int usage(char** argv) {
-	printf( "\nUsage:\t%s -q -f config_file program_name [arguments]\n"
-		"\t-q makes proxychains quiet - this overrides the config setting\n"
-		"\t-t allows to manually specify a configfile to use\n"
-		"\tfor example : proxychains telnet somehost.com\n"
-		"More help in README file\n\n", argv[0]);
+static int usage(char **argv) {
+	printf("\nUsage:\t%s -q -f config_file program_name [arguments]\n"
+	       "\t-q makes proxychains quiet - this overrides the config setting\n"
+	       "\t-t allows to manually specify a configfile to use\n"
+	       "\tfor example : proxychains telnet somehost.com\n" "More help in README file\n\n", argv[0]);
 	return EXIT_FAILURE;
 }
 
-int check_path(char* path) {
-	if(!path) return 0;
+int check_path(char *path) {
+	if(!path)
+		return 0;
 	return access(path, R_OK) != -1;
 }
 
-static const char* dll_name = "libproxychains4.so";
+static const char *dll_name = "libproxychains4.so";
 
 static char own_dir[256];
-static const char* dll_dirs[] = {
+static const char *dll_dirs[] = {
 	".",
 	own_dir,
 	LIB_DIR,
@@ -56,9 +56,10 @@ static const char* dll_dirs[] = {
 	NULL
 };
 
-static void set_own_dir(const char* argv0) {
+static void set_own_dir(const char *argv0) {
 	size_t l = strlen(argv0);
-	while(l && argv0[l - 1] != '/') l--;
+	while(l && argv0[l - 1] != '/')
+		l--;
 	if(l == 0)
 		memcpy(own_dir, ".", 2);
 	else {
@@ -76,7 +77,7 @@ int main(int argc, char *argv[]) {
 	int start_argv = 1;
 	int quiet = 0;
 	size_t i;
-	const char* prefix = NULL;
+	const char *prefix = NULL;
 
 	for(i = 0; i < MAX_COMMANDLINE_FLAGS; i++) {
 		if(start_argv < argc && argv[start_argv][0] == '-') {
@@ -96,41 +97,48 @@ int main(int argc, char *argv[]) {
 			break;
 	}
 
-	if(start_argv >= argc) return usage(argv);
+	if(start_argv >= argc)
+		return usage(argv);
 
 	/* check if path of config file has not been passed via command line */
 	if(!path) {
 		// priority 1: env var PROXYCHAINS_CONF_FILE
 		path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
-		if(check_path(path)) goto have;
+		if(check_path(path))
+			goto have;
 
 		// priority 2; proxychains conf in actual dir
 		path = getcwd(buf, sizeof(buf));
 		snprintf(pbuf, sizeof(pbuf), "%s/%s", path, PROXYCHAINS_CONF_FILE);
 		path = pbuf;
-		if(check_path(path)) goto have;
+		if(check_path(path))
+			goto have;
 
 		// priority 3; $HOME/.proxychains/proxychains.conf
 		path = getenv("HOME");
 		snprintf(pbuf, sizeof(pbuf), "%s/.proxychains/%s", path, PROXYCHAINS_CONF_FILE);
 		path = pbuf;
-		if(check_path(path)) goto have;
+		if(check_path(path))
+			goto have;
 
 		// priority 4: /etc/proxychains.conf
 		path = "/etc/proxychains.conf";
-		if(check_path(path)) goto have;
+		if(check_path(path))
+			goto have;
 		perror("couldnt find configuration file");
 		return 1;
 	}
 
 	have:
 
-	if(!quiet) fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
+	if(!quiet)
+		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
 
-	if(quiet) setenv(PROXYCHAINS_QUIET_MODE_ENV_VAR, "1", 1);
+	if(quiet)
+		setenv(PROXYCHAINS_QUIET_MODE_ENV_VAR, "1", 1);
 
 
 	// search DLL
@@ -150,7 +158,8 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "couldnt locate %s\n", dll_name);
 		return EXIT_FAILURE;
 	}
-	if(!quiet) fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
+	if(!quiet)
+		fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
 
 	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/%s", prefix, dll_name);
 
