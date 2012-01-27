@@ -19,6 +19,10 @@ parsearg() {
 	esac
 }
 
+ismac() {
+	uname -s | grep Darwin
+}
+
 while true ; do
 	case $1 in
 	-*) parsearg "$1"; shift;;
@@ -54,6 +58,9 @@ echo exec_prefix=$exec_prefix>>config.mak
 echo bindir=$bindir>>config.mak
 echo libdir=$libdir>>config.mak
 echo includedir=$includedir>>config.mak
+if ismac ; then
+	echo LDSO_SUFFIX=dylib>>config.mak
+fi
 
 echo done, now run make \&\& make install
 
