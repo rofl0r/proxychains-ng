@@ -33,7 +33,7 @@ ALL_TOOLS = $(PXCHAINS)
 -include config.mak
 
 CFLAGS+=$(USER_CFLAGS)
-CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\"
+CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DINSTALL_PREFIX=\"$(prefix)\"
 
 
 all: $(ALL_LIBS) $(ALL_TOOLS)
