@@ -93,6 +93,30 @@ in_addr_t make_internal_ip(uint32_t index) {
 	return (in_addr_t) ret.as_int;
 }
 
+// stolen from libulz (C) rofl0r
+void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes) {
+	unsigned char *p;
+	char *o = outbuf_16_bytes;
+	unsigned char n;
+	for(p = ip_buf_4_bytes; p < ip_buf_4_bytes + 4; p++) {
+		n = *p;
+		if(*p >= 100) {
+			if(*p >= 200)
+				*(o++) = '2';
+			else
+				*(o++) = '1';
+			n %= 100;
+		}
+		if(*p >= 10) {
+			*(o++) = (n / 10) + '0';
+			n %= 10;
+		}
+		*(o++) = n + '0';
+		*(o++) = '.';
+	}
+	o[-1] = 0;
+}
+
 static const char base64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 static int poll_retry(struct pollfd *fds, nfds_t nfsd, int timeout) {
@@ -277,12 +301,16 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 	int len;
 	unsigned char buff[BUFF_SIZE];
+	char ip_buf[16];
+	
 	//memset (buff, 0, sizeof(buff));
 
 	switch (pt) {
 		case HTTP_TYPE:{
-				if(!dns_len)
-					dns_name = inet_ntoa(*(struct in_addr *) &ip.as_int);
+				if(!dns_len) {
+					pc_stringfromipv4(&ip.octet[0], ip_buf);
+					dns_name = ip_buf;
+				}
 
 				snprintf((char *) buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name,
 					 ntohs(port));
@@ -487,13 +515,15 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	struct sockaddr_in addr;
+	char ip_buf[16];
 
 	*fd = socket(PF_INET, SOCK_STREAM, 0);
 	if(*fd == -1)
 		goto error;
-
+	
+	pc_stringfromipv4(&pd->ip.octet[0], ip_buf);
 	proxychains_write_log(LOG_PREFIX "%s " TP " %s:%d ",
-			      begin_mark, inet_ntoa(*(struct in_addr *) &pd->ip), htons(pd->port));
+			      begin_mark, ip_buf, htons(pd->port));
 	pd->ps = PLAY_STATE;
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
@@ -570,6 +600,7 @@ static unsigned int calc_alive(proxy_data * pd, unsigned int proxy_count) {
 static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	int retcode = -1;
 	char *hostname;
+	char ip_buf[16];
 
 	PDEBUG("chain_step()\n");
 
@@ -579,7 +610,8 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 			goto usenumericip;
 	} else {
 	usenumericip:
-		hostname = inet_ntoa(*(struct in_addr *) &pto->ip);
+		pc_stringfromipv4(&pto->ip.octet[0], ip_buf);
+		hostname = ip_buf;
 	}
 
 	proxychains_write_log(TP " %s:%d ", hostname, htons(pto->port));

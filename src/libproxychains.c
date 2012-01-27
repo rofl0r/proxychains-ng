@@ -385,6 +385,7 @@ int getnameinfo(const struct sockaddr *sa,
 		socklen_t salen, char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags)
 #endif
 {
+	char ip_buf[16];
 	int ret = 0;
 
 	if(!init_l)
@@ -395,36 +396,14 @@ int getnameinfo(const struct sockaddr *sa,
 	if(!proxychains_resolver) {
 		ret = true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 	} else {
-		if(hostlen)
-			strncpy(host, inet_ntoa(SOCKADDR_2(*sa)), hostlen);
+		if(hostlen) {
+			pc_stringfromipv4((unsigned char*) &(SOCKADDR_2(*sa)), ip_buf);
+			strncpy(host, ip_buf, hostlen);
+		}
 		if(servlen)
 			snprintf(serv, servlen, "%d", ntohs(SOCKPORT(*sa)));
 	}
 	return ret;
-}
-
-// stolen from libulz (C) rofl0r
-static void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes) {
-	unsigned char *p;
-	char *o = outbuf_16_bytes;
-	unsigned char n;
-	for(p = ip_buf_4_bytes; p < ip_buf_4_bytes + 4; p++) {
-		n = *p;
-		if(*p >= 100) {
-			if(*p >= 200)
-				*(o++) = '2';
-			else
-				*(o++) = '1';
-			n %= 100;
-		}
-		if(*p >= 10) {
-			*(o++) = (n / 10) + '0';
-			n %= 10;
-		}
-		*(o++) = n + '0';
-		*(o++) = '.';
-	}
-	o[-1] = 0;
 }
 
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {

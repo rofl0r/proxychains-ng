@@ -142,6 +142,8 @@ int proxy_getaddrinfo(const char *node, const char *service,
 
 struct hostent* proxy_gethostbyname(const char *name);
 
+void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
+
 #ifdef DEBUG
 # define PDEBUG(fmt, args...) fprintf(stderr,"DEBUG:"fmt, ## args)
 #else
