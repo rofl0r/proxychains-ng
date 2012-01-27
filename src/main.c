@@ -42,7 +42,7 @@ int check_path(char *path) {
 	return access(path, R_OK) != -1;
 }
 
-static const char *dll_name = "libproxychains4.so";
+static const char *dll_name = DLL_NAME;
 
 static char own_dir[256];
 static const char *dll_dirs[] = {

@@ -33,7 +33,7 @@ ALL_TOOLS = $(PXCHAINS)
 -include config.mak
 
 CFLAGS+=$(USER_CFLAGS)
-CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DINSTALL_PREFIX=\"$(prefix)\"
+CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DINSTALL_PREFIX=\"$(prefix)\" -DDLL_NAME=\"$(LDSO_PATHNAME)\"
 
 
 all: $(ALL_LIBS) $(ALL_TOOLS)
