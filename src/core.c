@@ -249,11 +249,10 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 
 #define INVALID_INDEX 0xFFFFFFFFU
 static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, char *user, char *pass) {
-#ifdef DEBUG
-	PDEBUG("tunnel_to()\n");
-#endif
 	char *dns_name = NULL;
 	size_t dns_len = 0;
+
+	PDEBUG("tunnel_to()\n");
 
 	// we use ip addresses with 224.* to lookup their dns name in our table, to allow remote DNS resolution
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
@@ -571,9 +570,9 @@ static unsigned int calc_alive(proxy_data * pd, unsigned int proxy_count) {
 static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	int retcode = -1;
 	char *hostname;
-#ifdef DEBUG
+
 	PDEBUG("chain_step()\n");
-#endif
+
 	if(pto->ip.octet[0] == remote_dns_subnet) {
 		hostname = string_from_internal_ip(pto->ip);
 		if(!hostname)
@@ -614,9 +613,8 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	unsigned int curr_len = 0;
 
 	p3 = &p4;
-#ifdef DEBUG
+
 	PDEBUG("connect_proxy_chain\n");
-#endif
 
 	again:
 
@@ -633,9 +631,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				if(!p2)
 					break;
 				if(SUCCESS != chain_step(ns, p1, p2)) {
-#ifdef DEBUG
 					PDEBUG("GOTO AGAIN 1\n");
-#endif
 					goto again;
 				}
 				p1 = p2;
@@ -651,24 +647,18 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			alive_count = calc_alive(pd, proxy_count);
 			offset = 0;
 			if(!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
-#ifdef DEBUG
 				PDEBUG("select_proxy failed\n");
-#endif
 				goto error_strict;
 			}
 			if(SUCCESS != start_chain(&ns, p1, ST)) {
-#ifdef DEBUG
 				PDEBUG("start_chain failed\n");
-#endif
 				goto error_strict;
 			}
 			while(offset < proxy_count) {
 				if(!(p2 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
 					break;
 				if(SUCCESS != chain_step(ns, p1, p2)) {
-#ifdef DEBUG
 					PDEBUG("chain_step failed\n");
-#endif
 					goto error_strict;
 				}
 				p1 = p2;
@@ -693,9 +683,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				if(!(p2 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
 					goto error_more;
 				if(SUCCESS != chain_step(ns, p1, p2)) {
-#ifdef DEBUG
 					PDEBUG("GOTO AGAIN 2\n");
-#endif
 					goto again;
 				}
 				p1 = p2;
@@ -721,9 +709,8 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	error_more:
 	proxychains_write_log("\n!!!need more proxies!!!\n");
 	error_strict:
-#ifdef DEBUG
 	PDEBUG("error\n");
-#endif
+	
 	release_all(pd, proxy_count);
 	if(ns != -1)
 		close(ns);

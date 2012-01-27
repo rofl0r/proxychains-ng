@@ -75,14 +75,10 @@ static void init_lib(void) {
 		fprintf(stderr, "Cannot load symbol 'connect' %s\n", dlerror());
 		exit(1);
 	} else {
-#ifdef DEBUG
 		PDEBUG("loaded symbol 'connect'" " real addr %p  wrapped addr %p\n", true_connect, connect);
-#endif
 	}
 	if(connect == true_connect) {
-#ifdef DEBUG
 		PDEBUG("circular reference detected, aborting!\n");
-#endif
 		abort();
 	}
 
@@ -93,10 +89,8 @@ static void init_lib(void) {
 		fprintf(stderr, "Cannot load symbol 'gethostbyname' %s\n", dlerror());
 		exit(1);
 	} else {
-#ifdef DEBUG
 		PDEBUG("loaded symbol 'gethostbyname'"
 		       " real addr %p  wrapped addr %p\n", true_gethostbyname, gethostbyname);
-#endif
 	}
 	true_getaddrinfo = (getaddrinfo_t)
 	    dlsym(RTLD_NEXT, "getaddrinfo");
@@ -105,9 +99,7 @@ static void init_lib(void) {
 		fprintf(stderr, "Cannot load symbol 'getaddrinfo' %s\n", dlerror());
 		exit(1);
 	} else {
-#ifdef DEBUG
 		PDEBUG("loaded symbol 'getaddrinfo'" " real addr %p  wrapped addr %p\n", true_getaddrinfo, getaddrinfo);
-#endif
 	}
 	true_freeaddrinfo = (freeaddrinfo_t)
 	    dlsym(RTLD_NEXT, "freeaddrinfo");
@@ -116,10 +108,8 @@ static void init_lib(void) {
 		fprintf(stderr, "Cannot load symbol 'freeaddrinfo' %s\n", dlerror());
 		exit(1);
 	} else {
-#ifdef DEBUG
 		PDEBUG("loaded symbol 'freeaddrinfo'"
 		       " real addr %p  wrapped addr %p\n", true_freeaddrinfo, freeaddrinfo);
-#endif
 	}
 	true_gethostbyaddr = (gethostbyaddr_t)
 	    dlsym(RTLD_NEXT, "gethostbyaddr");
@@ -128,10 +118,8 @@ static void init_lib(void) {
 		fprintf(stderr, "Cannot load symbol 'gethostbyaddr' %s\n", dlerror());
 		exit(1);
 	} else {
-#ifdef DEBUG
 		PDEBUG("loaded symbol 'gethostbyaddr'"
 		       " real addr %p  wrapped addr %p\n", true_gethostbyaddr, gethostbyaddr);
-#endif
 	}
 	true_getnameinfo = (getnameinfo_t)
 	    dlsym(RTLD_NEXT, "getnameinfo");
@@ -140,9 +128,7 @@ static void init_lib(void) {
 		fprintf(stderr, "Cannot load symbol 'getnameinfo' %s\n", dlerror());
 		exit(1);
 	} else {
-#ifdef DEBUG
 		PDEBUG("loaded symbol 'getnameinfo'" " real addr %p  wrapped addr %p\n", true_getnameinfo, getnameinfo);
-#endif
 	}
 	init_l = 1;
 }
