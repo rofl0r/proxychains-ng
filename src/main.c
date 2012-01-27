@@ -77,22 +77,22 @@ int main(int argc, char *argv[]) {
 	int quiet = 0;
 	size_t i;
 	const char* prefix = NULL;
-	
+
 	for(i = 0; i < MAX_COMMANDLINE_FLAGS; i++) {
 		if(start_argv < argc && argv[start_argv][0] == '-') {
 			if(argv[start_argv][1] == 'q') {
 				quiet = 1;
 				start_argv++;
 			} else if(argv[start_argv][1] == 'f') {
-				
-				if(start_argv + 1 < argc) 
+
+				if(start_argv + 1 < argc)
 					path = argv[start_argv + 1];
-				else 
+				else
 					return usage(argv);
-				
+
 				start_argv += 2;
 			}
-		} else 
+		} else
 			break;
 	}
 
@@ -103,33 +103,33 @@ int main(int argc, char *argv[]) {
 		// priority 1: env var PROXYCHAINS_CONF_FILE
 		path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
 		if(check_path(path)) goto have;
-		
+
 		// priority 2; proxychains conf in actual dir
 		path = getcwd(buf, sizeof(buf));
 		snprintf(pbuf, sizeof(pbuf), "%s/%s", path, PROXYCHAINS_CONF_FILE);
 		path = pbuf;
 		if(check_path(path)) goto have;
-		
+
 		// priority 3; $HOME/.proxychains/proxychains.conf
 		path = getenv("HOME");
 		snprintf(pbuf, sizeof(pbuf), "%s/.proxychains/%s", path, PROXYCHAINS_CONF_FILE);
 		path = pbuf;
 		if(check_path(path)) goto have;
-		
+
 		// priority 4: /etc/proxychains.conf
 		path = "/etc/proxychains.conf";
 		if(check_path(path)) goto have;
 		perror("couldnt find configuration file");
 		return 1;
 	}
-	
+
 	have:
 
 	if(!quiet) fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
-	
+
 	if(quiet) setenv(PROXYCHAINS_QUIET_MODE_ENV_VAR, "1", 1);
 
 
@@ -151,7 +151,7 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 	if(!quiet) fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
-	
+
 	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/%s", prefix, dll_name);
 
 	putenv(buf);

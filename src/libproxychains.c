@@ -68,9 +68,9 @@ static void init_lib(void)
 #endif
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
-	
+
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
-	
+
 	true_connect = (connect_t) dlsym(RTLD_NEXT, "connect");
 
 	if (!true_connect) {
@@ -89,12 +89,12 @@ static void init_lib(void)
 		#endif
 		abort();
 	}
-	
-	true_gethostbyname = (gethostbyname_t) 
+
+	true_gethostbyname = (gethostbyname_t)
 		dlsym(RTLD_NEXT, "gethostbyname");
 
 	if (!true_gethostbyname) {
-		fprintf(stderr, "Cannot load symbol 'gethostbyname' %s\n", 
+		fprintf(stderr, "Cannot load symbol 'gethostbyname' %s\n",
 				dlerror());
 		exit(1);
 	} else {
@@ -104,11 +104,11 @@ static void init_lib(void)
 		true_gethostbyname, gethostbyname);
 		#endif
 	}
-	true_getaddrinfo = (getaddrinfo_t) 
+	true_getaddrinfo = (getaddrinfo_t)
 		dlsym(RTLD_NEXT, "getaddrinfo");
 
 	if (!true_getaddrinfo) {
-		fprintf(stderr, "Cannot load symbol 'getaddrinfo' %s\n", 
+		fprintf(stderr, "Cannot load symbol 'getaddrinfo' %s\n",
 				dlerror());
 		exit(1);
 	} else {
@@ -118,11 +118,11 @@ static void init_lib(void)
 			true_getaddrinfo, getaddrinfo);
 		#endif
 	}
-	true_freeaddrinfo = (freeaddrinfo_t) 
+	true_freeaddrinfo = (freeaddrinfo_t)
 		dlsym(RTLD_NEXT, "freeaddrinfo");
 
 	if (!true_freeaddrinfo) {
-		fprintf(stderr, "Cannot load symbol 'freeaddrinfo' %s\n", 
+		fprintf(stderr, "Cannot load symbol 'freeaddrinfo' %s\n",
 				dlerror());
 		exit(1);
 	} else {
@@ -132,11 +132,11 @@ static void init_lib(void)
 			true_freeaddrinfo, freeaddrinfo);
 		#endif
 	}
-	true_gethostbyaddr = (gethostbyaddr_t) 
+	true_gethostbyaddr = (gethostbyaddr_t)
 		dlsym(RTLD_NEXT, "gethostbyaddr");
 
 	if (!true_gethostbyaddr) {
-		fprintf(stderr, "Cannot load symbol 'gethostbyaddr' %s\n", 
+		fprintf(stderr, "Cannot load symbol 'gethostbyaddr' %s\n",
 				dlerror());
 		exit(1);
 	} else {
@@ -146,11 +146,11 @@ static void init_lib(void)
 			true_gethostbyaddr, gethostbyaddr);
 		#endif
 	}
-	true_getnameinfo = (getnameinfo_t) 
+	true_getnameinfo = (getnameinfo_t)
 		dlsym(RTLD_NEXT, "getnameinfo");
 
 	if (!true_getnameinfo) {
-		fprintf(stderr, "Cannot load symbol 'getnameinfo' %s\n", 
+		fprintf(stderr, "Cannot load symbol 'getnameinfo' %s\n",
 				dlerror());
 		exit(1);
 	} else {
@@ -199,7 +199,7 @@ static inline void get_chain_data(
 		perror("Can't locate proxychains.conf");
 		exit(1);
 	}
-	
+
 	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
 	if(env && *env == '1') proxychains_quiet_mode = 1;
 
@@ -207,25 +207,25 @@ static inline void get_chain_data(
 		if(buff[0] != '\n' && buff[strspn(buff," ")]!='#') {
 			if(list) {
 				memset(&pd[count], 0, sizeof(proxy_data));
-				
+
 				pd[count].ps = PLAY_STATE;
 				port_n = 0;
-				
+
 				sscanf(buff,"%s %s %d %s %s", type, host, &port_n,
 					pd[count].user, pd[count].pass);
-				
+
 				pd[count].ip.as_int = (uint32_t) inet_addr(host);
 				pd[count].port = htons((unsigned short)port_n);
-				
+
 				if(!strcmp(type,"http")) {
 					pd[count].pt = HTTP_TYPE;
 				} else if(!strcmp(type,"socks4")) {
 					pd[count].pt = SOCKS4_TYPE;
 				} else if(!strcmp(type,"socks5")) {
 					pd[count].pt = SOCKS5_TYPE;
-				} else 
+				} else
 					continue;
-				
+
 				if(pd[count].ip.as_int && port_n &&
 				   pd[count].ip.as_int != (uint32_t) -1)
 					if(++count==MAX_CHAIN)
@@ -355,9 +355,9 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 	flags = fcntl(sock, F_GETFL, 0);
 	if(flags & O_NONBLOCK)
 	fcntl(sock, F_SETFL, !O_NONBLOCK);
-	
+
 	dest_ip.as_int = SOCKADDR(*addr);
-	
+
 	ret = connect_proxy_chain(
 		sock,
 		dest_ip,
@@ -366,7 +366,7 @@ int connect (int sock, const struct sockaddr *addr, unsigned int len)
 		proxychains_proxy_count,
 		proxychains_ct,
 		proxychains_max_chain );
-	
+
 	fcntl(sock, F_SETFL, flags);
 	if(ret != SUCCESS)
 	errno = ECONNREFUSED;
@@ -377,14 +377,14 @@ struct hostent *gethostbyname(const char *name)
 {
 	if(!init_l)
 		init_lib();
-	
+
 	PDEBUG("gethostbyname: %s\n",name);
-	
+
 	if(proxychains_resolver)
 		return proxy_gethostbyname(name);
 	else
 		return true_gethostbyname(name);
-			
+
 	return NULL;
 }
 
@@ -393,17 +393,17 @@ int getaddrinfo(const char *node, const char *service,
 		struct addrinfo **res)
 {
 	int ret = 0;
-	
+
 	if(!init_l)
 		init_lib();
-	
+
 	PDEBUG("getaddrinfo: %s %s\n",node ,service);
-	
+
 	if(proxychains_resolver)
 		ret = proxy_getaddrinfo(node, service, hints, res);
 	else
 		ret = true_getaddrinfo(node, service, hints, res);
-			
+
 	return ret;
 }
 
@@ -411,9 +411,9 @@ void freeaddrinfo(struct addrinfo *res)
 {
 	if(!init_l)
 		init_lib();
-	
+
 	PDEBUG("freeaddrinfo %p \n",res);
-	
+
 	if(!proxychains_resolver)
 		true_freeaddrinfo(res);
 	else {
@@ -437,19 +437,19 @@ int getnameinfo (const struct sockaddr * sa,
 #endif
 {
 	int ret = 0;
-	
+
 	if(!init_l)
 		init_lib();
-	
+
 	PDEBUG("getnameinfo: %s %s\n", host, serv);
-	
+
 	if(!proxychains_resolver) {
 		ret = true_getnameinfo(sa,salen,host,hostlen,
 				serv,servlen,flags);
 	} else {
-		if(hostlen) 
+		if(hostlen)
 			strncpy(host, inet_ntoa(SOCKADDR_2(*sa)),hostlen);
-		if(servlen) 
+		if(servlen)
 			snprintf(serv, servlen,"%d",ntohs(SOCKPORT(*sa)));
 	}
 	return ret;
@@ -483,16 +483,16 @@ struct hostent *gethostbyaddr (const void *addr, socklen_t len, int type)
 	static char ipv4[4];
 	static char* list[2];
 	static struct hostent he;
-	
+
 	if(!init_l)
 		init_lib();
-	
+
 	PDEBUG("TODO: proper gethostbyaddr hook\n");
-	
+
 	if(!proxychains_resolver)
 		return true_gethostbyaddr(addr,len,type);
 	else {
-		
+
 		PDEBUG("len %u\n", len);
 		if(len != 4) return NULL;
 		he.h_name = buf;
@@ -508,4 +508,4 @@ struct hostent *gethostbyaddr (const void *addr, socklen_t len, int type)
 	}
 	return NULL;
 }
-	
+
