@@ -67,6 +67,8 @@ static void set_own_dir(const char* argv0) {
 	}
 }
 
+#define MAX_COMMANDLINE_FLAGS 2
+
 int main(int argc, char *argv[]) {
 	char *path = NULL;
 	char buf[256];
@@ -76,7 +78,7 @@ int main(int argc, char *argv[]) {
 	size_t i;
 	const char* prefix = NULL;
 	
-	for(i = 0; i < 2; i++) {
+	for(i = 0; i < MAX_COMMANDLINE_FLAGS; i++) {
 		if(start_argv < argc && argv[start_argv][0] == '-') {
 			if(argv[start_argv][1] == 'q') {
 				quiet = 1;
