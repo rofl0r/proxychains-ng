@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
 			goto have;
 
 		// priority 5: /etc/proxychains.conf
-		path = "/etc/proxychains.conf";
+		path = "/etc/" PROXYCHAINS_CONF_FILE;
 		if(check_path(path))
 			goto have;
 		perror("couldnt find configuration file");
