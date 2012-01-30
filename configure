@@ -31,27 +31,27 @@ while true ; do
 	esac
 done
 
-if [ ! $exec_prefix ] ; then
+if [ -z "$exec_prefix" ] ; then
 	exec_prefix=$prefix
 fi
 
-if [ ! $libdir ] ; then
+if [ -z "$libdir" ] ; then
 	libdir=$prefix/lib
 fi
 
-if [ ! $includedir ] ; then
+if [ -z "$includedir" ] ; then
 	includedir=$prefix/include
 fi
 
-if [ ! $sysconfdir ] ; then
+if [ -z "$sysconfdir" ] ; then
 	sysconfdir=$prefix/etc
 fi
 
-if [ ! $bindir ] ; then
+if [ -z "$bindir" ] ; then
 	bindir=$exec_prefix/bin
 fi
 
-if [ ! $CC ] ; then
+if [ -z "$CC" ] ; then
 	CC=cc
 fi
 
