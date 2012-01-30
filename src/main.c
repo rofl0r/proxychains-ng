@@ -121,8 +121,8 @@ int main(int argc, char *argv[]) {
 		if(check_path(path))
 			goto have;
 
-		// priority 4: $INSTALL_PREFIX/etc/proxychains.conf
-		path = INSTALL_PREFIX "/etc/" PROXYCHAINS_CONF_FILE;
+		// priority 4: $SYSCONFDIR/proxychains.conf
+		path = SYSCONFDIR "/" PROXYCHAINS_CONF_FILE;
 		if(check_path(path))
 			goto have;
 
