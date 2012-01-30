@@ -11,6 +11,7 @@ bindir = $(exec_prefix)/bin
 prefix = /usr/local/
 includedir = $(prefix)/include
 libdir = $(prefix)/lib
+sysconfdir=$(prefix)/etc
 
 SRCS = $(sort $(wildcard src/*.c))
 OBJS = $(SRCS:.c=.o)
@@ -47,7 +48,7 @@ all: $(ALL_LIBS) $(ALL_TOOLS)
 install: 
 	install $(INSTALL_FLAGS) 755 $(ALL_TOOLS) $(bindir)/
 	install $(INSTALL_FLAGS) 644 $(ALL_LIBS) $(libdir)/
-	install $(INSTALL_FLAGS) 644 src/proxychains.conf $(prefix)/etc/
+	install $(INSTALL_FLAGS) 644 src/proxychains.conf $(sysconfdir)/
 
 clean:
 	rm -f $(ALL_LIBS)
