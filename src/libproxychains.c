@@ -284,6 +284,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	struct in_addr *p_addr_in;
 	unsigned short port;
 	size_t i;
+	int remote_dns_connect = 0;
 
 	if(!init_l)
 		init_lib();
@@ -301,7 +302,11 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	PDEBUG("target: %s\n", inet_ntop(AF_INET, p_addr_in, str, sizeof(str)));
 	PDEBUG("port: %d\n", port);
 #endif
-	for(i = 0; i < num_localnet_addr; i++) {
+
+	// check if connect called from proxydns
+        remote_dns_connect = (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
+
+	for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
 		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
 		   == (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr)) {
 			if(localnet_addr[i].port || localnet_addr[i].port == port) {
