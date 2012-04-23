@@ -59,7 +59,6 @@ typedef enum {
 	BLOCKED  //  target's port blocked on last proxy in the chain
 } ERR_CODE;
 
-
 typedef enum {
 	HTTP_TYPE,
 	SOCKS4_TYPE,
@@ -107,18 +106,11 @@ typedef struct {
 	int flags;
 } thread_arg;
 
-int connect_proxy_chain (
-	int sock,
-	ip_type target_ip,
-	unsigned short target_port,
-	proxy_data * pd,
-	unsigned int proxy_count,
-	chain_type ct,
-	unsigned int max_chain );
+int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
+			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
+			 unsigned int max_chain );
 
 int proxychains_write_log(char *str,...);
-struct hostent* proxy_gethostbyname(const char *name);
-
 
 typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
 connect_t true_connect;
@@ -137,17 +129,18 @@ freeaddrinfo_t true_freeaddrinfo;
 typedef int (*getnameinfo_t) (const struct sockaddr *,
 		socklen_t, char *,
 		socklen_t, char *,
-		socklen_t, unsigned int);
+		socklen_t, int);
 getnameinfo_t true_getnameinfo;
 
 typedef struct hostent *(*gethostbyaddr_t) (const void *, socklen_t, int);
 gethostbyaddr_t true_gethostbyaddr;
 
+struct hostent* proxy_gethostbyname(const char *name);
+
 int proxy_getaddrinfo(const char *node, const char *service,
 		                const struct addrinfo *hints,
 				                struct addrinfo **res);
 
-struct hostent* proxy_gethostbyname(const char *name);
 
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
 
