@@ -41,7 +41,7 @@
 #define     SOCKADDR_2(x)     (satosin(x)->sin_addr)
 #define     SOCKPORT(x)     (satosin(x)->sin_port)
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
-#define     MAX_CHAIN 30*1024
+#define     MAX_CHAIN 512
 
 int tcp_read_time_out;
 int tcp_connect_time_out;
