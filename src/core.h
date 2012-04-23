@@ -147,7 +147,7 @@ void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
 #ifdef DEBUG
 # define PDEBUG(fmt, args...) fprintf(stderr,"DEBUG:"fmt, ## args)
 #else
-# define PDEBUG(fmt, args...)
+# define PDEBUG(fmt, args...) do {} while (0)
 #endif
 
 #endif
