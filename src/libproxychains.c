@@ -60,74 +60,47 @@ unsigned int remote_dns_subnet = 224;
 static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
 static void init_lib(void);
 
+static void load_sym(void** funcptr, char* symname, void* proxyfunc) {
+
+	*funcptr = dlsym(RTLD_NEXT, symname);
+	
+	if(!(*funcptr)) {
+		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
+		exit(1);
+	} else {
+		PDEBUG("loaded symbol 'connect'" " real addr %p  wrapped addr %p\n", (*funcptr), proxyfunc);
+	}
+	if((*funcptr) == proxyfunc) {
+		PDEBUG("circular reference detected, aborting!\n");
+		abort();
+	}
+}
+
 static void init_lib(void) {
+	static const struct override_info {
+		void* funcptr;
+		char* symname;
+		void* proxyfunc;
+	} override_symbols[] = {
+		{ .funcptr = &true_connect, .symname = "connect", .proxyfunc = connect,},
+		{ .funcptr = &true_gethostbyname, .symname = "gethostbyname", .proxyfunc = gethostbyname,},
+		{ .funcptr = &true_getaddrinfo, .symname = "getaddrinfo", .proxyfunc = getaddrinfo,},
+		{ .funcptr = &true_freeaddrinfo, .symname = "freeaddrinfo", .proxyfunc = freeaddrinfo,},
+		{ .funcptr = &true_gethostbyaddr, .symname = "gethostbyaddr", .proxyfunc = gethostbyaddr,},
+		{ .funcptr = &true_getnameinfo, .symname = "getnameinfo", .proxyfunc = getnameinfo,},
+	};
+	unsigned i;
+	
 	MUTEX_INIT(&internal_ips_lock, NULL);
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
 
-	true_connect = (connect_t) dlsym(RTLD_NEXT, "connect");
-
-	if(!true_connect) {
-		fprintf(stderr, "Cannot load symbol 'connect' %s\n", dlerror());
-		exit(1);
-	} else {
-		PDEBUG("loaded symbol 'connect'" " real addr %p  wrapped addr %p\n", true_connect, connect);
+	for (i = 0; i < (sizeof(override_symbols) / sizeof(override_symbols[0])); i++) {
+		load_sym(override_symbols[i].funcptr, override_symbols[i].symname, override_symbols[i].proxyfunc);
 	}
-	if(connect == true_connect) {
-		PDEBUG("circular reference detected, aborting!\n");
-		abort();
-	}
-
-	true_gethostbyname = (gethostbyname_t)
-	    dlsym(RTLD_NEXT, "gethostbyname");
-
-	if(!true_gethostbyname) {
-		fprintf(stderr, "Cannot load symbol 'gethostbyname' %s\n", dlerror());
-		exit(1);
-	} else {
-		PDEBUG("loaded symbol 'gethostbyname'"
-		       " real addr %p  wrapped addr %p\n", true_gethostbyname, gethostbyname);
-	}
-	true_getaddrinfo = (getaddrinfo_t)
-	    dlsym(RTLD_NEXT, "getaddrinfo");
-
-	if(!true_getaddrinfo) {
-		fprintf(stderr, "Cannot load symbol 'getaddrinfo' %s\n", dlerror());
-		exit(1);
-	} else {
-		PDEBUG("loaded symbol 'getaddrinfo'" " real addr %p  wrapped addr %p\n", true_getaddrinfo, getaddrinfo);
-	}
-	true_freeaddrinfo = (freeaddrinfo_t)
-	    dlsym(RTLD_NEXT, "freeaddrinfo");
-
-	if(!true_freeaddrinfo) {
-		fprintf(stderr, "Cannot load symbol 'freeaddrinfo' %s\n", dlerror());
-		exit(1);
-	} else {
-		PDEBUG("loaded symbol 'freeaddrinfo'"
-		       " real addr %p  wrapped addr %p\n", true_freeaddrinfo, freeaddrinfo);
-	}
-	true_gethostbyaddr = (gethostbyaddr_t)
-	    dlsym(RTLD_NEXT, "gethostbyaddr");
-
-	if(!true_gethostbyaddr) {
-		fprintf(stderr, "Cannot load symbol 'gethostbyaddr' %s\n", dlerror());
-		exit(1);
-	} else {
-		PDEBUG("loaded symbol 'gethostbyaddr'"
-		       " real addr %p  wrapped addr %p\n", true_gethostbyaddr, gethostbyaddr);
-	}
-	true_getnameinfo = (getnameinfo_t)
-	    dlsym(RTLD_NEXT, "getnameinfo");
-
-	if(!true_getnameinfo) {
-		fprintf(stderr, "Cannot load symbol 'getnameinfo' %s\n", dlerror());
-		exit(1);
-	} else {
-		PDEBUG("loaded symbol 'getnameinfo'" " real addr %p  wrapped addr %p\n", true_getnameinfo, getnameinfo);
-	}
+	
 	init_l = 1;
 }
 
