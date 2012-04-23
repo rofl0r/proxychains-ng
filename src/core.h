@@ -97,15 +97,6 @@ typedef struct {
 	char pass[256];
 } proxy_data;
 
-typedef struct {
-	proxy_data *pd;
-	chain_type ct;
-	unsigned int proxy_count;
-	int sock;
-	struct sockaddr addr;
-	int flags;
-} thread_arg;
-
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
 			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
 			 unsigned int max_chain );
