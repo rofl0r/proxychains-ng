@@ -82,12 +82,14 @@ static void init_lib(void) {
 		char* symname;
 		void* proxyfunc;
 	} override_symbols[] = {
-		{ .funcptr = &true_connect, .symname = "connect", .proxyfunc = connect,},
-		{ .funcptr = &true_gethostbyname, .symname = "gethostbyname", .proxyfunc = gethostbyname,},
-		{ .funcptr = &true_getaddrinfo, .symname = "getaddrinfo", .proxyfunc = getaddrinfo,},
-		{ .funcptr = &true_freeaddrinfo, .symname = "freeaddrinfo", .proxyfunc = freeaddrinfo,},
-		{ .funcptr = &true_gethostbyaddr, .symname = "gethostbyaddr", .proxyfunc = gethostbyaddr,},
-		{ .funcptr = &true_getnameinfo, .symname = "getnameinfo", .proxyfunc = getnameinfo,},
+		#define SYM_ENTRY(X) { .funcptr = &true_ ## X,  .symname = # X, .proxyfunc = X,} 
+		SYM_ENTRY(connect),
+		SYM_ENTRY(gethostbyname),
+		SYM_ENTRY(getaddrinfo),
+		SYM_ENTRY(freeaddrinfo),
+		SYM_ENTRY(gethostbyaddr),
+		SYM_ENTRY(getnameinfo),
+		#undef SYM_ENTRY
 	};
 	unsigned i;
 	
