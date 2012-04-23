@@ -52,13 +52,16 @@ int proxychains_got_chain_data = 0;
 unsigned int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
 int proxychains_resolver = 0;
-static int init_l = 0;
 localaddr_arg localnet_addr[MAX_LOCALNET];
 size_t num_localnet_addr = 0;
 unsigned int remote_dns_subnet = 224;
 
+#ifdef THREAD_SAFE
+pthread_once_t init_once = PTHREAD_ONCE_INIT;
+#endif
+static int init_l = 0;
+
 static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
-static void init_lib(void);
 
 static void load_sym(void** funcptr, char* symname, void* proxyfunc) {
 
@@ -76,7 +79,9 @@ static void load_sym(void** funcptr, char* symname, void* proxyfunc) {
 	}
 }
 
-static void init_lib(void) {
+#define INIT() init_lib_wrapper(__FUNCTION__)
+
+static void do_init(void) {
 	static const struct override_info {
 		void* funcptr;
 		char* symname;
@@ -92,7 +97,6 @@ static void init_lib(void) {
 		#undef SYM_ENTRY
 	};
 	unsigned i;
-	
 	MUTEX_INIT(&internal_ips_lock, NULL);
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
@@ -102,11 +106,37 @@ static void init_lib(void) {
 	for (i = 0; i < (sizeof(override_symbols) / sizeof(override_symbols[0])); i++) {
 		load_sym(override_symbols[i].funcptr, override_symbols[i].symname, override_symbols[i].proxyfunc);
 	}
-	
 	init_l = 1;
 }
 
-static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
+static void init_lib_wrapper(const char* caller) {
+#ifndef DEBUG
+	(void) caller;
+#endif
+#ifndef THREAD_SAFE
+	if(init_l) return;
+	PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
+	do_init();
+#else
+	if(!init_l) PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
+	pthread_once(&init_once, do_init);
+#endif
+}
+
+/* if we use gcc >= 3, we can instruct the dynamic loader 
+ * to call init_lib at link time. otherwise it gets loaded
+ * lazily, which has the disadvantage that there's a potential
+ * race condition if 2 threads call it before init_l is set 
+ * and PTHREAD support was disabled */
+#if __GNUC__ > 2
+__attribute__((constructor))
+static void gcc_init(void) {
+	INIT();
+}
+#endif
+
+/* get configuration from config file */
+static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
 	int count = 0, port_n = 0, list = 0;
 	char buff[1024], type[1024], host[1024], user[1024];
 	char *env;
@@ -247,7 +277,7 @@ static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, ch
 	proxychains_got_chain_data = 1;
 }
 
-
+/*******  HOOK FUNCTIONS  *******/
 
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	int socktype = 0, flags = 0, ret = 0;
@@ -260,9 +290,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	unsigned short port;
 	size_t i;
 	int remote_dns_connect = 0;
-
-	if(!init_l)
-		init_lib();
+	INIT();
 	optlen = sizeof(socktype);
 	getsockopt(sock, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
 	if(!(SOCKFAMILY(*addr) == AF_INET && socktype == SOCK_STREAM))
@@ -309,8 +337,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 }
 
 struct hostent *gethostbyname(const char *name) {
-	if(!init_l)
-		init_lib();
+	INIT();
 
 	PDEBUG("gethostbyname: %s\n", name);
 
@@ -325,8 +352,7 @@ struct hostent *gethostbyname(const char *name) {
 int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	int ret = 0;
 
-	if(!init_l)
-		init_lib();
+	INIT();
 
 	PDEBUG("getaddrinfo: %s %s\n", node, service);
 
@@ -339,8 +365,7 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 }
 
 void freeaddrinfo(struct addrinfo *res) {
-	if(!init_l)
-		init_lib();
+	INIT();
 
 	PDEBUG("freeaddrinfo %p \n", res);
 
@@ -366,9 +391,8 @@ int getnameinfo(const struct sockaddr *sa,
 	char ip_buf[16];
 	int ret = 0;
 
-	if(!init_l)
-		init_lib();
-
+	INIT();
+	
 	PDEBUG("getnameinfo: %s %s\n", host, serv);
 
 	if(!proxychains_resolver) {
@@ -390,8 +414,7 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 	static char *list[2];
 	static struct hostent he;
 
-	if(!init_l)
-		init_lib();
+	INIT();
 
 	PDEBUG("TODO: proper gethostbyaddr hook\n");
 
