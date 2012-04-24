@@ -174,7 +174,11 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 
 	while(fgets(buff, sizeof(buff), file)) {
 		if(buff[0] != '\n' && buff[strspn(buff, " ")] != '#') {
+			/* proxylist has to come last */
 			if(list) {
+				if(count >= MAX_CHAIN)
+					break;
+				
 				memset(&pd[count], 0, sizeof(proxy_data));
 
 				pd[count].ps = PLAY_STATE;
@@ -195,8 +199,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					continue;
 
 				if(pd[count].ip.as_int && port_n && pd[count].ip.as_int != (uint32_t) - 1)
-					if(++count == MAX_CHAIN)
-						break;
+					count++;
 			} else {
 				if(strstr(buff, "[ProxyList]")) {
 					list = 1;
