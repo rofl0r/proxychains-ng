@@ -229,7 +229,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					memset(local_in_port, 0, sizeof(local_in_port) / sizeof(local_in_port[0]));
 
 					if(sscanf(local_in_addr_port, "%15[^:]:%5s", local_in_addr, local_in_port) < 2) {
-						PDEBUG("added localnet: netaddr=%s, port=%s\n",
+						PDEBUG("added localnet: netaddr=%s, netmask=%s\n",
 						       local_in_addr, local_netmask);
 					} else {
 						PDEBUG("added localnet: netaddr=%s, port=%s, netmask=%s\n",
@@ -315,7 +315,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
 		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
 		   == (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr)) {
-			if(localnet_addr[i].port || localnet_addr[i].port == port) {
+			if(!localnet_addr[i].port || localnet_addr[i].port == port) {
 				PDEBUG("accessing localnet using true_connect\n");
 				return true_connect(sock, addr, len);
 			}
