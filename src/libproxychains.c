@@ -70,49 +70,41 @@ static int init_l = 0;
 
 static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
 
-static void load_sym(void** funcptr, char* symname, void* proxyfunc) {
+static void* load_sym(char* symname, void* proxyfunc) {
 
-	*funcptr = dlsym(RTLD_NEXT, symname);
+	void *funcptr = dlsym(RTLD_NEXT, symname);
 	
-	if(!(*funcptr)) {
+	if(!funcptr) {
 		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
 		exit(1);
 	} else {
 		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, (*funcptr), proxyfunc);
 	}
-	if((*funcptr) == proxyfunc) {
+	if(funcptr == proxyfunc) {
 		PDEBUG("circular reference detected, aborting!\n");
 		abort();
 	}
+	return funcptr;
 }
 
 #define INIT() init_lib_wrapper(__FUNCTION__)
 
+#define SETUP_SYM(X) do { true_ ## X = load_sym( # X, X ); } while(0)
+
 static void do_init(void) {
-	static const struct override_info {
-		void* funcptr;
-		char* symname;
-		void* proxyfunc;
-	} override_symbols[] = {
-		#define SYM_ENTRY(X) { .funcptr = &true_ ## X,  .symname = # X, .proxyfunc = X,} 
-		SYM_ENTRY(connect),
-		SYM_ENTRY(gethostbyname),
-		SYM_ENTRY(getaddrinfo),
-		SYM_ENTRY(freeaddrinfo),
-		SYM_ENTRY(gethostbyaddr),
-		SYM_ENTRY(getnameinfo),
-		#undef SYM_ENTRY
-	};
-	unsigned i;
 	MUTEX_INIT(&internal_ips_lock, NULL);
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
-
-	for (i = 0; i < (sizeof(override_symbols) / sizeof(override_symbols[0])); i++) {
-		load_sym(override_symbols[i].funcptr, override_symbols[i].symname, override_symbols[i].proxyfunc);
-	}
+	
+	SETUP_SYM(connect);
+	SETUP_SYM(gethostbyname);
+	SETUP_SYM(getaddrinfo);
+	SETUP_SYM(freeaddrinfo);
+	SETUP_SYM(gethostbyaddr);
+	SETUP_SYM(getnameinfo);
+	
 	init_l = 1;
 }
 
