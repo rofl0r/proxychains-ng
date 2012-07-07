@@ -4,10 +4,8 @@
     begin                : Tue May 14 2002
     copyright          :  netcreature (C) 2002
     email                 : netcreature@users.sourceforge.net
- ***************************************************************************/
-#include <stdint.h>
- /*     GPL */
-/***************************************************************************
+ ***************************************************************************
+ ***************************************************************************
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -15,6 +13,9 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+
+#include <stdint.h>
+
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
 #define BUFF_SIZE 8*1024  // used to read responses from proxies.
@@ -104,34 +105,29 @@ int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port
 int proxychains_write_log(char *str,...);
 
 typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
-connect_t true_connect;
-
 typedef struct hostent* (*gethostbyname_t)(const char *);
-gethostbyname_t true_gethostbyname;
-
-typedef int (*getaddrinfo_t)(const char *, const char *,
-		const struct addrinfo *,
-		struct addrinfo **);
-getaddrinfo_t true_getaddrinfo;
-
 typedef int (*freeaddrinfo_t)(struct addrinfo *);
-freeaddrinfo_t true_freeaddrinfo;
-
-typedef int (*getnameinfo_t) (const struct sockaddr *,
-		socklen_t, char *,
-		socklen_t, char *,
-		socklen_t, int);
-getnameinfo_t true_getnameinfo;
-
 typedef struct hostent *(*gethostbyaddr_t) (const void *, socklen_t, int);
-gethostbyaddr_t true_gethostbyaddr;
+
+typedef int (*getaddrinfo_t)(const char *, const char *, const struct addrinfo *, 
+			     struct addrinfo **);
+
+typedef int (*getnameinfo_t) (const struct sockaddr *, socklen_t, char *, 
+			      socklen_t, char *, socklen_t, int);
+
+
+extern connect_t true_connect;
+extern gethostbyname_t true_gethostbyname;
+extern getaddrinfo_t true_getaddrinfo;
+extern freeaddrinfo_t true_freeaddrinfo;
+extern getnameinfo_t true_getnameinfo;
+extern gethostbyaddr_t true_gethostbyaddr;
+
 
 struct hostent* proxy_gethostbyname(const char *name);
 
-int proxy_getaddrinfo(const char *node, const char *service,
-		                const struct addrinfo *hints,
-				                struct addrinfo **res);
-
+int proxy_getaddrinfo(const char *node, const char *service, 
+		      const struct addrinfo *hints, struct addrinfo **res);
 
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
 

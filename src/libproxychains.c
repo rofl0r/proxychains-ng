@@ -43,6 +43,13 @@
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
 #define     MAX_CHAIN 512
 
+connect_t true_connect;
+gethostbyname_t true_gethostbyname;
+getaddrinfo_t true_getaddrinfo;
+freeaddrinfo_t true_freeaddrinfo;
+getnameinfo_t true_getnameinfo;
+gethostbyaddr_t true_gethostbyaddr;
+
 int tcp_read_time_out;
 int tcp_connect_time_out;
 chain_type proxychains_ct;
