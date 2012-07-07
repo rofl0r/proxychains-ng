@@ -2,6 +2,18 @@
 
 prefix=/usr/local
 
+usage() {
+	echo "supported arguments"
+	echo "--prefix=/path 		default: $prefix"
+	echo "--exec_prefix=/path	default: $prefix/bin"
+	echo "--bindir=/path		default: $prefix/bin"
+	echo "--libdir=/path		default: $prefix/lib"
+	echo "--includedir=/path	default: $prefix/include"
+	echo "--sysconfdir=/path	default: $prefix/etc"
+	echo "--help : show this text"
+	exit 1
+}
+
 spliteq() {
 	arg=$1
 	echo "${arg#*=}"
@@ -17,6 +29,7 @@ parsearg() {
 	--libdir=*) libdir=`spliteq $1`;;
 	--includedir=*) includedir=`spliteq $1`;;
 	--sysconfdir=*) sysconfdir=`spliteq $1`;;
+	--help) usage;;
 	esac
 }
 
