@@ -230,26 +230,15 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 	pfd[0].events = POLLOUT;
 	fcntl(sock, F_SETFL, O_NONBLOCK);
 	ret = true_connect(sock, addr, len);
-#ifdef DEBUG
-	if(ret == -1)
-		perror("true_connect");
-	printf("\nconnect ret=%d\n", ret);
-
-	fflush(stdout);
-#endif
+	PDEBUG("\nconnect ret=%d\n", ret);
+	
 	if(ret == -1 && errno == EINPROGRESS) {
 		ret = poll_retry(pfd, 1, tcp_connect_time_out);
-#ifdef DEBUG
-		printf("\npoll ret=%d\n", ret);
-		fflush(stdout);
-#endif
+		PDEBUG("\npoll ret=%d\n", ret);
 		if(ret == 1) {
 			value_len = sizeof(socklen_t);
 			getsockopt(sock, SOL_SOCKET, SO_ERROR, &value, &value_len);
-#ifdef DEBUG
-			printf("\nvalue=%d\n", value);
-			fflush(stdout);
-#endif
+			PDEBUG("\nvalue=%d\n", value);
 			if(!value)
 				ret = 0;
 			else
@@ -258,6 +247,10 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 			ret = -1;
 		}
 	} else {
+#ifdef DEBUG
+		if(ret == -1)
+			perror("true_connect");
+#endif
 		if(ret != 0)
 			ret = -1;
 	}

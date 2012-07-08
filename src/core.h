@@ -132,7 +132,7 @@ int proxy_getaddrinfo(const char *node, const char *service,
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
 
 #ifdef DEBUG
-# define PDEBUG(fmt, args...) fprintf(stderr,"DEBUG:"fmt, ## args)
+# define PDEBUG(fmt, args...) do { fprintf(stderr,"DEBUG:"fmt, ## args); fflush(stderr); } while(0)
 #else
 # define PDEBUG(fmt, args...) do {} while (0)
 #endif
