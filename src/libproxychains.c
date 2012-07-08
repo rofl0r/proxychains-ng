@@ -150,17 +150,9 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_read_time_out = 4 * 1000;
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
-
-	/* Get path to configuration file from env.
-	 * this file has priority if it's defined. */
 	
-	env = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
-	if(!env) env = get_config_path(buff, sizeof(buff));
-	if(env) file = fopen(env, "r");
-	if(!file) {
-		perror("Can't locate proxychains.conf");
-		exit(1);
-	}
+	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buff, sizeof(buff));
+	file = fopen(env, "r");
 
 	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
 	if(env && *env == '1')

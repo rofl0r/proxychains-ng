@@ -95,11 +95,7 @@ int main(int argc, char *argv[]) {
 		return usage(argv);
 
 	/* check if path of config file has not been passed via command line */
-	if(!path) path = get_config_path(pbuf, sizeof(pbuf));
-	if(!path) {
-		perror("couldnt find configuration file");
-		return 1;
-	}
+	path = get_config_path(path, pbuf, sizeof(pbuf));
 	
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);

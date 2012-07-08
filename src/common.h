@@ -5,4 +5,4 @@
 
 #include <stddef.h>
 
-char *get_config_path(char* pbuf, size_t bufsize);
+char *get_config_path(char* default_path, char* pbuf, size_t bufsize);
