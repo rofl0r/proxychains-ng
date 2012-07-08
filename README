@@ -1,23 +1,43 @@
 ProxyChains ver 4.0 README
 ==========================
 
+  ProxyChains is a UNIX program, that hooks network-related libc functions
+  in dynamically linked programs via a preloaded DLL and redirects the
+  connections through SOCKS4a/5 or HTTP proxies.
+
 *********** ATTENTION ***********
 
-this program works only on dynamically linked programs.
-also both proxychains and the program to call must use
-the same dynamic linker (i.e. same libc)
+  this program works only on dynamically linked programs.
+  also both proxychains and the program to call must use
+  the same dynamic linker (i.e. same libc)
 
 *********************************
 
+*** Known limitations of the current version: ***
 
-This is Unix version only.
+  when a process forks, does a DNS lookup in the child, and then uses
+  the ip in the parent, the corresponding ip mapping will not be found.
+  this is because the fork can't write back into the parents mapping table.
+  IRSSI shows this behaviour, so you have to pass the resolved ip address
+  to it. (you can use the proxyresolv script (requires "dig") to do so)
 
-How to mess with sources - How to Install : read INSTALL !!!!!!
+  this means that you can't currently use tor onion urls for irssi.
+  to solve this issue, an external data store (file, pipe, ...) has to
+  manage the dns <-> ip mapping. of course there has to be proper locking.
+  shm_open, mkstemp, are possible candidates for a file based approach,
+  the other option is to spawn some kind of server process that manages the
+  map lookups. since connect() etc are hooked, this must not be a TCP server.
 
-This program forces any tcp connection made by any given tcp client
-to follow through proxy (or proxy chain). It is a kind of proxifier.
-It acts like sockscap / permeo / eborder driver ( intercepts TCP calls )
-It is FREE.
+  I am reluctant on doing this change, because the described behaviour
+  seems pretty idiotic (doing a fork only for a DNS lookup), and irssi
+  is currently the only known affected program.
+
+*** Installation ***
+
+  # needs a working C compiler, preferably gcc
+  ./configure
+  make
+  sudo make install
 
 Changelog:
 ----------
@@ -74,21 +94,21 @@ proxychains looks for config file in following order:
 
 Usage Example:
 
-	bash$ proxychains telnet targethost.com
+	$ proxychains telnet targethost.com
 
 in this example it will run telnet through proxy(or chained proxies)
 specified by proxychains.conf
 
 Usage Example:
 
-      	bash$ proxychains -f /etc/proxychains-other.conf targethost2.com
+      	$ proxychains -f /etc/proxychains-other.conf targethost2.com
 
 in this example it will use different configuration file then proxychains.conf 
 to connect to targethost2.com host.
 
 Usage Example:
 
-	bash$ proxyresolv targethost.com
+	$ proxyresolv targethost.com
 
 in this example it will resolve targethost.com through proxy(or chained proxies)
 specified by proxychains.conf
