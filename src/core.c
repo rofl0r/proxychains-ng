@@ -279,6 +279,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 		if(!dns_len)
 			goto err;
 	}
+	
+	PDEBUG("host dns %s\n", dns_name ? dns_name : "<NULL>");
 
 	size_t ulen = strlen(user);
 	size_t passlen = strlen(pass);
@@ -616,7 +618,7 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 			break;
 		case SOCKET_ERROR:
 			pto->ps = DOWN_STATE;
-			proxychains_write_log("<--timeout\n");
+			proxychains_write_log("<--socket error or timeout!\n");
 			close(ns);
 			break;
 	}
