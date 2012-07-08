@@ -78,7 +78,7 @@ static void* load_sym(char* symname, void* proxyfunc) {
 		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
 		exit(1);
 	} else {
-		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, (*funcptr), proxyfunc);
+		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, funcptr, proxyfunc);
 	}
 	if(funcptr == proxyfunc) {
 		PDEBUG("circular reference detected, aborting!\n");
