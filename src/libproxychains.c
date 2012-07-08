@@ -141,7 +141,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	char *env;
 	char local_in_addr_port[32];
 	char local_in_addr[32], local_in_port[32], local_netmask[32];
-	FILE *file;
+	FILE *file = NULL;
 
 	if(proxychains_got_chain_data)
 		return;
@@ -151,21 +151,16 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
 
-	/*
-	 * Get path to configuration file from env this file has priority
-	 * if it's defined.
-	 */
+	/* Get path to configuration file from env.
+	 * this file has priority if it's defined. */
+	
 	env = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
-
-	snprintf(buff, 256, "%s/.proxychains/proxychains.conf", getenv("HOME"));
-
-	if(!env || (!(file = fopen(env, "r"))))
-		if(!(file = fopen("./proxychains.conf", "r")))
-			if(!(file = fopen(buff, "r")))
-				if(!(file = fopen("/etc/proxychains.conf", "r"))) {
-					perror("Can't locate proxychains.conf");
-					exit(1);
-				}
+	if(!env) env = get_config_path(buff, sizeof(buff));
+	if(env) file = fopen(env, "r");
+	if(!file) {
+		perror("Can't locate proxychains.conf");
+		exit(1);
+	}
 
 	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
 	if(env && *env == '1')

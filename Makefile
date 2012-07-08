@@ -15,7 +15,7 @@ sysconfdir=$(prefix)/etc
 
 SRCS = $(sort $(wildcard src/*.c))
 OBJS = $(SRCS:.c=.o)
-LOBJS = src/core.o src/libproxychains.o
+LOBJS = src/core.o src/common.o src/libproxychains.o
 
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe -DTHREAD_SAFE
 LDFLAGS = -shared -fPIC -ldl -lpthread
@@ -63,7 +63,7 @@ $(LDSO_PATHNAME): $(LOBJS)
 	$(CC) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -o $@ $(LOBJS)
 
 $(ALL_TOOLS): $(OBJS)
-	$(CC) src/main.o -o $(PXCHAINS)
+	$(CC) src/main.o src/common.o -o $(PXCHAINS)
 
 
 .PHONY: all clean install

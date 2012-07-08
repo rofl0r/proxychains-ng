@@ -36,12 +36,6 @@ static int usage(char **argv) {
 	return EXIT_FAILURE;
 }
 
-int check_path(char *path) {
-	if(!path)
-		return 0;
-	return access(path, R_OK) != -1;
-}
-
 static const char *dll_name = DLL_NAME;
 
 static char own_dir[256];
@@ -101,41 +95,12 @@ int main(int argc, char *argv[]) {
 		return usage(argv);
 
 	/* check if path of config file has not been passed via command line */
+	if(!path) path = get_config_path(pbuf, sizeof(pbuf));
 	if(!path) {
-		// priority 1: env var PROXYCHAINS_CONF_FILE
-		path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
-		if(check_path(path))
-			goto have;
-
-		// priority 2; proxychains conf in actual dir
-		path = getcwd(buf, sizeof(buf));
-		snprintf(pbuf, sizeof(pbuf), "%s/%s", path, PROXYCHAINS_CONF_FILE);
-		path = pbuf;
-		if(check_path(path))
-			goto have;
-
-		// priority 3; $HOME/.proxychains/proxychains.conf
-		path = getenv("HOME");
-		snprintf(pbuf, sizeof(pbuf), "%s/.proxychains/%s", path, PROXYCHAINS_CONF_FILE);
-		path = pbuf;
-		if(check_path(path))
-			goto have;
-
-		// priority 4: $SYSCONFDIR/proxychains.conf
-		path = SYSCONFDIR "/" PROXYCHAINS_CONF_FILE;
-		if(check_path(path))
-			goto have;
-
-		// priority 5: /etc/proxychains.conf
-		path = "/etc/" PROXYCHAINS_CONF_FILE;
-		if(check_path(path))
-			goto have;
 		perror("couldnt find configuration file");
 		return 1;
 	}
-
-	have:
-
+	
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
 
