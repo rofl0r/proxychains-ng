@@ -175,21 +175,16 @@ static void encode_base_64(char *src, char *dest, int max_len) {
 	*dest++ = 0;
 }
 
-#define LOG_BUFF 1024*20
-
-int proxychains_write_log(char *str, ...) {
-	char buff[LOG_BUFF];
+void proxychains_write_log(char *str, ...) {
+	char buff[1024*20];
 	va_list arglist;
-	FILE *log_file;
-	log_file = stderr;
 	if(!proxychains_quiet_mode) {
 		va_start(arglist, str);
-		vsprintf(buff, str, arglist);
+		vsnprintf(buff, sizeof(buff), str, arglist);
 		va_end(arglist);
-		fprintf(log_file, "%s", buff);
-		fflush(log_file);
+		fprintf(stderr, "%s", buff);
+		fflush(stderr);
 	}
-	return EXIT_SUCCESS;
 }
 
 static int write_n_bytes(int fd, char *buff, size_t size) {
