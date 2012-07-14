@@ -835,11 +835,15 @@ struct hostent *proxy_gethostbyname(const char *name) {
 	MUTEX_UNLOCK(&internal_ips_lock);
 	return NULL;
 }
+
 int proxy_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	struct servent *se = NULL;
 	struct hostent *hp = NULL;
 	struct sockaddr *sockaddr_space = NULL;
 	struct addrinfo *addrinfo_space = NULL;
+	struct servent se_buf;
+	char buf[1024];
+	int port;
 
 //      printf("proxy_getaddrinfo node %s service %s\n",node,service);
 	addrinfo_space = malloc(sizeof(struct addrinfo));
@@ -858,13 +862,10 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 		else
 			goto err3;
 	}
-	if(service)
-		se = getservbyname(service, NULL);
+	if(service) getservbyname_r(service, NULL, &se_buf, buf, sizeof(buf), &se);
 
-	if(!se) {
-		((struct sockaddr_in *) sockaddr_space)->sin_port = htons(atoi(service ? : "0"));
-	} else
-		((struct sockaddr_in *) sockaddr_space)->sin_port = se->s_port;
+	port = se ? se->s_port : htons(atoi(service ? service : "0"));
+	((struct sockaddr_in *) sockaddr_space)->sin_port = port;
 
 	*res = addrinfo_space;
 	(*res)->ai_addr = sockaddr_space;
