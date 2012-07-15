@@ -325,13 +325,14 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	return ret;
 }
 
+static struct gethostbyname_data ghbndata;
 struct hostent *gethostbyname(const char *name) {
 	INIT();
 
 	PDEBUG("gethostbyname: %s\n", name);
 
 	if(proxychains_resolver)
-		return proxy_gethostbyname(name);
+		return proxy_gethostbyname(name, &ghbndata);
 	else
 		return true_gethostbyname(name);
 
@@ -360,10 +361,8 @@ void freeaddrinfo(struct addrinfo *res) {
 
 	if(!proxychains_resolver)
 		true_freeaddrinfo(res);
-	else {
-		free(res->ai_addr);
-		free(res);
-	}
+	else
+		proxy_freeaddrinfo(res);
 	return;
 }
 

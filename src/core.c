@@ -33,6 +33,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <stdarg.h>
+#include <assert.h>
 #ifdef THREAD_SAFE
 #include <pthread.h>
 pthread_mutex_t internal_ips_lock;
@@ -736,13 +737,9 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	return -1;
 }
 
-// TODO: all those buffers aren't threadsafe, but since no memory allocation happens there shouldnt be any segfaults
-static struct hostent hostent_space;
-static in_addr_t resolved_addr;
-static char *resolved_addr_p[2];
-static char addr_name[1024 * 8];
 static const ip_type local_host = { {127, 0, 0, 1} };
-struct hostent *proxy_gethostbyname(const char *name) {
+
+struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data* data) {
 	char buff[256];
 	uint32_t i, hash;
 	// yep, new_mem never gets freed. once you passed a fake ip to the client, you can't "retreat" it
@@ -751,20 +748,20 @@ struct hostent *proxy_gethostbyname(const char *name) {
 
 	struct hostent *hp;
 
-	resolved_addr_p[0] = (char *) &resolved_addr;
-	resolved_addr_p[1] = NULL;
+	data->resolved_addr_p[0] = (char *) &data->resolved_addr;
+	data->resolved_addr_p[1] = NULL;
 
-	hostent_space.h_addr_list = resolved_addr_p;
+	data->hostent_space.h_addr_list = data->resolved_addr_p;
 
-	resolved_addr = 0;
+	data->resolved_addr = 0;
 
 	gethostname(buff, sizeof(buff));
 
 	if(!strcmp(buff, name)) {
-		resolved_addr = inet_addr(buff);
-		if(resolved_addr == (in_addr_t) (-1))
-			resolved_addr = (in_addr_t) (local_host.as_int);
-		return &hostent_space;
+		data->resolved_addr = inet_addr(buff);
+		if(data->resolved_addr == (in_addr_t) (-1))
+			data->resolved_addr = (in_addr_t) (local_host.as_int);
+		return &data->hostent_space;
 	}
 
 	memset(buff, 0, sizeof(buff));
@@ -782,7 +779,7 @@ struct hostent *proxy_gethostbyname(const char *name) {
 	if(internal_ips.counter) {
 		for(i = 0; i < internal_ips.counter; i++) {
 			if(internal_ips.list[i]->hash == hash && !strcmp(name, internal_ips.list[i]->string)) {
-				resolved_addr = make_internal_ip(i);
+				data->resolved_addr = make_internal_ip(i);
 				PDEBUG("got cached ip for %s\n", name);
 				goto have_ip;
 			}
@@ -802,8 +799,8 @@ struct hostent *proxy_gethostbyname(const char *name) {
 		}
 	}
 
-	resolved_addr = make_internal_ip(internal_ips.counter);
-	if(resolved_addr == (in_addr_t) - 1)
+	data->resolved_addr = make_internal_ip(internal_ips.counter);
+	if(data->resolved_addr == (in_addr_t) - 1)
 		goto err_plus_unlock;
 
 	l = strlen(name);
@@ -825,64 +822,69 @@ struct hostent *proxy_gethostbyname(const char *name) {
 
 	MUTEX_UNLOCK(&internal_ips_lock);
 
-	strncpy(addr_name, name, sizeof(addr_name));
+	strncpy(data->addr_name, name, sizeof(data->addr_name));
 
-	hostent_space.h_name = addr_name;
-	hostent_space.h_length = sizeof(in_addr_t);
-	return &hostent_space;
+	data->hostent_space.h_name = data->addr_name;
+	data->hostent_space.h_length = sizeof(in_addr_t);
+	return &data->hostent_space;
 
 	err_plus_unlock:
 	MUTEX_UNLOCK(&internal_ips_lock);
 	return NULL;
 }
 
+struct addrinfo_data {
+	struct addrinfo addrinfo_space;
+	struct sockaddr sockaddr_space;
+	char addr_name[256];
+};
+
+void proxy_freeaddrinfo(struct addrinfo *res) {
+	free(res);
+}
+
+
 int proxy_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
+	struct gethostbyname_data ghdata;
+	struct addrinfo_data *space;
 	struct servent *se = NULL;
 	struct hostent *hp = NULL;
-	struct sockaddr *sockaddr_space = NULL;
-	struct addrinfo *addrinfo_space = NULL;
 	struct servent se_buf;
 	char buf[1024];
 	int port;
 
 //      printf("proxy_getaddrinfo node %s service %s\n",node,service);
-	addrinfo_space = malloc(sizeof(struct addrinfo));
-	if(!addrinfo_space)
-		goto err1;
-	sockaddr_space = malloc(sizeof(struct sockaddr));
-	if(!sockaddr_space)
-		goto err2;
-	memset(sockaddr_space, 0, sizeof(*sockaddr_space));
-	memset(addrinfo_space, 0, sizeof(*addrinfo_space));
-	if(node && !inet_aton(node, &((struct sockaddr_in *) sockaddr_space)->sin_addr)) {
-		hp = proxy_gethostbyname(node);
+	space = calloc(1, sizeof(struct addrinfo_data));
+	if(!space) goto err1;
+	
+	if(node && !inet_aton(node, &((struct sockaddr_in *) &space->sockaddr_space)->sin_addr)) {
+		hp = proxy_gethostbyname(node, &ghdata);
 		if(hp)
-			memcpy(&((struct sockaddr_in *) sockaddr_space)->sin_addr,
+			memcpy(&((struct sockaddr_in *) &space->sockaddr_space)->sin_addr,
 			       *(hp->h_addr_list), sizeof(in_addr_t));
 		else
-			goto err3;
+			goto err2;
 	}
 	if(service) getservbyname_r(service, NULL, &se_buf, buf, sizeof(buf), &se);
 
 	port = se ? se->s_port : htons(atoi(service ? service : "0"));
-	((struct sockaddr_in *) sockaddr_space)->sin_port = port;
+	((struct sockaddr_in *) &space->sockaddr_space)->sin_port = port;
 
-	*res = addrinfo_space;
-	(*res)->ai_addr = sockaddr_space;
+	*res = &space->addrinfo_space;
+	assert((size_t)(*res) == (size_t) space);
+	(*res)->ai_addr = &space->sockaddr_space;
 	if(node)
-		strcpy(addr_name, node);
-	(*res)->ai_canonname = addr_name;
+		strncpy(space->addr_name, node, sizeof(space->addr_name));
+	(*res)->ai_canonname = space->addr_name;
 	(*res)->ai_next = NULL;
-	(*res)->ai_family = sockaddr_space->sa_family = AF_INET;
+	(*res)->ai_family = space->sockaddr_space.sa_family = AF_INET;
 	(*res)->ai_socktype = hints->ai_socktype;
 	(*res)->ai_flags = hints->ai_flags;
 	(*res)->ai_protocol = hints->ai_protocol;
-	(*res)->ai_addrlen = sizeof(*sockaddr_space);
+	(*res)->ai_addrlen = sizeof(space->sockaddr_space);
 	goto out;
-	err3:
-	free(sockaddr_space);
 	err2:
-	free(addrinfo_space);
+	free(space);
 	err1:
 	return 1;
 	out:

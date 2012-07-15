@@ -123,11 +123,18 @@ extern freeaddrinfo_t true_freeaddrinfo;
 extern getnameinfo_t true_getnameinfo;
 extern gethostbyaddr_t true_gethostbyaddr;
 
+struct gethostbyname_data {
+	struct hostent hostent_space;
+	in_addr_t resolved_addr;
+	char *resolved_addr_p[2];
+	char addr_name[1024 * 8];
+};
 
-struct hostent* proxy_gethostbyname(const char *name);
+struct hostent* proxy_gethostbyname(const char *name, struct gethostbyname_data *data);
 
 int proxy_getaddrinfo(const char *node, const char *service, 
 		      const struct addrinfo *hints, struct addrinfo **res);
+void proxy_freeaddrinfo(struct addrinfo *res);
 
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
 
