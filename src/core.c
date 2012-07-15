@@ -878,10 +878,16 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	(*res)->ai_canonname = space->addr_name;
 	(*res)->ai_next = NULL;
 	(*res)->ai_family = space->sockaddr_space.sa_family = AF_INET;
-	(*res)->ai_socktype = hints->ai_socktype;
-	(*res)->ai_flags = hints->ai_flags;
-	(*res)->ai_protocol = hints->ai_protocol;
 	(*res)->ai_addrlen = sizeof(space->sockaddr_space);
+
+	if(hints) {
+		(*res)->ai_socktype = hints->ai_socktype;
+		(*res)->ai_flags = hints->ai_flags;
+		(*res)->ai_protocol = hints->ai_protocol;
+	} else {
+		(*res)->ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
+	}
+	
 	goto out;
 	err2:
 	free(space);
