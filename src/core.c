@@ -850,6 +850,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	struct servent *se = NULL;
 	struct hostent *hp = NULL;
 	struct servent se_buf;
+	struct addrinfo *p;
 	char buf[1024];
 	int port;
 
@@ -870,22 +871,23 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	port = se ? se->s_port : htons(atoi(service ? service : "0"));
 	((struct sockaddr_in *) &space->sockaddr_space)->sin_port = port;
 
-	*res = &space->addrinfo_space;
-	assert((size_t)(*res) == (size_t) space);
-	(*res)->ai_addr = &space->sockaddr_space;
+	*res = p = &space->addrinfo_space;
+	assert((size_t)p == (size_t) space);
+	
+	p->ai_addr = &space->sockaddr_space;
 	if(node)
 		strncpy(space->addr_name, node, sizeof(space->addr_name));
-	(*res)->ai_canonname = space->addr_name;
-	(*res)->ai_next = NULL;
-	(*res)->ai_family = space->sockaddr_space.sa_family = AF_INET;
-	(*res)->ai_addrlen = sizeof(space->sockaddr_space);
+	p->ai_canonname = space->addr_name;
+	p->ai_next = NULL;
+	p->ai_family = space->sockaddr_space.sa_family = AF_INET;
+	p->ai_addrlen = sizeof(space->sockaddr_space);
 
 	if(hints) {
-		(*res)->ai_socktype = hints->ai_socktype;
-		(*res)->ai_flags = hints->ai_flags;
-		(*res)->ai_protocol = hints->ai_protocol;
+		p->ai_socktype = hints->ai_socktype;
+		p->ai_flags = hints->ai_flags;
+		p->ai_protocol = hints->ai_protocol;
 	} else {
-		(*res)->ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
+		p->ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
 	}
 	
 	goto out;
