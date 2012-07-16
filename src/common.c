@@ -17,7 +17,7 @@ char *get_config_path(char* default_path, char* pbuf, size_t bufsize) {
 		goto have;
 	
 	// priority 1: env var PROXYCHAINS_CONF_FILE
-	getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
+	path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
 	if(check_path(path))
 		goto have;
 
