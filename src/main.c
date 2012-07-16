@@ -1,12 +1,4 @@
-/***************************************************************************
-                          main.c  -  description
-
-    begin                : Tue May 14 2002
-    copyright            :  netcreature (C) 2002
-    email                : netcreature@users.sourceforge.net
- ***************************************************************************/
- /*     GPL */
-/***************************************************************************
+/*   (C) 2011, 2012 rofl0r
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -14,6 +6,7 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+
 #undef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #undef _XOPEN_SOURCE
