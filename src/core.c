@@ -413,7 +413,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 					char in[2];
 					char out[515];
 					char *cur = out;
-					int c;
+					size_t c;
 					*cur++ = 1;	// version
 					c = ulen & 0xFF;
 					*cur++ = c;
