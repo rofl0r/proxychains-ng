@@ -114,8 +114,6 @@ void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes) {
 	o[-1] = 0;
 }
 
-static const char base64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
 static int poll_retry(struct pollfd *fds, nfds_t nfsd, int timeout) {
 	int ret;
 	int time_remain = timeout;
@@ -140,8 +138,8 @@ static int poll_retry(struct pollfd *fds, nfds_t nfsd, int timeout) {
 	return ret;
 }
 
-
 static void encode_base_64(char *src, char *dest, int max_len) {
+	static const char base64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	int n, l, i;
 	l = strlen(src);
 	max_len = (max_len - 1) / 4;
