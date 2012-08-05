@@ -1,4 +1,4 @@
-ProxyChains ver 4.0 README
+ProxyChains ver 4.1 README
 ==========================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -41,6 +41,9 @@ ProxyChains ver 4.0 README
 
 Changelog:
 ----------
+Version 4.1 adds support for mac os x (i386, x86_64, ppc)
+all internal functions are threadsafe when compiled with -DTHREAD_SAFE
+(default).
 
 Version (4.x) removes the dnsresolver script which required a dynamically
 linked "dig" binary to be present with remote DNS lookup.

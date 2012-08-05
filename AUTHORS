@@ -3,7 +3,8 @@ N3E7CR34TUR3.
 http://proxychains.sourceforge.net
 netcreature@users.sourceforge.net
 
-main.c, remote-dns, thread safety, bugfixes, build system, cleanups
+main.c, remote-dns, thread safety, bugfixes, build system, 
+cleanups, mac support
 rofl0r.
 https://github.com/rofl0r/proxychains
 
