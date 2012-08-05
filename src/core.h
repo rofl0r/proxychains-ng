@@ -15,6 +15,10 @@
  ***************************************************************************/
 
 #include <stdint.h>
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
