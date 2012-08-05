@@ -841,6 +841,25 @@ void proxy_freeaddrinfo(struct addrinfo *res) {
 	free(res);
 }
 
+#ifdef IS_MAC
+/* getservbyname on mac is using thread local storage, so we dont need mutex */
+static int getservbyname_r(const char* name, const char* proto, struct servent* result_buf, 
+			   char* buf, size_t buflen, struct servent** result) {
+	struct servent *res;
+	int ret;
+	(void) buf; (void) buflen;
+	res = getservbyname(name, proto);
+	if(res) {
+		*result_buf = *res;
+		*result = result_buf;
+		ret = 0;
+	} else {
+		*result = NULL;
+		ret = ENOENT;
+	}
+	return ret;
+}
+#endif
 
 int proxy_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	struct gethostbyname_data ghdata;
