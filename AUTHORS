@@ -1,4 +1,4 @@
-original code
+original code up to version 3.1
 N3E7CR34TUR3.
 http://proxychains.sourceforge.net
 netcreature@users.sourceforge.net
@@ -9,9 +9,15 @@ rofl0r.
 https://github.com/rofl0r/proxychains
 
 localnet, bugfixes
+jianing yang.
+https://github.com/jianingy/proxychains
+https://sourceforge.net/projects/proxychains/forums/forum/644747/topic/3498696
+
+poll_retry (fixes for signal handling)
+colin cross.
+https://sourceforge.net/projects/proxychains/forums/forum/644747/topic/2367923
+
+collecting patches from px forum and putting it into a repo
 adam hamsik.
 https://github.com/haad/proxychains
 
-localnet-port, bugfixes
-jianing yang.
-https://github.com/jianingy/proxychains
