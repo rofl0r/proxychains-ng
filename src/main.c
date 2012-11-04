@@ -103,6 +103,8 @@ int main(int argc, char *argv[]) {
 	// search DLL
 
 	set_own_dir(argv[0]);
+	
+	i = 0;
 
 	while(dll_dirs[i]) {
 		snprintf(buf, sizeof(buf), "%s/%s", dll_dirs[i], dll_name);
