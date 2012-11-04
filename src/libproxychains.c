@@ -93,6 +93,7 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 static void do_init(void) {
 	MUTEX_INIT(&internal_ips_lock, NULL);
+	MUTEX_INIT(&hostdb_lock, NULL);
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 

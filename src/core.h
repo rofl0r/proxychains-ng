@@ -45,6 +45,7 @@ extern internal_ip_lookup_table internal_ips;
 #ifdef THREAD_SAFE
 #include <pthread.h>
 extern pthread_mutex_t internal_ips_lock;
+extern pthread_mutex_t hostdb_lock;
 # define MUTEX_LOCK(x) pthread_mutex_lock(x)
 # define MUTEX_UNLOCK(x) pthread_mutex_unlock(x)
 # define MUTEX_INIT(x,y) pthread_mutex_init(x, y)

@@ -37,6 +37,7 @@
 #ifdef THREAD_SAFE
 #include <pthread.h>
 pthread_mutex_t internal_ips_lock;
+pthread_mutex_t hostdb_lock;
 #endif
 
 #include "core.h"
@@ -774,11 +775,14 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	memset(buff, 0, sizeof(buff));
 
 	// this iterates over the "known hosts" db, usually /etc/hosts
+	MUTEX_LOCK(&hostdb_lock);
 	while((hp = gethostent()))
 		if(!strcmp(hp->h_name, name) && hp->h_addrtype == AF_INET && hp->h_length == sizeof(in_addr_t)) {
 			data->resolved_addr = *((in_addr_t*)(hp->h_addr_list[0]));
+			MUTEX_UNLOCK(&hostdb_lock);
 			goto retname;
 		}
+	MUTEX_UNLOCK(&hostdb_lock);
 
 	hash = dalias_hash((char *) name);
 
