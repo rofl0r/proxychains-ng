@@ -752,6 +752,7 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	data->hostent_space.h_addr_list = data->resolved_addr_p;
 
 	data->resolved_addr = 0;
+	data->hostent_space.h_addrtype = AF_INET;
 
 	gethostname(buff, sizeof(buff));
 
@@ -759,11 +760,15 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 		data->resolved_addr = inet_addr(buff);
 		if(data->resolved_addr == (in_addr_t) (-1))
 			data->resolved_addr = (in_addr_t) (local_host.as_int);
+		snprintf(data->addr_name, sizeof(data->addr_name), "%s", name);
+		data->hostent_space.h_name = data->addr_name;
+		data->hostent_space.h_length = sizeof(in_addr_t);
 		return &data->hostent_space;
 	}
 
 	memset(buff, 0, sizeof(buff));
 
+	// FIXME this is not threadsafe
 	while((hp = gethostent()))
 		if(!strcmp(hp->h_name, name))
 			return hp;
@@ -820,7 +825,7 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 
 	MUTEX_UNLOCK(&internal_ips_lock);
 
-	strncpy(data->addr_name, name, sizeof(data->addr_name));
+	snprintf(data->addr_name, sizeof(data->addr_name), "%s", name);
 
 	data->hostent_space.h_name = data->addr_name;
 	data->hostent_space.h_length = sizeof(in_addr_t);
