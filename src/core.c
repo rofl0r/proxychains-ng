@@ -737,6 +737,11 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 static const ip_type local_host = { {127, 0, 0, 1} };
 
+static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* name) {
+	snprintf(data->addr_name, sizeof(data->addr_name), "%s", name);
+	data->hostent_space.h_name = data->addr_name;
+}
+
 struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data* data) {
 	char buff[256];
 	uint32_t i, hash;
@@ -750,9 +755,12 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	data->resolved_addr_p[1] = NULL;
 
 	data->hostent_space.h_addr_list = data->resolved_addr_p;
+	// let aliases point to the NULL member, mimicking an empty list.
+	data->hostent_space.h_aliases = &data->resolved_addr_p[1];
 
 	data->resolved_addr = 0;
 	data->hostent_space.h_addrtype = AF_INET;
+	data->hostent_space.h_length = sizeof(in_addr_t);
 
 	gethostname(buff, sizeof(buff));
 
@@ -760,19 +768,17 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 		data->resolved_addr = inet_addr(buff);
 		if(data->resolved_addr == (in_addr_t) (-1))
 			data->resolved_addr = (in_addr_t) (local_host.as_int);
-		snprintf(data->addr_name, sizeof(data->addr_name), "%s", name);
-		data->hostent_space.h_name = data->addr_name;
-		data->hostent_space.h_length = sizeof(in_addr_t);
-		return &data->hostent_space;
+		goto retname;
 	}
 
 	memset(buff, 0, sizeof(buff));
 
-	// FIXME this is not threadsafe
+	// this iterates over the "known hosts" db, usually /etc/hosts
 	while((hp = gethostent()))
-		if(!strcmp(hp->h_name, name))
-			return hp;
-
+		if(!strcmp(hp->h_name, name) && hp->h_addrtype == AF_INET && hp->h_length == sizeof(in_addr_t)) {
+			data->resolved_addr = *((in_addr_t*)(hp->h_addr_list[0]));
+			goto retname;
+		}
 
 	hash = dalias_hash((char *) name);
 
@@ -824,11 +830,11 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	have_ip:
 
 	MUTEX_UNLOCK(&internal_ips_lock);
+	
+	retname:
 
-	snprintf(data->addr_name, sizeof(data->addr_name), "%s", name);
-
-	data->hostent_space.h_name = data->addr_name;
-	data->hostent_space.h_length = sizeof(in_addr_t);
+	gethostbyname_data_setstring(data, (char*) name);
+	
 	return &data->hostent_space;
 
 	err_plus_unlock:
