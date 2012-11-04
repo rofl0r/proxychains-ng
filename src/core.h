@@ -149,3 +149,7 @@ void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
 #endif
 
 #endif
+
+//RcB: DEP "core.c"
+//RcB: DEP "libproxychains.c"
+//RcB: LINK "-Wl,--no-as-needed -ldl -lpthread"
