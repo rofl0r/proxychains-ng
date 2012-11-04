@@ -18,7 +18,7 @@ OBJS = $(SRCS:.c=.o)
 LOBJS = src/core.o src/common.o src/libproxychains.o
 
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe -DTHREAD_SAFE
-LDFLAGS = -shared -fPIC -ldl -lpthread
+LDFLAGS = -shared -fPIC -Wl,--no-as-needed -ldl -lpthread
 INC     = 
 PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
