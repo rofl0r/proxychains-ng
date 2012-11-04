@@ -400,6 +400,7 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 	static char buf[16];
 	static char ipv4[4];
 	static char *list[2];
+	static char *aliases[1];
 	static struct hostent he;
 
 	INIT();
@@ -419,7 +420,8 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 		list[1] = NULL;
 		he.h_addr_list = list;
 		he.h_addrtype = AF_INET;
-		he.h_aliases = NULL;
+		aliases[0] = NULL;
+		he.h_aliases = aliases;
 		he.h_length = 4;
 		pc_stringfromipv4((unsigned char *) addr, buf);
 		return &he;
