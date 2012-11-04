@@ -4,6 +4,10 @@
 *.lo
 .deps/
 .libs/
+*.rcb
+*.out
+*~
+*.patch
 
 # Autoconf stuff 
 libtool
