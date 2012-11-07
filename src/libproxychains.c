@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 #include <netdb.h>
 
 #include <netinet/in.h>
@@ -91,9 +92,17 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 #define SETUP_SYM(X) do { true_ ## X = load_sym( # X, X ); } while(0)
 
+#include "shm.h"
+#include "allocator_thread.h"
+
 static void do_init(void) {
 	MUTEX_INIT(&internal_ips_lock, NULL);
 	MUTEX_INIT(&hostdb_lock, NULL);
+	internal_ips = shm_realloc(NULL, 0, sizeof(internal_ip_lookup_table));
+	assert(internal_ips);
+	memset(internal_ips, 0, sizeof(internal_ip_lookup_table));
+	at_init(&internal_ips->mi.addr, &internal_ips->mi.oldsz, &internal_ips->mi.newsz);
+	
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 
@@ -270,6 +279,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 /*******  HOOK FUNCTIONS  *******/
 
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
+	PFUNC();
 	int socktype = 0, flags = 0, ret = 0;
 	socklen_t optlen = 0;
 	ip_type dest_ip;

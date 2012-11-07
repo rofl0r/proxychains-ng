@@ -42,14 +42,15 @@ pthread_mutex_t hostdb_lock;
 
 #include "core.h"
 #include "common.h"
+#include "shm.h"
+#include "allocator_thread.h"
 
 extern int tcp_read_time_out;
 extern int tcp_connect_time_out;
 extern int proxychains_quiet_mode;
 extern unsigned int remote_dns_subnet;
 
-internal_ip_lookup_table internal_ips = { 0, 0, NULL };
-
+internal_ip_lookup_table *internal_ips = NULL;
 
 uint32_t dalias_hash(char *s0) {
 	unsigned char *s = (void *) s0;
@@ -62,6 +63,7 @@ uint32_t dalias_hash(char *s0) {
 }
 
 uint32_t index_from_internal_ip(ip_type internalip) {
+	PFUNC();
 	ip_type tmp = internalip;
 	uint32_t ret;
 	ret = tmp.octet[3] + (tmp.octet[2] << 8) + (tmp.octet[1] << 16);
@@ -70,11 +72,12 @@ uint32_t index_from_internal_ip(ip_type internalip) {
 }
 
 char *string_from_internal_ip(ip_type internalip) {
+	PFUNC();
 	char *res = NULL;
 	uint32_t index = index_from_internal_ip(internalip);
 	MUTEX_LOCK(&internal_ips_lock);
-	if(index < internal_ips.counter)
-		res = internal_ips.list[index]->string;
+	if(index < internal_ips->counter)
+		res = internal_ips->list[index]->string;
 	MUTEX_UNLOCK(&internal_ips_lock);
 	return res;
 }
@@ -220,6 +223,7 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 	int ret, value;
 	socklen_t value_len;
 	struct pollfd pfd[1];
+	PFUNC();
 
 	pfd[0].fd = sock;
 	pfd[0].events = POLLOUT;
@@ -260,7 +264,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	char *dns_name = NULL;
 	size_t dns_len = 0;
 
-	PDEBUG("tunnel_to()\n");
+	PFUNC();
 
 	// we use ip addresses with 224.* to lookup their dns name in our table, to allow remote DNS resolution
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
@@ -588,7 +592,7 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	char *hostname;
 	char ip_buf[16];
 
-	PDEBUG("chain_step()\n");
+	PFUNC();
 
 	if(pto->ip.octet[0] == remote_dns_subnet) {
 		hostname = string_from_internal_ip(pto->ip);
@@ -632,7 +636,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 	p3 = &p4;
 
-	PDEBUG("connect_proxy_chain\n");
+	PFUNC();
 
 	again:
 
@@ -744,6 +748,7 @@ static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* 
 }
 
 struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data* data) {
+	PFUNC();
 	char buff[256];
 	uint32_t i, hash;
 	// yep, new_mem never gets freed. once you passed a fake ip to the client, you can't "retreat" it
@@ -789,9 +794,9 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	MUTEX_LOCK(&internal_ips_lock);
 
 	// see if we already have this dns entry saved.
-	if(internal_ips.counter) {
-		for(i = 0; i < internal_ips.counter; i++) {
-			if(internal_ips.list[i]->hash == hash && !strcmp(name, internal_ips.list[i]->string)) {
+	if(internal_ips->counter) {
+		for(i = 0; i < internal_ips->counter; i++) {
+			if(internal_ips->list[i]->hash == hash && !strcmp(name, internal_ips->list[i]->string)) {
 				data->resolved_addr = make_internal_ip(i);
 				PDEBUG("got cached ip for %s\n", name);
 				goto have_ip;
@@ -799,12 +804,14 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 		}
 	}
 	// grow list if needed.
-	if(internal_ips.capa < internal_ips.counter + 1) {
+	if(internal_ips->capa < internal_ips->counter + 1) {
 		PDEBUG("realloc\n");
-		new_mem = realloc(internal_ips.list, (internal_ips.capa + 16) * sizeof(void *));
+		new_mem = at_realloc(internal_ips->list, 
+				      internal_ips->capa * sizeof(void *),
+				      (internal_ips->capa + 16) * sizeof(void *));
 		if(new_mem) {
-			internal_ips.capa += 16;
-			internal_ips.list = new_mem;
+			internal_ips->capa += 16;
+			internal_ips->list = new_mem;
 		} else {
 	oom:
 			proxychains_write_log("out of mem\n");
@@ -812,24 +819,30 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 		}
 	}
 
-	data->resolved_addr = make_internal_ip(internal_ips.counter);
+	data->resolved_addr = make_internal_ip(internal_ips->counter);
 	if(data->resolved_addr == (in_addr_t) - 1)
 		goto err_plus_unlock;
 
 	l = strlen(name);
-	new_mem = malloc(sizeof(string_hash_tuple) + l + 1);
+	string_hash_tuple tmp = { 0 };
+	new_mem = at_dumpstring((char*) &tmp, sizeof(string_hash_tuple));
 	if(!new_mem)
 		goto oom;
 
-	PDEBUG("creating new entry %d for ip of %s\n", (int) internal_ips.counter, name);
+	PDEBUG("creating new entry %d for ip of %s\n", (int) internal_ips->counter, name);
 
-	internal_ips.list[internal_ips.counter] = new_mem;
-	internal_ips.list[internal_ips.counter]->hash = hash;
-	internal_ips.list[internal_ips.counter]->string = (char *) new_mem + sizeof(string_hash_tuple);
+	internal_ips->list[internal_ips->counter] = new_mem;
+	internal_ips->list[internal_ips->counter]->hash = hash;
+	
+	new_mem = at_dumpstring((char*) name, l + 1);
+	
+	if(!new_mem) {
+		internal_ips->list[internal_ips->counter] = 0;
+		goto oom;
+	}
+	internal_ips->list[internal_ips->counter]->string = new_mem;
 
-	memcpy(internal_ips.list[internal_ips.counter]->string, name, l + 1);
-
-	internal_ips.counter += 1;
+	internal_ips->counter += 1;
 
 	have_ip:
 
@@ -839,10 +852,13 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 
 	gethostbyname_data_setstring(data, (char*) name);
 	
+	PDEBUG("return hostent space\n");
+	
 	return &data->hostent_space;
 
 	err_plus_unlock:
 	MUTEX_UNLOCK(&internal_ips_lock);
+	PDEBUG("return err\n");
 	return NULL;
 }
 
@@ -853,6 +869,7 @@ struct addrinfo_data {
 };
 
 void proxy_freeaddrinfo(struct addrinfo *res) {
+	PFUNC();
 	free(res);
 }
 
@@ -860,6 +877,7 @@ void proxy_freeaddrinfo(struct addrinfo *res) {
 /* getservbyname on mac is using thread local storage, so we dont need mutex */
 static int getservbyname_r(const char* name, const char* proto, struct servent* result_buf, 
 			   char* buf, size_t buflen, struct servent** result) {
+	PFUNC();
 	struct servent *res;
 	int ret;
 	(void) buf; (void) buflen;
@@ -885,6 +903,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	struct addrinfo *p;
 	char buf[1024];
 	int port;
+	PFUNC();
 
 //      printf("proxy_getaddrinfo node %s service %s\n",node,service);
 	space = calloc(1, sizeof(struct addrinfo_data));

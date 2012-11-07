@@ -14,6 +14,7 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <unistd.h>
 #include <stdint.h>
 #include <netinet/in.h>
 #include <sys/types.h>
@@ -35,13 +36,20 @@ typedef struct {
 	char* string;
 } string_hash_tuple;
 
+struct mallocinfo {
+	void * addr;
+	size_t oldsz;
+	size_t newsz;
+};
+
 typedef struct {
 	uint32_t counter;
 	uint32_t capa;
+	struct mallocinfo mi;
 	string_hash_tuple** list;
 } internal_ip_lookup_table;
 
-extern internal_ip_lookup_table internal_ips;
+extern internal_ip_lookup_table *internal_ips;
 #ifdef THREAD_SAFE
 #include <pthread.h>
 extern pthread_mutex_t internal_ips_lock;
@@ -143,11 +151,7 @@ void proxy_freeaddrinfo(struct addrinfo *res);
 
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
 
-#ifdef DEBUG
-# define PDEBUG(fmt, args...) do { fprintf(stderr,"DEBUG:"fmt, ## args); fflush(stderr); } while(0)
-#else
-# define PDEBUG(fmt, args...) do {} while (0)
-#endif
+#include "debug.h"
 
 #endif
 
