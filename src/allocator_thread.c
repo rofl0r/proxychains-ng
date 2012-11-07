@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
 #include "allocator_thread.h"
 #include "shm.h"
 #include "debug.h"
@@ -60,10 +61,8 @@ char *string_from_internal_ip(ip_type internalip) {
 	PFUNC();
 	char *res = NULL;
 	uint32_t index = index_from_internal_ip(internalip);
-	MUTEX_LOCK(&internal_ips_lock);
 	if(index < internal_ips->counter)
 		res = internal_ips->list[index]->string;
-	MUTEX_UNLOCK(&internal_ips_lock);
 	return res;
 }
 
@@ -85,9 +84,6 @@ static ip_type ip_from_internal_list(char* name, size_t len) {
 	size_t i;
 	ip_type res;
 	void* new_mem;
-
-	MUTEX_LOCK(&internal_ips_lock);
-
 	// see if we already have this dns entry saved.
 	if(internal_ips->counter) {
 		for(i = 0; i < internal_ips->counter; i++) {
@@ -138,12 +134,9 @@ static ip_type ip_from_internal_list(char* name, size_t len) {
 
 	have_ip:
 
-	MUTEX_UNLOCK(&internal_ips_lock);
-	
 	return res;
 	err_plus_unlock:
 	
-	MUTEX_UNLOCK(&internal_ips_lock);
 	PDEBUG("return err\n");
 	return ip_type_invalid;
 }
@@ -246,22 +239,33 @@ static void* threadfunc(void* x) {
 	return 0;
 }
 
+/* API to access the internal ip mapping */
+
 ip_type at_get_ip_for_host(char* host, size_t len) {
 	ip_type readbuf;
+	MUTEX_LOCK(&internal_ips_lock);
 	if(len > MSG_LEN_MAX) goto inv;
 	struct at_msghdr msg = {.msgtype = ATM_GETIP, .datalen = len + 1 };
 	if(sendmessage(ATD_SERVER, &msg, host) &&
-	   getmessage(ATD_CLIENT, &msg, &readbuf))
-		 return readbuf;
-	inv:
-	return ip_type_invalid;
+	   getmessage(ATD_CLIENT, &msg, &readbuf));
+	else {
+		inv:
+		readbuf = ip_type_invalid;
+	}
+	MUTEX_UNLOCK(&internal_ips_lock);
+	return readbuf;
 }
 
 size_t at_get_host_for_ip(ip_type ip, char* readbuf) {
 	struct at_msghdr msg = {.msgtype = ATM_GETNAME, .datalen = sizeof(ip_type) };
-	if(sendmessage(ATD_SERVER, &msg, &ip) && getmessage(ATD_CLIENT, &msg, readbuf))
-		return msg.datalen - 1;
-	return 0;
+	size_t res = 0;
+	MUTEX_LOCK(&internal_ips_lock);
+	if(sendmessage(ATD_SERVER, &msg, &ip) && getmessage(ATD_CLIENT, &msg, readbuf)) {
+		if((ptrdiff_t) msg.datalen <= 0) res = 0;
+		else res = msg.datalen - 1;
+	}
+	MUTEX_UNLOCK(&internal_ips_lock);
+	return res;
 }
 
 
@@ -296,5 +300,6 @@ void at_close(void) {
 	close(req_pipefd[1]);
 	close(resp_pipefd[0]);
 	close(resp_pipefd[1]);
+	pthread_attr_destroy(&allocator_thread_attr);
 	MUTEX_DESTROY(&internal_ips_lock);
 }
