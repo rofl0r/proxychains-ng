@@ -28,11 +28,6 @@
 
 #include "ip_type.h"
 
-#ifdef THREAD_SAFE
-#include "mutex.h"
-extern pthread_mutex_t hostdb_lock;
-#endif
-
 /*error codes*/
 typedef enum {
 	SUCCESS=0,
@@ -120,6 +115,9 @@ int proxy_getaddrinfo(const char *node, const char *service,
 void proxy_freeaddrinfo(struct addrinfo *res);
 
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
+
+void core_initialize(void);
+void core_unload(void);
 
 #include "debug.h"
 

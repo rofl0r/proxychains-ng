@@ -34,10 +34,8 @@
 #include <sys/time.h>
 #include <stdarg.h>
 #include <assert.h>
-#ifdef THREAD_SAFE
-#include <pthread.h>
+#include "mutex.h"
 pthread_mutex_t hostdb_lock;
-#endif
 
 #include "core.h"
 #include "common.h"
@@ -690,6 +688,14 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 		close(ns);
 	errno = ETIMEDOUT;
 	return -1;
+}
+
+void core_initialize(void) {
+	MUTEX_INIT(&hostdb_lock);
+}
+
+void core_unload(void) {
+	MUTEX_DESTROY(&hostdb_lock);
 }
 
 static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* name) {

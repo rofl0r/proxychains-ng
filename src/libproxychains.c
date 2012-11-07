@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <dlfcn.h>
+#include <pthread.h>
 
 
 #include "core.h"
@@ -64,9 +65,8 @@ localaddr_arg localnet_addr[MAX_LOCALNET];
 size_t num_localnet_addr = 0;
 unsigned int remote_dns_subnet = 224;
 
-#ifdef THREAD_SAFE
 pthread_once_t init_once = PTHREAD_ONCE_INIT;
-#endif
+
 static int init_l = 0;
 
 static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
@@ -97,7 +97,7 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 static void do_init(void) {
 	srand(time(NULL));
-	MUTEX_INIT(&hostdb_lock);
+	core_initialize();
 	at_init();
 	
 	/* read the config file */
@@ -115,18 +115,23 @@ static void do_init(void) {
 	init_l = 1;
 }
 
+#if 0
+/* FIXME this is currently unused.
+ * it is not strictly needed.
+ * maybe let it be called by a gcc destructor, if that doesnt
+ * have negative consequences (e.g. when a child calles exit) */
+static void unload(void) {
+	at_close();
+	core_unload();
+}
+#endif
+
 static void init_lib_wrapper(const char* caller) {
 #ifndef DEBUG
 	(void) caller;
 #endif
-#ifndef THREAD_SAFE
-	if(init_l) return;
-	PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
-	do_init();
-#else
 	if(!init_l) PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
 	pthread_once(&init_once, do_init);
-#endif
 }
 
 /* if we use gcc >= 3, we can instruct the dynamic loader 
