@@ -270,7 +270,7 @@ size_t at_get_host_for_ip(ip_type ip, char* readbuf) {
 
 
 static void initpipe(int* fds) {
-	if(pipe2(fds, 0/*O_CLOEXEC*/) == -1) {
+	if(pipe(fds) == -1) {
 		perror("pipe");
 		exit(1);
 	}
