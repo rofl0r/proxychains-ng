@@ -26,41 +26,11 @@
 #define BUFF_SIZE 8*1024  // used to read responses from proxies.
 #define     MAX_LOCALNET 64
 
-typedef union {
-	unsigned char octet[4];
-	uint32_t as_int;
-} ip_type;
+#include "ip_type.h"
 
-typedef struct {
-	uint32_t hash;
-	char* string;
-} string_hash_tuple;
-
-struct mallocinfo {
-	void * addr;
-	size_t oldsz;
-	size_t newsz;
-};
-
-typedef struct {
-	uint32_t counter;
-	uint32_t capa;
-	struct mallocinfo mi;
-	string_hash_tuple** list;
-} internal_ip_lookup_table;
-
-extern internal_ip_lookup_table *internal_ips;
 #ifdef THREAD_SAFE
-#include <pthread.h>
-extern pthread_mutex_t internal_ips_lock;
+#include "mutex.h"
 extern pthread_mutex_t hostdb_lock;
-# define MUTEX_LOCK(x) pthread_mutex_lock(x)
-# define MUTEX_UNLOCK(x) pthread_mutex_unlock(x)
-# define MUTEX_INIT(x,y) pthread_mutex_init(x, y)
-#else
-# define MUTEX_LOCK(x)
-# define MUTEX_UNLOCK(x)
-# define MUTEX_INIT(x,y)
 #endif
 
 /*error codes*/

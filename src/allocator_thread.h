@@ -1,8 +1,15 @@
-#include <unistd.h>
+#ifndef ALLOCATOR_THREAD_H
+#define ALLOCATOR_THREAD_H
 
-void *at_realloc(void* old, size_t oldsize, size_t newsize);
-char *at_dumpstring(char* s, size_t len);
-void at_init(void **data, size_t *oldsize, size_t *newsize);
+#include <unistd.h>
+#include "ip_type.h"
+
+#define MSG_LEN_MAX 256
+
+void at_init(void);
 void at_close(void);
+size_t at_get_host_for_ip(ip_type ip, char* readbuf);
+ip_type at_get_ip_for_host(char* host, size_t len);
 
 //RcB: DEP "allocator_thread.c"
+#endif

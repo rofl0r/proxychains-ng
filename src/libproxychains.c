@@ -96,12 +96,9 @@ static void* load_sym(char* symname, void* proxyfunc) {
 #include "allocator_thread.h"
 
 static void do_init(void) {
-	MUTEX_INIT(&internal_ips_lock, NULL);
-	MUTEX_INIT(&hostdb_lock, NULL);
-	internal_ips = shm_realloc(NULL, 0, sizeof(internal_ip_lookup_table));
-	assert(internal_ips);
-	memset(internal_ips, 0, sizeof(internal_ip_lookup_table));
-	at_init(&internal_ips->mi.addr, &internal_ips->mi.oldsz, &internal_ips->mi.newsz);
+	srand(time(NULL));
+	MUTEX_INIT(&hostdb_lock);
+	at_init();
 	
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
