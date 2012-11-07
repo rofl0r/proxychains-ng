@@ -1,4 +1,5 @@
 #include "../src/core.h"
+#include "../src/common.h"
 #include <stdio.h>
 
 void printhostent(struct hostent *hp) {

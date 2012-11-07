@@ -114,8 +114,6 @@ int proxy_getaddrinfo(const char *node, const char *service,
 		      const struct addrinfo *hints, struct addrinfo **res);
 void proxy_freeaddrinfo(struct addrinfo *res);
 
-void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
-
 void core_initialize(void);
 void core_unload(void);
 

@@ -1,6 +1,6 @@
 #include <netdb.h>
 #include <stdio.h>
-#include "../src/core.h"
+#include "../src/common.h"
 
 void printhostent(struct hostent *hp) {
 	char ipbuf[16];
