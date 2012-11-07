@@ -9,28 +9,12 @@ ProxyChains ver 4.1 README
 
   this program works only on dynamically linked programs.
   also both proxychains and the program to call must use
-  the same dynamic linker (i.e. same libc)
+  the same dynamic linker (i.e. same libc).
+  why ? because in order to hook to libc functions like
+  connect(), dynamic loader facilities are used, namely
+  dl_sym() and LD_PRELOAD.
 
 *********************************
-
-*** Known limitations of the current version: ***
-
-  when a process forks, does a DNS lookup in the child, and then uses
-  the ip in the parent, the corresponding ip mapping will not be found.
-  this is because the fork can't write back into the parents mapping table.
-  IRSSI shows this behaviour, so you have to pass the resolved ip address
-  to it. (you can use the proxyresolv script (requires "dig") to do so)
-
-  this means that you can't currently use tor onion urls for irssi.
-  to solve this issue, an external data store (file, pipe, ...) has to
-  manage the dns <-> ip mapping. of course there has to be proper locking.
-  shm_open, mkstemp, are possible candidates for a file based approach,
-  the other option is to spawn some kind of server process that manages the
-  map lookups. since connect() etc are hooked, this must not be a TCP server.
-
-  I am reluctant on doing this change, because the described behaviour
-  seems pretty idiotic (doing a fork only for a DNS lookup), and irssi
-  is currently the only known affected program.
 
 *** Installation ***
 
@@ -41,6 +25,15 @@ ProxyChains ver 4.1 README
 
 Changelog:
 ----------
+
+Version 4.3 (not yet released):
+  fixes programs that do dns-lookups in child processes (fork()ed),
+  like irssi. to achieve this, support for compilation without pthreads
+  was sacrified.
+
+Version 4.2:
+  some bugfixes
+
 Version 4.1 adds support for mac os x (i386, x86_64, ppc)
 all internal functions are threadsafe when compiled with -DTHREAD_SAFE
 (default).
