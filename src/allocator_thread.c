@@ -13,13 +13,8 @@
 #include "debug.h"
 #include "ip_type.h"
 #include "mutex.h"
-
-struct stringpool mem;
-static char *at_dumpstring(char* s, size_t len) {
-	PFUNC();
-	return stringpool_add(&mem, s, len);
-}
-
+#include "hash.h"
+#include "stringdump.h"
 
 /* stuff for our internal translation table */
 
@@ -37,16 +32,6 @@ typedef struct {
 pthread_mutex_t internal_ips_lock;
 internal_ip_lookup_table *internal_ips = NULL;
 internal_ip_lookup_table internal_ips_buf;
-
-uint32_t dalias_hash(char *s0) {
-	unsigned char *s = (void *) s0;
-	uint_fast32_t h = 0;
-	while(*s) {
-		h = 16 * h + *s++;
-		h ^= h >> 24 & 0xf0;
-	}
-	return h & 0xfffffff;
-}
 
 uint32_t index_from_internal_ip(ip_type internalip) {
 	PFUNC();
@@ -113,7 +98,7 @@ static ip_type ip_from_internal_list(char* name, size_t len) {
 		goto err_plus_unlock;
 
 	string_hash_tuple tmp = { 0 };
-	new_mem = at_dumpstring((char*) &tmp, sizeof(string_hash_tuple));
+	new_mem = dumpstring((char*) &tmp, sizeof(string_hash_tuple));
 	if(!new_mem)
 		goto oom;
 
@@ -122,7 +107,7 @@ static ip_type ip_from_internal_list(char* name, size_t len) {
 	internal_ips->list[internal_ips->counter] = new_mem;
 	internal_ips->list[internal_ips->counter]->hash = hash;
 	
-	new_mem = at_dumpstring((char*) name, len + 1);
+	new_mem = dumpstring((char*) name, len + 1);
 	
 	if(!new_mem) {
 		internal_ips->list[internal_ips->counter] = 0;
@@ -285,7 +270,6 @@ void at_init(void) {
 	memset(internal_ips, 0, sizeof *internal_ips);
 	initpipe(req_pipefd);
 	initpipe(resp_pipefd);
-	stringpool_init(&mem);
 	pthread_attr_init(&allocator_thread_attr);
 	pthread_attr_setstacksize(&allocator_thread_attr, 16 * 1024);
 	pthread_create(&allocator_thread, &allocator_thread_attr, threadfunc, 0);

@@ -94,9 +94,11 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 #include "shm.h"
 #include "allocator_thread.h"
+#include "stringdump.h"
 
 static void do_init(void) {
 	srand(time(NULL));
+	dumpstring_init(); // global string garbage can
 	core_initialize();
 	at_init();
 	
@@ -357,7 +359,7 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 
 	INIT();
 
-	PDEBUG("getaddrinfo: %s %s\n", node, service);
+	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
 	if(proxychains_resolver)
 		ret = proxy_getaddrinfo(node, service, hints, res);

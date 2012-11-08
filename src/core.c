@@ -34,8 +34,6 @@
 #include <sys/time.h>
 #include <stdarg.h>
 #include <assert.h>
-#include "mutex.h"
-pthread_mutex_t hostdb_lock;
 
 #include "core.h"
 #include "common.h"
@@ -666,12 +664,14 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	return -1;
 }
 
+#include "hostentdb.h"
+struct hostent_list hl;
+
 void core_initialize(void) {
-	MUTEX_INIT(&hostdb_lock);
+	hdb_init(&hl);
 }
 
 void core_unload(void) {
-	MUTEX_DESTROY(&hostdb_lock);
 }
 
 static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* name) {
@@ -682,9 +682,6 @@ static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* 
 struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data* data) {
 	PFUNC();
 	char buff[256];
-	size_t l = strlen(name);
-
-	struct hostent *hp;
 
 	data->resolved_addr_p[0] = (char *) &data->resolved_addr;
 	data->resolved_addr_p[1] = NULL;
@@ -709,16 +706,13 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	memset(buff, 0, sizeof(buff));
 
 	// this iterates over the "known hosts" db, usually /etc/hosts
-	MUTEX_LOCK(&hostdb_lock);
-	while((hp = gethostent()))
-		if(!strcmp(hp->h_name, name) && hp->h_addrtype == AF_INET && hp->h_length == sizeof(in_addr_t)) {
-			data->resolved_addr = *((in_addr_t*)(hp->h_addr_list[0]));
-			MUTEX_UNLOCK(&hostdb_lock);
-			goto retname;
-		}
-	MUTEX_UNLOCK(&hostdb_lock);
-
-	data->resolved_addr = at_get_ip_for_host((char*) name, l).as_int;
+	ip_type hdb_res = hdb_get(&hl, (char*) name);
+	if(hdb_res.as_int != ip_type_invalid.as_int) {
+		data->resolved_addr = hdb_res.as_int;
+		goto retname;
+	}
+	
+	data->resolved_addr = at_get_ip_for_host((char*) name, strlen(name)).as_int;
 	if(data->resolved_addr == (in_addr_t) ip_type_invalid.as_int) return NULL;
 
 	retname:
