@@ -1,4 +1,4 @@
-ProxyChains ver 4.1 README
+ProxyChains ver 4.3 README
 ==========================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -21,35 +21,44 @@ ProxyChains ver 4.1 README
   # needs a working C compiler, preferably gcc
   ./configure
   make
-  sudo make install
+  [optional] sudo make install
+
+  if you dont install, you can use proxychains from the build directory
+  like this: ./proxychains4 -f src/proxychains.conf telnet google.com 80
 
 Changelog:
 ----------
 
-Version 4.3 (not yet released):
-  fixes programs that do dns-lookups in child processes (fork()ed),
+Version 4.3:
+- fixes programs that do dns-lookups in child processes (fork()ed),
   like irssi. to achieve this, support for compilation without pthreads
   was sacrified.
+- fixes thread safety for gethostent() calls.
+- improved DNS handling speed, since hostent db is cached.
 
 Version 4.2:
-  some bugfixes
+- fixes compilation issues with ubuntu 12.04 toolchain
+- fixes segfault in rare codepath
 
-Version 4.1 adds support for mac os x (i386, x86_64, ppc)
-all internal functions are threadsafe when compiled with -DTHREAD_SAFE
-(default).
+Version 4.1 
+- support for mac os x (all archs)
+- all internal functions are threadsafe when compiled with -DTHREAD_SAFE 
+  (default).
 
-Version (4.x) removes the dnsresolver script which required a dynamically
-linked "dig" binary to be present with remote DNS lookup.
-this speeds up any operation involving DNS, as the old script had to use TCP.
-additionally it allows to use .onion urls when used with TOR.
-also it removed the broken autoconf build system with a simple Makefile.
-there's a ./configure script though for convenience.
-it also adds support for a config file passed via command line switches/
-environment variables.
+Version 4.0
+- replaced dnsresolver script (which required a dynamically linked "dig" 
+  binary to be present) with remote DNS lookup.
+  this speeds up any operation involving DNS, as the old script had to use TCP.
+  additionally it allows to use .onion urls when used with TOR.
+- removed broken autoconf build system with a simple Makefile.
+  there's a ./configure script though for convenience.
+  it also adds support for a config file passed via command line switches/
+  environment variables.
 
-Version (3.x) introduces support for DNS resolving through proxy 
-it supports SOCKS4, SOCKS5 and HTTP CONNECT proxy servers.
-Auth-types: socks - "user/pass" , http - "basic".
+Version 3.0
+- support for DNS resolving through proxy 
+  supports SOCKS4, SOCKS5 and HTTP CONNECT proxy servers.
+  Auth-types: socks - "user/pass" , http - "basic".
 
 When to use it ?
 1) When the only way to get "outside" from your LAN is through proxy server.
@@ -58,7 +67,8 @@ When to use it ?
 	like: your_host <--> proxy1 <--> proxy2 <--> target_host
 4) To "proxify" some program with no proxy support built-in (like telnet)
 5) Access intranet from outside via proxy.
-5) To use DNS behind proxy.
+6) To use DNS behind proxy.
+7) To access hidden tor onion services.
 
 Some cool features:
 
