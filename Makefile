@@ -21,7 +21,8 @@ LOBJS = src/nameinfo.o \
         src/hostentdb.o src/hash.o
 
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
-LDFLAGS = -shared -fPIC -Wl,--no-as-needed -ldl -lpthread
+NO_AS_NEEDED = -Wl,--no-as-needed
+LDFLAGS = -shared -fPIC $(NO_AS_NEEDED) -ldl -lpthread
 INC     = 
 PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
