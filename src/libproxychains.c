@@ -381,22 +381,16 @@ void freeaddrinfo(struct addrinfo *res) {
 	return;
 }
 
-// work around a buggy prototype in GLIBC. according to the bugtracker it has been fixed in git at 02 May 2011.
-// 2.14 came out in June 2011 so that should be the first fixed version
-#if defined(__GLIBC__) && (__GLIBC__ < 3) && (__GLIBC_MINOR__ < 14)
-int getnameinfo(const struct sockaddr *sa,
-		socklen_t salen, char *host, socklen_t hostlen, char *serv, socklen_t servlen, unsigned int flags)
-#else
-int getnameinfo(const struct sockaddr *sa,
-		socklen_t salen, char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags)
-#endif
+int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen, 
+	           char *host, socklen_t hostlen, char *serv, 
+	           socklen_t servlen, int flags)
 {
 	char ip_buf[16];
 	int ret = 0;
 
 	INIT();
 	
-	PDEBUG("getnameinfo: %s %s\n", host, serv);
+	PFUNC();
 
 	if(!proxychains_resolver) {
 		ret = true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
