@@ -395,6 +395,8 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	if(!proxychains_resolver) {
 		ret = true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 	} else {
+		if(salen < sizeof(struct sockaddr_in) || SOCKFAMILY(*sa) != AF_INET)
+			return EAI_FAMILY;
 		if(hostlen) {
 			pc_stringfromipv4((unsigned char*) &(SOCKADDR_2(*sa)), ip_buf);
 			if(snprintf(host, hostlen, "%s", ip_buf) >= hostlen)
