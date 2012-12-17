@@ -397,10 +397,13 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	} else {
 		if(hostlen) {
 			pc_stringfromipv4((unsigned char*) &(SOCKADDR_2(*sa)), ip_buf);
-			strncpy(host, ip_buf, hostlen);
+			if(snprintf(host, hostlen, "%s", ip_buf) >= hostlen)
+				return EAI_OVERFLOW;
 		}
-		if(servlen)
-			snprintf(serv, servlen, "%d", ntohs(SOCKPORT(*sa)));
+		if(servlen) {
+			if(snprintf(serv, servlen, "%d", ntohs(SOCKPORT(*sa))) >= servlen)
+				return EAI_OVERFLOW;
+		}
 	}
 	return ret;
 }
