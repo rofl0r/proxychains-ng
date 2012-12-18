@@ -2,6 +2,8 @@
 #include <string.h>
 #include <netdb.h>
 #include <stdlib.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 #include "ip_type.h"
 #include "hash.h"
