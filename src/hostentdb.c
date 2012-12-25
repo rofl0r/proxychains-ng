@@ -28,11 +28,16 @@ static void hdb_add(struct hostent_list* hl, char* host, ip_type ip) {
 }
 
 static void hdb_fill(struct hostent_list *hl) {
+#ifndef IS_BSD
 	struct hostent* hp;
 	while((hp = gethostent()))
 		if(hp->h_addrtype == AF_INET && hp->h_length == sizeof(in_addr_t)) {
 			hdb_add(hl, hp->h_name, (ip_type) { .as_int = *((in_addr_t*)(hp->h_addr_list[0])) });
 		}
+#else
+	/* FreeBSD hangs on gethostent(). since this feature is not crucial, we just do nothing */
+	(void) hl;
+#endif
 }
 
 void hdb_init(struct hostent_list *hl) {

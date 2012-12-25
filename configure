@@ -34,7 +34,11 @@ parsearg() {
 }
 
 ismac() {
-	uname -s | grep Darwin
+	uname -s | grep Darwin >/dev/null
+}
+
+isbsd() {
+	uname -s | grep BSD >/dev/null
 }
 
 while true ; do
@@ -83,6 +87,9 @@ if ismac ; then
 	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
 	echo LD_SET_SONAME=-Wl,-install_name,>>config.mak
 	echo INSTALL_FLAGS=-m>>config.mak
+elif isbsd ; then
+	echo LIBDL=>>config.mak
+	echo "CFLAGS+=-DIS_BSD">>config.mak
 fi
 
 echo done, now run make \&\& make install
