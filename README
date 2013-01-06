@@ -7,7 +7,24 @@ ProxyChains ver 4.4 README
 
 *********** ATTENTION ***********
 
-  this program works only on dynamically linked programs.
+  this program can be used to circumvent censorship.
+  doing so can be VERY DANGEROUS in certain countries.
+
+  ALWAYS MAKE SURE THAT PROXYCHAINS WORKS AS EXPECTED
+  BEFORE USING IT FOR ANYTHING SERIOUS.
+
+  this involves both the program and the proxy that you're going to
+  use.
+
+  for example, you can connect to some "what is my ip" service
+  like ifconfig.me to make sure that it's not using your real ip.
+
+  ONLY USE PROXYCHAINS IF YOU KNOW WHAT YOU'RE DOING.
+
+
+*********** ATTENTION ***********
+
+  this program works only on DYNAMICALLY LINKED programs.
   also both proxychains and the program to call must use
   the same dynamic linker (i.e. same libc).
   why ? because in order to hook to libc functions like
