@@ -33,8 +33,6 @@ LDSO_SUFFIX = so
 LD_SET_SONAME = -Wl,-soname=
 INSTALL_FLAGS = -D -m
 
--include config.mak
-
 LDSO_PATHNAME = libproxychains4.$(LDSO_SUFFIX)
 
 SHARED_LIBS = $(LDSO_PATHNAME)
@@ -42,6 +40,7 @@ ALL_LIBS = $(SHARED_LIBS)
 PXCHAINS = proxychains4
 ALL_TOOLS = $(PXCHAINS)
 
+-include config.mak
 
 CFLAGS+=$(USER_CFLAGS) $(MAC_CFLAGS)
 CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DSYSCONFDIR=\"$(sysconfdir)\" -DDLL_NAME=\"$(LDSO_PATHNAME)\"
