@@ -72,4 +72,4 @@ $(ALL_TOOLS): $(OBJS)
 	$(CC) src/main.o src/common.o -o $(PXCHAINS)
 
 
-.PHONY: all clean install
+.PHONY: all clean install install-config
