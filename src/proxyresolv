@@ -1,8 +1,10 @@
 #!/bin/sh
-# This script is called by proxychains to resolve DNS names
+# This is a legacy script that uses "dig" to do DNS lookups via TCP.
+# it is not actively maintained since proxychains no longer depends
+# on it. i leave it here as a bonus.
 
 # DNS server used to resolve names
-DNS_SERVER=4.2.2.2
+DNS_SERVER=8.8.8.8
 
 
 if [ $# = 0 ] ; then
@@ -12,5 +14,5 @@ if [ $# = 0 ] ; then
 fi
 
 
-export LD_PRELOAD=libproxychains.so
+export LD_PRELOAD=libproxychains4.so
 dig $1 @$DNS_SERVER +tcp | awk '/A.+[0-9]+\.[0-9]+\.[0-9]/{print $5;}'
