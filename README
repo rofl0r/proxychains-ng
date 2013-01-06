@@ -22,6 +22,7 @@ ProxyChains ver 4.4 README
   ./configure --prefix=/usr --sysconfdir=/etc
   make
   [optional] sudo make install
+  [optional] sudo make install-config (installs proxychains.conf)
 
   if you dont install, you can use proxychains from the build directory
   like this: ./proxychains4 -f src/proxychains.conf telnet google.com 80
