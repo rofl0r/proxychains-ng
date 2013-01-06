@@ -90,6 +90,7 @@ if ismac ; then
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
+	echo INSTALL_FLAGS=-m>>config.mak
 fi
 
 echo done, now run make \&\& make install
