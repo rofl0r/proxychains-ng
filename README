@@ -1,4 +1,4 @@
-ProxyChains ver 4.3 README
+ProxyChains ver 4.4 README
 ==========================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -19,7 +19,7 @@ ProxyChains ver 4.3 README
 *** Installation ***
 
   # needs a working C compiler, preferably gcc
-  ./configure
+  ./configure --prefix=/usr --sysconfdir=/etc
   make
   [optional] sudo make install
 
@@ -28,6 +28,10 @@ ProxyChains ver 4.3 README
 
 Changelog:
 ----------
+
+Version 4.4:
+- FreeBSD port
+- fixes some installation issues on Debian and Mac.
 
 Version 4.3:
 - fixes programs that do dns-lookups in child processes (fork()ed),
