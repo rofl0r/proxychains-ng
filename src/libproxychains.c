@@ -45,6 +45,7 @@
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
 #define     MAX_CHAIN 512
 
+close_t true_close;
 connect_t true_connect;
 gethostbyname_t true_gethostbyname;
 getaddrinfo_t true_getaddrinfo;
@@ -113,6 +114,7 @@ static void do_init(void) {
 	SETUP_SYM(freeaddrinfo);
 	SETUP_SYM(gethostbyaddr);
 	SETUP_SYM(getnameinfo);
+	SETUP_SYM(close);
 	
 	init_l = 1;
 }
@@ -281,6 +283,16 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 }
 
 /*******  HOOK FUNCTIONS  *******/
+
+int close(int fd) {
+	/* prevent rude programs (like ssh) from closing our pipes */
+	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
+	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
+		return true_close(fd);
+	}
+	errno = EINTR;
+	return -1;
+}
 
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	PFUNC();

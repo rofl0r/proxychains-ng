@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <errno.h>
 #include "allocator_thread.h"
 #include "shm.h"
 #include "debug.h"
@@ -147,8 +148,8 @@ struct at_msghdr {
 
 static pthread_t allocator_thread;
 static pthread_attr_t allocator_thread_attr;
-static int req_pipefd[2];
-static int resp_pipefd[2];
+int req_pipefd[2];
+int resp_pipefd[2];
 
 static int wait_data(int readfd) {
 	PFUNC();
@@ -158,7 +159,13 @@ static int wait_data(int readfd) {
 	int ret;
 	while((ret = select(readfd+1, &fds, NULL, NULL, NULL)) <= 0) {
 		if(ret < 0) {
-			perror("select2");
+			int e = errno;
+			if(e == EINTR) continue;
+#ifdef __GLIBC__
+			char emsg[1024];
+			char* x = strerror_r(errno, emsg, sizeof emsg);
+			dprintf(2, "select2: %s\n", x);
+#endif
 			return 0;
 		}
 	}
