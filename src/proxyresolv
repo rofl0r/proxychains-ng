@@ -15,4 +15,4 @@ fi
 
 
 export LD_PRELOAD=libproxychains4.so
-dig $1 @$DNS_SERVER +tcp | awk '/A.+[0-9]+\.[0-9]+\.[0-9]/{print $5;}'
+dig $1 @$DNS_SERVER +tcp | awk '/A.?[0-9]+\.[0-9]+\.[0-9]/{print $5;}'
