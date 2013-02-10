@@ -1,9 +1,23 @@
-ProxyChains ver 4.4 README
-==========================
+ProxyChains-NG ver 4.5 README
+=============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
-  in dynamically linked programs via a preloaded DLL and redirects the
-  connections through SOCKS4a/5 or HTTP proxies.
+  in DYNAMICALLY LINKED programs via a preloaded DLL (dlsym(), LD_PRELOAD)
+  and redirects the connections through SOCKS4a/5 or HTTP proxies.
+  It supports TCP only (no UDP/ICMP etc).
+
+  The way it works is basically a HACK; so it is possible that it doesn't
+  work with your program, especially when it's a script, or starts 
+  numerous processes like background daemons or uses dlopen() to load
+  "modules" (bug in glibc dynlinker).
+  It should work with simple compiled (C/C++) dynamically linked programs
+  though.
+
+  If your program doesn't work with proxychains, consider using an 
+  iptables based solution instead; this is much more robust.
+
+  Supported Platforms: Linux, BSD, Mac.
+
 
 *********** ATTENTION ***********
 
@@ -25,18 +39,6 @@ ProxyChains ver 4.4 README
   RESPONSIBILITY FOR ANY ABUSE OR MISUSE OF THIS SOFTWARE AND 
   THE RESULTING CONSEQUENCES.
 
-
-*********** ATTENTION ***********
-
-  this program works only on DYNAMICALLY LINKED programs.
-  also both proxychains and the program to call must use
-  the same dynamic linker (i.e. same libc).
-  why ? because in order to hook to libc functions like
-  connect(), dynamic loader facilities are used, namely
-  dl_sym() and LD_PRELOAD.
-
-*********************************
-
 *** Installation ***
 
   # needs a working C compiler, preferably gcc
@@ -50,6 +52,10 @@ ProxyChains ver 4.4 README
 
 Changelog:
 ----------
+
+Version 4.5:
+- hook close() to prevent OpenSSH from messing with internal infrastructure.
+  this caused ssh client to segfault when proxified.
 
 Version 4.4:
 - FreeBSD port
@@ -104,10 +110,9 @@ Some cool features:
 	random order from the list ( user defined length of chain ).
 	exact order  (as they appear in the list )
 	dynamic order (smart exclude dead proxies from chain)
-* You can use it with any TCP client application, even network scanners
-	yes, yes - you can make portscan via proxy (or chained proxies)
-	for example with Nmap scanner by fyodor (www.insecire.org/nmap).
-	proxychains nmap -sT -PO -p 80 -iR  (find some webservers through proxy)
+* You can use it with most TCP client applications, possibly even network 
+	scanners, as long as they use standard libc functionality.
+	pcap based scanning does not work.
 * You can use it with servers, like squid, sendmail, or whatever.
 * DNS resolving through proxy.
 
@@ -116,13 +121,13 @@ Configuration:
 --------------
 
 proxychains looks for config file in following order:
-1)	file listed in environment variable ${PROXYCHAINS_CONF_FILE} or
+1)	file listed in environment variable PROXYCHAINS_CONF_FILE or
 	provided as a -f argument to proxychains script or binary.
 2)	./proxychains.conf
 3)	$(HOME)/.proxychains/proxychains.conf
-4)	/etc/proxychains.conf  **
+4)	$(sysconfdir)/proxychains.conf  **
 
-**see more in /etc/proxychains.conf
+** usually /etc/proxychains.conf
 
 Usage Example:
 
