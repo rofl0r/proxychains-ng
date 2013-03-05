@@ -150,3 +150,7 @@ Usage Example:
 in this example it will resolve targethost.com through proxy(or chained proxies)
 specified by proxychains.conf
 
+Community:
+----------
+#proxychains on irc.freenode.net
+
