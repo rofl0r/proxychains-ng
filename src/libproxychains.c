@@ -168,7 +168,11 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	*ct = DYNAMIC_TYPE;
 	
 	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buff, sizeof(buff));
-	file = fopen(env, "r");
+	if( ( file = fopen(env, "r") ) == NULL )
+	{
+	        perror("couldnt read configuration file");
+        	exit(1);
+	}
 
 	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
 	if(env && *env == '1')
