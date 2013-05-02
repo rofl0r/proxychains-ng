@@ -192,7 +192,12 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 
 				sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
 
-				pd[count].ip.as_int = (uint32_t) inet_addr(host);
+				in_addr_t host_ip = inet_addr(host);
+				if(host_ip == INADDR_NONE) {
+					fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
+					exit(1);
+				}
+				pd[count].ip.as_int = (uint32_t) host_ip;
 				pd[count].port = htons((unsigned short) port_n);
 
 				if(!strcmp(type, "http")) {
