@@ -47,8 +47,9 @@ typedef enum {
 typedef enum {
 	DYNAMIC_TYPE,
 	STRICT_TYPE,
-	RANDOM_TYPE}
-chain_type;
+	RANDOM_TYPE,
+	ROUND_ROBIN_TYPE
+} chain_type;
 
 typedef enum {
 	PLAY_STATE,
