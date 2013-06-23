@@ -217,10 +217,10 @@ static void get_chain_data(proxy_chain_list *pc_list) {
 						pd_list[count].pt = SOCKS5_TYPE;
 					} else
 						continue;
-				}
 
-				if(pd_list[count].ip.as_int && port_n && pd_list[count].ip.as_int != (uint32_t) - 1)
-					count++;
+					if(pd_list[count].ip.as_int && port_n && pd_list[count].ip.as_int != (uint32_t) - 1)
+						count++;
+				}
 			} else {
 				char *s1, *s2;
 				if((s1=(strstr(buff, "["))+1) && (s1 < (s2=strstr(buff, "]")))) {
