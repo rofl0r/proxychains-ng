@@ -52,18 +52,8 @@ freeaddrinfo_t true_freeaddrinfo;
 getnameinfo_t true_getnameinfo;
 gethostbyaddr_t true_gethostbyaddr;
 
-//~ int tcp_read_time_out;
-//~ int tcp_connect_time_out;
-//~ chain_type proxychains_ct;
-//~ proxy_data proxychains_pd[MAX_CHAIN];
-//~ unsigned int proxychains_proxy_count = 0;
-//~ unsigned int proxychains_proxy_offset = 0;
-//~ unsigned int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
 int proxychains_resolver = 0;
-//~ localaddr_arg localnet_addr[MAX_LOCALNET];
-//~ size_t num_localnet_addr = 0;
-//~ unsigned int remote_dns_subnet = 224;
 
 proxy_chain_list *proxychains_chain_list = NULL;
 
