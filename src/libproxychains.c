@@ -43,7 +43,6 @@
 #define     SOCKADDR_2(x)     (satosin(x)->sin_addr)
 #define     SOCKPORT(x)     (satosin(x)->sin_port)
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
-#define     MAX_CHAIN 512
 
 close_t true_close;
 connect_t true_connect;
@@ -53,25 +52,28 @@ freeaddrinfo_t true_freeaddrinfo;
 getnameinfo_t true_getnameinfo;
 gethostbyaddr_t true_gethostbyaddr;
 
-int tcp_read_time_out;
-int tcp_connect_time_out;
-chain_type proxychains_ct;
-proxy_data proxychains_pd[MAX_CHAIN];
-unsigned int proxychains_proxy_count = 0;
-unsigned int proxychains_proxy_offset = 0;
-int proxychains_got_chain_data = 0;
-unsigned int proxychains_max_chain = 1;
+//~ int tcp_read_time_out;
+//~ int tcp_connect_time_out;
+//~ chain_type proxychains_ct;
+//~ proxy_data proxychains_pd[MAX_CHAIN];
+//~ unsigned int proxychains_proxy_count = 0;
+//~ unsigned int proxychains_proxy_offset = 0;
+//~ unsigned int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
 int proxychains_resolver = 0;
-localaddr_arg localnet_addr[MAX_LOCALNET];
-size_t num_localnet_addr = 0;
-unsigned int remote_dns_subnet = 224;
+//~ localaddr_arg localnet_addr[MAX_LOCALNET];
+//~ size_t num_localnet_addr = 0;
+//~ unsigned int remote_dns_subnet = 224;
+
+proxy_chain_list *proxychains_chain_list = NULL;
 
 pthread_once_t init_once = PTHREAD_ONCE_INIT;
 
 static int init_l = 0;
 
-static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
+static inline void get_chain_data(proxy_chain_list *pc_list);
+static inline int get_chain_type(char *buff, chain_type *ct);
+int proxy_chain_load_pdata(proxy_chain *pc, proxy_data *pd_list, int count);
 
 static void* load_sym(char* symname, void* proxyfunc) {
 
@@ -104,9 +106,26 @@ static void do_init(void) {
 	core_initialize();
 	at_init();
 	
+	/* Create global library data */
+	proxychains_chain_list = (proxy_chain_list*)malloc(sizeof(proxy_chain_list));
+	if (proxychains_chain_list ==  NULL) {
+		proxychains_write_log(LOG_PREFIX "Error failed to allocate proxy list object\n");
+		exit(1);
+	}
+	
+	/* Initialize proxychain library data */
+	proxychains_chain_list->remote_dns_subnet = -1; // -1 means no remote dns
+	//~ proxychains_chain_list->pc = NULL;
+	proxychains_chain_list->count = 0;
+	//~ proxychains_chain_list->localnet_addr = NULL;
+	proxychains_chain_list->num_localnet_addr = 0;
+	proxychains_chain_list->tcp_read_time_out = 4 * 1000;
+	proxychains_chain_list->tcp_connect_time_out = 10 * 1000;
+	
 	/* read the config file */
-	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
-	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
+	get_chain_data(proxychains_chain_list);
+	PDEBUG("Finished loading chain data\n");
+	DUMP_PROXY_CHAIN(proxychains_chain_list->pc[0]);
 
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
 	
@@ -153,21 +172,19 @@ static void gcc_init(void) {
 #endif
 
 /* get configuration from config file */
-static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
+static void get_chain_data(proxy_chain_list *pc_list) {
+	static int got_chain_data = 0;
 	int count = 0, port_n = 0, list = 0;
-	char buff[1024], type[1024], host[1024], user[1024];
+	char buff[1024], type[1024], host[1024], label[1024];
 	char *env;
 	char local_in_addr_port[32];
 	char local_in_addr[32], local_in_port[32], local_netmask[32];
 	FILE *file = NULL;
+	proxy_chain *pc_curr = NULL;
+	proxy_data pd_list[MAX_CHAIN];
 
-	if(proxychains_got_chain_data)
+	if(got_chain_data)
 		return;
-
-	//Some defaults
-	tcp_read_time_out = 4 * 1000;
-	tcp_connect_time_out = 10 * 1000;
-	*ct = DYNAMIC_TYPE;
 	
 	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buff, sizeof(buff));
 	if( ( file = fopen(env, "r") ) == NULL )
@@ -183,60 +200,106 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	while(fgets(buff, sizeof(buff), file)) {
 		if(buff[0] != '\n' && buff[strspn(buff, " ")] != '#') {
 			/* proxylist has to come last */
-			if(list) {
+			if(list && (buff[0] != '[')) {
 				if(count >= MAX_CHAIN)
 					break;
 				
-				memset(&pd[count], 0, sizeof(proxy_data));
+				memset(&pd_list[count], 0, sizeof(proxy_data));
 
-				pd[count].ps = PLAY_STATE;
+				pd_list[count].ps = PLAY_STATE;
+				pc_curr->ct = DYNAMIC_TYPE;
+				pc_curr->tcp_read_time_out = pc_list->tcp_read_time_out;
+				pc_curr->tcp_connect_time_out = pc_list->tcp_connect_time_out;
 				port_n = 0;
+				
+				if(strstr(buff, "tcp_read_time_out")) {
+					sscanf(buff, "%s %d", label, &pc_curr->tcp_read_time_out);
+				} else if(strstr(buff, "tcp_connect_time_out")) {
+					sscanf(buff, "%s %d", label, &pc_curr->tcp_connect_time_out);
+				} else if(strstr(buff, "chain_len")) {
+					char *pc;
+					int len;
+					pc = strchr(buff, '=');
+					len = atoi(++pc);
+					pc_curr->max_chain = (len ? len : 1);
+				} else if(!get_chain_type(buff, &pc_curr->ct)) {
+					;
+				} else {
+					pd_list[count].user[0] = pd_list[count].pass[0] = '\0';
+					sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd_list[count].user, pd_list[count].pass);
 
-				sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
+					in_addr_t host_ip = inet_addr(host);
+					if(host_ip == INADDR_NONE) {
+						fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
+						exit(1);
+					}
+					pd_list[count].ip.as_int = (uint32_t) host_ip;
+					pd_list[count].port = htons((unsigned short) port_n);
 
-				in_addr_t host_ip = inet_addr(host);
-				if(host_ip == INADDR_NONE) {
-					fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
-					exit(1);
+					if(!strcmp(type, "http")) {
+						pd_list[count].pt = HTTP_TYPE;
+					} else if(!strcmp(type, "socks4")) {
+						pd_list[count].pt = SOCKS4_TYPE;
+					} else if(!strcmp(type, "socks5")) {
+						pd_list[count].pt = SOCKS5_TYPE;
+					} else
+						continue;
 				}
-				pd[count].ip.as_int = (uint32_t) host_ip;
-				pd[count].port = htons((unsigned short) port_n);
 
-				if(!strcmp(type, "http")) {
-					pd[count].pt = HTTP_TYPE;
-				} else if(!strcmp(type, "socks4")) {
-					pd[count].pt = SOCKS4_TYPE;
-				} else if(!strcmp(type, "socks5")) {
-					pd[count].pt = SOCKS5_TYPE;
-				} else
-					continue;
-
-				if(pd[count].ip.as_int && port_n && pd[count].ip.as_int != (uint32_t) - 1)
+				if(pd_list[count].ip.as_int && port_n && pd_list[count].ip.as_int != (uint32_t) - 1)
 					count++;
 			} else {
-				if(strstr(buff, "[ProxyList]")) {
+				char *s1, *s2;
+				if((s1=strstr(buff, "[")) && (s1 < (s2=strstr(buff, "]")))) {
+					/* If have a previous chain stored in the temp chain, copy
+					   to global lists. */
+					if (count) {
+						proxy_chain_load_pdata(pc_curr, pd_list, count);
+						count = 0;
+					}
+					
+					PDEBUG("Parsing chain: %s\n", buff);
+					if (pc_list->count >= MAX_CHAIN_LISTS) {
+						proxychains_write_log(LOG_PREFIX "Warning more than %d lists defined in configfile, skipping any more list definitions.\n", MAX_CHAIN_LISTS);
+						continue;
+					}
+					
+					/* Create new proxy list */
+					pc_curr = pc_list->pc[pc_list->count++] = (proxy_chain*)malloc(sizeof(proxy_chain));
+					if (pc_curr ==  NULL) {
+						proxychains_write_log(LOG_PREFIX "Error failed to allocate proxy chain object\n");
+						exit(1);
+					}
+					pc_curr->count = 0;
+					pc_curr->offset = 0;
+					pc_curr->max_chain = 1;
+					pc_curr->tcp_read_time_out = pc_list->tcp_read_time_out;
+					pc_curr->tcp_connect_time_out = pc_list->tcp_connect_time_out;
+					
+					pc_curr->name = (char*)malloc(sizeof(char)*(s2-s1));
+					if (pc_curr->name ==  NULL) {
+						proxychains_write_log(LOG_PREFIX "Error failed to allocate proxy chain name string\n");
+						exit(1);
+					}
+					strncpy(pc_curr->name, s1, s2-s1);
+					
 					list = 1;
-				} else if(strstr(buff, "random_chain")) {
-					*ct = RANDOM_TYPE;
-				} else if(strstr(buff, "strict_chain")) {
-					*ct = STRICT_TYPE;
-				} else if(strstr(buff, "dynamic_chain")) {
-					*ct = DYNAMIC_TYPE;
-				} else if(strstr(buff, "round_robin_chain")) {
-					*ct = ROUND_ROBIN_TYPE;
+				} else if(!get_chain_type(buff, &pc_list->ct)) {
+					;
 				} else if(strstr(buff, "tcp_read_time_out")) {
-					sscanf(buff, "%s %d", user, &tcp_read_time_out);
+					sscanf(buff, "%s %d", label, &pc_list->tcp_read_time_out);
 				} else if(strstr(buff, "tcp_connect_time_out")) {
-					sscanf(buff, "%s %d", user, &tcp_connect_time_out);
+					sscanf(buff, "%s %d", label, &pc_list->tcp_connect_time_out);
 				} else if(strstr(buff, "remote_dns_subnet")) {
-					sscanf(buff, "%s %d", user, &remote_dns_subnet);
-					if(remote_dns_subnet >= 256) {
+					sscanf(buff, "%s %d", label, &pc_list->remote_dns_subnet);
+					if(pc_list->remote_dns_subnet >= 256) {
 						fprintf(stderr,
 							"remote_dns_subnet: invalid value. requires a number between 0 and 255.\n");
 						exit(1);
 					}
 				} else if(strstr(buff, "localnet")) {
-					if(sscanf(buff, "%s %21[^/]/%15s", user, local_in_addr_port, local_netmask) < 3) {
+					localaddr_arg *laddr_a = &pc_list->localnet_addr[pc_list->num_localnet_addr];
+					if(sscanf(buff, "%s %21[^/]/%15s", label, local_in_addr_port, local_netmask) < 3) {
 						fprintf(stderr, "localnet format error");
 						exit(1);
 					}
@@ -250,38 +313,27 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 						PDEBUG("added localnet: netaddr=%s, port=%s, netmask=%s\n",
 						       local_in_addr, local_in_port, local_netmask);
 					}
-					if(num_localnet_addr < MAX_LOCALNET) {
+					if(pc_list->num_localnet_addr < MAX_LOCALNET) {
 						int error;
-						error =
-						    inet_pton(AF_INET, local_in_addr,
-							      &localnet_addr[num_localnet_addr].in_addr);
+						error = inet_pton(AF_INET, local_in_addr, &laddr_a->in_addr);
 						if(error <= 0) {
 							fprintf(stderr, "localnet address error\n");
 							exit(1);
 						}
-						error =
-						    inet_pton(AF_INET, local_netmask,
-							      &localnet_addr[num_localnet_addr].netmask);
+						error = inet_pton(AF_INET, local_netmask, &laddr_a->netmask);
 						if(error <= 0) {
 							fprintf(stderr, "localnet netmask error\n");
 							exit(1);
 						}
 						if(local_in_port[0]) {
-							localnet_addr[num_localnet_addr].port =
-							    (short) atoi(local_in_port);
+							laddr_a->port = (short) atoi(local_in_port);
 						} else {
-							localnet_addr[num_localnet_addr].port = 0;
+							laddr_a->port = 0;
 						}
-						++num_localnet_addr;
+						++pc_list->num_localnet_addr;
 					} else {
 						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
 					}
-				} else if(strstr(buff, "chain_len")) {
-					char *pc;
-					int len;
-					pc = strchr(buff, '=');
-					len = atoi(++pc);
-					proxychains_max_chain = (len ? len : 1);
 				} else if(strstr(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
 				} else if(strstr(buff, "proxy_dns")) {
@@ -290,9 +342,43 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 			}
 		}
 	}
+	
+	/* If have a previous chain stored in the temp chain, copy
+	   to global lists. This is needed for the last defined chain. */
+	if (count) {
+		proxy_chain_load_pdata(pc_curr, pd_list, count);
+		count = 0;
+	}
+	
 	fclose(file);
-	*proxy_count = count;
-	proxychains_got_chain_data = 1;
+	//~ *proxy_count = count;
+	got_chain_data = 1;
+}
+
+int get_chain_type(char *buff, chain_type *ct) {
+	if(strstr(buff, "random_chain"))
+		*ct = RANDOM_TYPE;
+	else if(strstr(buff, "strict_chain"))
+		*ct = STRICT_TYPE;
+	else if(strstr(buff, "dynamic_chain"))
+		*ct = DYNAMIC_TYPE;
+	else if(strstr(buff, "round_robin_chain"))
+		*ct = ROUND_ROBIN_TYPE;
+	else
+		return 1;
+	return 0;
+}
+
+int proxy_chain_load_pdata(proxy_chain *pc, proxy_data *pd_list, int count) {
+	pc->count = count;
+	pc->pd = (proxy_data*)malloc(sizeof(proxy_data)*count);
+	if (pc->pd ==  NULL) {
+		proxychains_write_log(LOG_PREFIX "Error failed to allocate proxy data list for \"%s\" chain\n", pc->name);
+		exit(1);
+	}
+	memcpy(pc->pd, pd_list, sizeof(proxy_data)*count);
+	
+	return 0;
 }
 
 /*******  HOOK FUNCTIONS  *******/
@@ -336,12 +422,12 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 #endif
 
 	// check if connect called from proxydns
-        remote_dns_connect = (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
+        remote_dns_connect = (ntohl(p_addr_in->s_addr) >> 24 == proxychains_chain_list->remote_dns_subnet);
 
-	for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
-		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
-		   == (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr)) {
-			if(!localnet_addr[i].port || localnet_addr[i].port == port) {
+	for(i = 0; i < proxychains_chain_list->num_localnet_addr && !remote_dns_connect; i++) {
+		if((proxychains_chain_list->localnet_addr[i].in_addr.s_addr & proxychains_chain_list->localnet_addr[i].netmask.s_addr)
+		   == (p_addr_in->s_addr & proxychains_chain_list->localnet_addr[i].netmask.s_addr)) {
+			if(!proxychains_chain_list->localnet_addr[i].port || proxychains_chain_list->localnet_addr[i].port == port) {
 				PDEBUG("accessing localnet using true_connect\n");
 				return true_connect(sock, addr, len);
 			}
@@ -357,7 +443,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	ret = connect_proxy_chain(sock,
 				  dest_ip,
 				  SOCKPORT(*addr),
-				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
+				  proxychains_chain_list->pc[0]);
 
 	fcntl(sock, F_SETFL, flags);
 	if(ret != SUCCESS)
