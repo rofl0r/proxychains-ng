@@ -63,7 +63,9 @@ static int init_l = 0;
 
 static inline void get_chain_data(proxy_chain_list *pc_list);
 static inline int get_chain_type(char *buff, chain_type *ct);
+int proxy_chain_list_load(proxy_chain_list *pc_list);
 int proxy_chain_load_pdata(proxy_chain *pc, proxy_data *pd_list, int count);
+proxy_chain* proxy_chain_list_set_selected(proxy_chain_list *pc_list, const char *chain_name);
 
 static void* load_sym(char* symname, void* proxyfunc) {
 
@@ -96,26 +98,7 @@ static void do_init(void) {
 	core_initialize();
 	at_init();
 	
-	/* Create global library data */
-	proxychains_chain_list = (proxy_chain_list*)malloc(sizeof(proxy_chain_list));
-	if (proxychains_chain_list ==  NULL) {
-		proxychains_write_log(LOG_PREFIX "Error failed to allocate proxy list object\n");
-		exit(1);
-	}
-	
-	/* Initialize proxychain library data */
-	proxychains_chain_list->remote_dns_subnet = -1; // -1 means no remote dns
-	//~ proxychains_chain_list->pc = NULL;
-	proxychains_chain_list->count = 0;
-	//~ proxychains_chain_list->localnet_addr = NULL;
-	proxychains_chain_list->num_localnet_addr = 0;
-	proxychains_chain_list->tcp_read_time_out = 4 * 1000;
-	proxychains_chain_list->tcp_connect_time_out = 10 * 1000;
-	
-	/* read the config file */
-	get_chain_data(proxychains_chain_list);
-	PDEBUG("Finished loading chain data\n");
-	DUMP_PROXY_CHAIN(proxychains_chain_list->pc[0]);
+	proxy_chain_list_load(proxychains_chain_list);
 
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
 	
@@ -197,9 +180,6 @@ static void get_chain_data(proxy_chain_list *pc_list) {
 				memset(&pd_list[count], 0, sizeof(proxy_data));
 
 				pd_list[count].ps = PLAY_STATE;
-				pc_curr->ct = DYNAMIC_TYPE;
-				pc_curr->tcp_read_time_out = pc_list->tcp_read_time_out;
-				pc_curr->tcp_connect_time_out = pc_list->tcp_connect_time_out;
 				port_n = 0;
 				
 				if(strstr(buff, "tcp_read_time_out")) {
@@ -208,10 +188,13 @@ static void get_chain_data(proxy_chain_list *pc_list) {
 					sscanf(buff, "%s %d", label, &pc_curr->tcp_connect_time_out);
 				} else if(strstr(buff, "chain_len")) {
 					char *pc;
-					int len;
+					int len = 1;
 					pc = strchr(buff, '=');
-					len = atoi(++pc);
-					pc_curr->max_chain = (len ? len : 1);
+					if ((pc=strchr(buff, '=')) == NULL) {
+						fprintf(stderr, "Warning: chain_len must use '='\n");
+					} else
+						len = atoi(++pc);
+					pc_curr->max_chain = len;
 				} else if(!get_chain_type(buff, &pc_curr->ct)) {
 					;
 				} else {
@@ -240,7 +223,7 @@ static void get_chain_data(proxy_chain_list *pc_list) {
 					count++;
 			} else {
 				char *s1, *s2;
-				if((s1=strstr(buff, "[")) && (s1 < (s2=strstr(buff, "]")))) {
+				if((s1=(strstr(buff, "["))+1) && (s1 < (s2=strstr(buff, "]")))) {
 					/* If have a previous chain stored in the temp chain, copy
 					   to global lists. */
 					if (count) {
@@ -260,6 +243,7 @@ static void get_chain_data(proxy_chain_list *pc_list) {
 						proxychains_write_log(LOG_PREFIX "Error failed to allocate proxy chain object\n");
 						exit(1);
 					}
+					pc_curr->ct = DYNAMIC_TYPE;
 					pc_curr->count = 0;
 					pc_curr->offset = 0;
 					pc_curr->max_chain = 1;
@@ -359,6 +343,43 @@ int get_chain_type(char *buff, chain_type *ct) {
 	return 0;
 }
 
+int proxy_chain_list_load(proxy_chain_list *pc_list) {
+	char *env = NULL;
+
+	/* Create global library data */
+	proxychains_chain_list = (proxy_chain_list*)malloc(sizeof(proxy_chain_list));
+	if (proxychains_chain_list ==  NULL) {
+		proxychains_write_log(LOG_PREFIX "Error failed to allocate proxy list object\n");
+		exit(1);
+	}
+	
+	/* Initialize proxychain library data */
+	proxychains_chain_list->remote_dns_subnet = -1; // -1 means no remote dns
+	//~ proxychains_chain_list->pc = NULL;
+	proxychains_chain_list->count = 0;
+	//~ proxychains_chain_list->localnet_addr = NULL;
+	proxychains_chain_list->num_localnet_addr = 0;
+	proxychains_chain_list->tcp_read_time_out = 4 * 1000;
+	proxychains_chain_list->tcp_connect_time_out = 10 * 1000;
+	//~ proxychains_chain_list->chain_selection = PROXYCHAINS_DEFAULT_CHAIN;
+	proxychains_chain_list->selected = NULL;
+	
+	/* read the config file */
+	get_chain_data(proxychains_chain_list);
+	PDEBUG("Finished loading chain data\n");
+	DUMP_PROXY_CHAIN_LIST(proxychains_chain_list);
+	//~ DUMP_PROXY_CHAIN(proxychains_chain_list->pc[0]);
+	
+	env = getenv(PROXYCHAINS_CHAIN_ENV_VAR);
+	if(!env)
+		env = PROXYCHAINS_DEFAULT_CHAIN;
+	if (!proxy_chain_list_set_selected(proxychains_chain_list, env)) {
+		proxychains_write_log(LOG_PREFIX "Error chain list \"%s\" not found\n", env);
+		exit(1);
+	}
+	return 0;
+}
+
 int proxy_chain_load_pdata(proxy_chain *pc, proxy_data *pd_list, int count) {
 	pc->count = count;
 	pc->pd = (proxy_data*)malloc(sizeof(proxy_data)*count);
@@ -369,6 +390,17 @@ int proxy_chain_load_pdata(proxy_chain *pc, proxy_data *pd_list, int count) {
 	memcpy(pc->pd, pd_list, sizeof(proxy_data)*count);
 	
 	return 0;
+}
+
+proxy_chain* proxy_chain_list_set_selected(proxy_chain_list *pc_list, const char *chain_name) {
+	int i = 0;
+	for (; i < pc_list->count; i++) {
+		if (!strcmp(chain_name, pc_list->pc[i]->name)) {
+			pc_list->selected = pc_list->pc[i];
+			return pc_list->pc[i];
+		}
+	}
+	return NULL;
 }
 
 /*******  HOOK FUNCTIONS  *******/
@@ -433,7 +465,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	ret = connect_proxy_chain(sock,
 				  dest_ip,
 				  SOCKPORT(*addr),
-				  proxychains_chain_list->pc[0]);
+				  proxychains_chain_list->selected);
 
 	fcntl(sock, F_SETFL, flags);
 	if(ret != SUCCESS)
