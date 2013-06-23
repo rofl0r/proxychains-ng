@@ -58,6 +58,7 @@ int tcp_connect_time_out;
 chain_type proxychains_ct;
 proxy_data proxychains_pd[MAX_CHAIN];
 unsigned int proxychains_proxy_count = 0;
+unsigned int proxychains_proxy_offset = 0;
 int proxychains_got_chain_data = 0;
 unsigned int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
@@ -105,6 +106,7 @@ static void do_init(void) {
 	
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
+	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
 
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
 	
@@ -220,6 +222,8 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					*ct = STRICT_TYPE;
 				} else if(strstr(buff, "dynamic_chain")) {
 					*ct = DYNAMIC_TYPE;
+				} else if(strstr(buff, "round_robin_chain")) {
+					*ct = ROUND_ROBIN_TYPE;
 				} else if(strstr(buff, "tcp_read_time_out")) {
 					sscanf(buff, "%s %d", user, &tcp_read_time_out);
 				} else if(strstr(buff, "tcp_connect_time_out")) {

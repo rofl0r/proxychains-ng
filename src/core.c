@@ -43,6 +43,7 @@
 extern int tcp_read_time_out;
 extern int tcp_connect_time_out;
 extern int proxychains_quiet_mode;
+extern unsigned int proxychains_proxy_offset;
 extern unsigned int remote_dns_subnet;
 
 static int poll_retry(struct pollfd *fds, nfds_t nfsd, int timeout) {
@@ -267,8 +268,10 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				}
 
 				// if not ok (200) or response greather than BUFF_SIZE return BLOCKED;
-				if(len == BUFF_SIZE || !(buff[9] == '2' && buff[10] == '0' && buff[11] == '0'))
+				if(len == BUFF_SIZE || !(buff[9] == '2' && buff[10] == '0' && buff[11] == '0')) {
+					PDEBUG("HTTP proxy blocked: buff=\"%s\"\n", buff);
 					return BLOCKED;
+				}
 
 				return SUCCESS;
 			}
@@ -427,6 +430,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 #define DT "Dynamic chain"
 #define ST "Strict chain"
 #define RT "Random chain"
+#define RRT "Round Robin chain"
 
 static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	struct sockaddr_in addr;
@@ -554,15 +558,18 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	proxy_data p4;
 	proxy_data *p1, *p2, *p3;
 	int ns = -1;
+	int rc = -1;
 	unsigned int offset = 0;
 	unsigned int alive_count = 0;
 	unsigned int curr_len = 0;
+	unsigned int curr_pos = 0;
 
 	p3 = &p4;
 
 	PFUNC();
 
 	again:
+	DUMP_PROXY_CHAIN(pd, proxy_count);
 
 	switch (ct) {
 		case DYNAMIC_TYPE:
@@ -585,6 +592,49 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
+			if(SUCCESS != chain_step(ns, p1, p3))
+				goto error;
+			break;
+
+		case ROUND_ROBIN_TYPE:
+			alive_count = calc_alive(pd, proxy_count);
+			curr_pos = offset = proxychains_proxy_offset;
+			if(alive_count < max_chain)
+				goto error_more;
+                        PDEBUG("1:rr_offset = %d, curr_pos = %d\n", offset, curr_pos);
+			/* Check from current RR offset til end */
+			do {
+				if(!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
+					/* Check from beginning to current RR offset */
+					offset = 0;
+				else if(rc > 0 && offset != curr_pos) {
+					PDEBUG("GOTO MORE PROXIES 0\n");
+					/* Increment the global offset, so we don't get into infinite loop */
+					proxychains_proxy_offset++;
+					goto error_more;
+				}
+				PDEBUG("2:rr_offset = %d\n", offset);
+			} while(SUCCESS != (rc=start_chain(&ns, p1, RRT)));
+			/* Create rest of chain using RR */
+			for(curr_len = 1; curr_len < max_chain;) {
+				PDEBUG("3:rr_offset = %d, curr_len = %d, max_chain = %d\n", offset, curr_len, max_chain);
+				p2 = select_proxy(FIFOLY, pd, proxy_count, &offset);
+				if(!p2) {
+					/* Try from the beginning to where we started */
+					offset = 0;
+					continue;
+				} else if(SUCCESS != chain_step(ns, p1, p2)) {
+					PDEBUG("GOTO AGAIN 1\n");
+					goto again;
+				} else
+					p1 = p2;
+				curr_len++;
+			}
+			//proxychains_write_log(TP);
+			p3->ip = target_ip;
+			p3->port = target_port;
+			proxychains_proxy_offset = offset+1;
+			PDEBUG("pd_offset = %d, curr_len = %d\n", proxychains_proxy_offset, curr_len);
 			if(SUCCESS != chain_step(ns, p1, p3))
 				goto error;
 			break;
