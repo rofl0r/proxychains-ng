@@ -10,12 +10,15 @@
 #include <stddef.h>
 #include <errno.h>
 #include "allocator_thread.h"
+#include "core.h"
 #include "shm.h"
 #include "debug.h"
 #include "ip_type.h"
 #include "mutex.h"
 #include "hash.h"
 #include "stringdump.h"
+
+extern proxy_chain_list *proxychains_chain_list;
 
 /* stuff for our internal translation table */
 
@@ -52,13 +55,12 @@ char *string_from_internal_ip(ip_type internalip) {
 	return res;
 }
 
-extern unsigned int remote_dns_subnet;
 ip_type make_internal_ip(uint32_t index) {
 	ip_type ret;
 	index++; // so we can start at .0.0.1
 	if(index > 0xFFFFFF)
 		return ip_type_invalid;
-	ret.octet[0] = remote_dns_subnet & 0xFF;
+	ret.octet[0] = proxychains_chain_list->remote_dns_subnet & 0xFF;
 	ret.octet[1] = (index & 0xFF0000) >> 16;
 	ret.octet[2] = (index & 0xFF00) >> 8;
 	ret.octet[3] = index & 0xFF;

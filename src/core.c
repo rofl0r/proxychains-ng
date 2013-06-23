@@ -40,11 +40,8 @@
 #include "shm.h"
 #include "allocator_thread.h"
 
-extern int tcp_read_time_out;
-extern int tcp_connect_time_out;
 extern int proxychains_quiet_mode;
-extern unsigned int proxychains_proxy_offset;
-extern unsigned int remote_dns_subnet;
+extern proxy_chain_list *proxychains_chain_list;
 
 static int poll_retry(struct pollfd *fds, nfds_t nfsd, int timeout) {
 	int ret;
@@ -140,7 +137,7 @@ static int read_n_bytes(int fd, char *buff, size_t size) {
 	pfd[0].events = POLLIN;
 	for(i = 0; i < size; i++) {
 		pfd[0].revents = 0;
-		ready = poll_retry(pfd, 1, tcp_read_time_out);
+		ready = poll_retry(pfd, 1, proxychains_chain_list->tcp_read_time_out);
 		if(ready != 1 || !(pfd[0].revents & POLLIN) || 1 != read(fd, &buff[i], 1))
 			return -1;
 	}
@@ -160,7 +157,7 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 	PDEBUG("\nconnect ret=%d\n", ret);
 	
 	if(ret == -1 && errno == EINPROGRESS) {
-		ret = poll_retry(pfd, 1, tcp_connect_time_out);
+		ret = poll_retry(pfd, 1, proxychains_chain_list->tcp_connect_time_out);
 		PDEBUG("\npoll ret=%d\n", ret);
 		if(ret == 1) {
 			value_len = sizeof(socklen_t);
@@ -199,7 +196,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
 	// the results returned from gethostbyname et al.)
 	// the hardcoded number 224 can now be changed using the config option remote_dns_subnet to i.e. 127
-	if(ip.octet[0] == remote_dns_subnet) {
+	if(ip.octet[0] == proxychains_chain_list->remote_dns_subnet) {
 		dns_len = at_get_host_for_ip(ip, hostnamebuf);
 		if(!dns_len) goto err;
 		else dns_name = hostnamebuf;
@@ -207,8 +204,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	
 	PDEBUG("host dns %s\n", dns_name ? dns_name : "<NULL>");
 
-	size_t ulen = strlen(user);
-	size_t passlen = strlen(pass);
+	size_t ulen = (user) ? strlen(user) : 0;
+	size_t passlen = (pass) ? strlen(pass) : 0;
 
 	if(ulen > 0xFF || passlen > 0xFF || dns_len > 0xFF) {
 		proxychains_write_log(LOG_PREFIX "error: maximum size of 255 for user/pass or domain name!\n");
@@ -231,7 +228,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				snprintf((char *) buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name,
 					 ntohs(port));
 
-				if(user[0]) {
+				if(ulen) {
 #define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1)
 					// 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator.
 					char src[HTTP_AUTH_MAX];
@@ -314,9 +311,9 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			}
 			break;
 		case SOCKS5_TYPE:{
-				if(user) {
+				if(ulen) {
 					buff[0] = 5;	//version
-					buff[1] = 2;	//nomber of methods
+					buff[1] = 2;	//number of methods
 					buff[2] = 0;	// no auth method
 					buff[3] = 2;	/// auth method -> username / password
 					if(4 != write_n_bytes(sock, (char *) buff, 4))
@@ -523,7 +520,7 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 
 	PFUNC();
 
-	if(pto->ip.octet[0] == remote_dns_subnet) {
+	if(pto->ip.octet[0] == proxychains_chain_list->remote_dns_subnet) {
 		if(!at_get_host_for_ip(pto->ip, hostname_buf)) goto usenumericip;
 		else hostname = hostname_buf;
 	} else {
@@ -552,9 +549,12 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	return retcode;
 }
 
+//~ int connect_proxy_chain(int sock, ip_type target_ip,
+			//~ unsigned short target_port, proxy_data * pd,
+			//~ unsigned int proxy_count, chain_type ct, unsigned int max_chain) {
 int connect_proxy_chain(int sock, ip_type target_ip,
-			unsigned short target_port, proxy_data * pd,
-			unsigned int proxy_count, chain_type ct, unsigned int max_chain) {
+			unsigned short target_port,
+			proxy_chain *pc) {
 	proxy_data p4;
 	proxy_data *p1, *p2, *p3;
 	int ns = -1;
@@ -565,13 +565,18 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	unsigned int curr_pos = 0;
 	unsigned int looped = 0; // went back to start of list in RR mode
 
+	proxy_data * pd = pc->pd;
+	unsigned int proxy_count = pc->count;
+	chain_type ct = pc->ct;
+	unsigned int max_chain = pc->max_chain;
+
 	p3 = &p4;
 
 	PFUNC();
 
 	again:
 	rc = -1;
-	DUMP_PROXY_CHAIN(pd, proxy_count);
+	DUMP_PROXY_CHAIN(pc);
 
 	switch (ct) {
 		case DYNAMIC_TYPE:
@@ -600,7 +605,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 		case ROUND_ROBIN_TYPE:
 			alive_count = calc_alive(pd, proxy_count);
-			curr_pos = offset = proxychains_proxy_offset;
+			curr_pos = offset = pc->offset;
 			if(alive_count < max_chain)
 				goto error_more;
                         PDEBUG("1:rr_offset = %d, curr_pos = %d\n", offset, curr_pos);
@@ -614,7 +619,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				} else if (looped && rc > 0 && offset >= curr_pos) {
  					PDEBUG("GOTO MORE PROXIES 0\n");
 					/* We've gone back to the start and now past our starting position */
-					proxychains_proxy_offset = 0;
+					pc->offset = 0;
  					goto error_more;
  				}
  				PDEBUG("2:rr_offset = %d\n", offset);
@@ -638,8 +643,8 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
-			proxychains_proxy_offset = offset+1;
-			PDEBUG("pd_offset = %d, curr_len = %d\n", proxychains_proxy_offset, curr_len);
+			pc->offset = offset+1;
+			PDEBUG("pd_offset = %d, curr_len = %d\n", pc->offset, curr_len);
 			if(SUCCESS != chain_step(ns, p1, p3))
 				goto error;
 			break;
