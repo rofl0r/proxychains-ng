@@ -563,12 +563,14 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	unsigned int alive_count = 0;
 	unsigned int curr_len = 0;
 	unsigned int curr_pos = 0;
+	unsigned int looped = 0; // went back to start of list in RR mode
 
 	p3 = &p4;
 
 	PFUNC();
 
 	again:
+	rc = -1;
 	DUMP_PROXY_CHAIN(pd, proxy_count);
 
 	switch (ct) {
@@ -603,18 +605,19 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				goto error_more;
                         PDEBUG("1:rr_offset = %d, curr_pos = %d\n", offset, curr_pos);
 			/* Check from current RR offset til end */
-			do {
-				if(!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
-					/* Check from beginning to current RR offset */
-					offset = 0;
-				else if(rc > 0 && offset != curr_pos) {
-					PDEBUG("GOTO MORE PROXIES 0\n");
-					/* Increment the global offset, so we don't get into infinite loop */
-					proxychains_proxy_offset++;
-					goto error_more;
-				}
-				PDEBUG("2:rr_offset = %d\n", offset);
-			} while(SUCCESS != (rc=start_chain(&ns, p1, RRT)));
+			for (;rc != SUCCESS; rc=start_chain(&ns, p1, RRT)) {
+				if (!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
+					/* We've receached the end of the list, go to the start */
+ 					offset = 0;
+					looped++;
+				} else if (looped && rc > 0 && offset >= curr_pos) {
+ 					PDEBUG("GOTO MORE PROXIES 0\n");
+					/* We've gone back to the start and now past our starting position */
+					proxychains_proxy_offset = 0;
+ 					goto error_more;
+ 				}
+ 				PDEBUG("2:rr_offset = %d\n", offset);
+			}
 			/* Create rest of chain using RR */
 			for(curr_len = 1; curr_len < max_chain;) {
 				PDEBUG("3:rr_offset = %d, curr_len = %d, max_chain = %d\n", offset, curr_len, max_chain);
