@@ -18,7 +18,7 @@ OBJS = $(SRCS:.c=.o)
 LOBJS = src/nameinfo.o \
         src/core.o src/common.o src/libproxychains.o src/shm.o \
         src/allocator_thread.o src/ip_type.o src/stringdump.o \
-        src/hostentdb.o src/hash.o
+        src/hostentdb.o src/hash.o src/debug.o
 
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
