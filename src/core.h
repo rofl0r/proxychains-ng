@@ -99,6 +99,7 @@ typedef struct {
 	int remote_dns_subnet; // -1 means no remote dns
 	int tcp_read_time_out;
 	int tcp_connect_time_out;
+	proxy_chain *selected;
 } proxy_chain_list;
 
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
