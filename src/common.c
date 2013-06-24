@@ -3,6 +3,26 @@
 #include <unistd.h>
 #include <stdio.h>
 
+const char *proxy_type_strmap[] = {
+    "http",
+    "socks4",
+    "socks5",
+};
+
+const char *chain_type_strmap[] = {
+    "dynamic_chain",
+    "strict_chain",
+    "random_chain",
+    "round_robin_chain",
+};
+
+const char *proxy_state_strmap[] = {
+    "play",
+    "down",
+    "blocked",
+    "busy",
+};
+
 // stolen from libulz (C) rofl0r
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes) {
 	unsigned char *p;
