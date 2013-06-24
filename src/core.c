@@ -605,11 +605,12 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				goto error_more;
                         PDEBUG("1:rr_offset = %d, curr_pos = %d\n", offset, curr_pos);
 			/* Check from current RR offset til end */
-			for (;rc != SUCCESS; rc=start_chain(&ns, p1, RRT)) {
+			for (;rc != SUCCESS;) {
 				if (!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
 					/* We've receached the end of the list, go to the start */
  					offset = 0;
 					looped++;
+					continue;
 				} else if (looped && rc > 0 && offset >= curr_pos) {
  					PDEBUG("GOTO MORE PROXIES 0\n");
 					/* We've gone back to the start and now past our starting position */
@@ -617,6 +618,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
  					goto error_more;
  				}
  				PDEBUG("2:rr_offset = %d\n", offset);
+ 				rc=start_chain(&ns, p1, RRT);
 			}
 			/* Create rest of chain using RR */
 			for(curr_len = 1; curr_len < max_chain;) {
