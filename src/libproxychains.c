@@ -330,17 +330,14 @@ static void get_chain_data(proxy_chain_list *pc_list) {
 }
 
 int get_chain_type(char *buff, chain_type *ct) {
-	if(strstr(buff, "random_chain"))
-		*ct = RANDOM_TYPE;
-	else if(strstr(buff, "strict_chain"))
-		*ct = STRICT_TYPE;
-	else if(strstr(buff, "dynamic_chain"))
-		*ct = DYNAMIC_TYPE;
-	else if(strstr(buff, "round_robin_chain"))
-		*ct = ROUND_ROBIN_TYPE;
-	else
-		return 1;
-	return 0;
+	int i = 0;
+	for (; i < MAX_CHAIN_TYPE; i++) {
+		if (strstr(buff, chain_type_strmap[i])) {
+			*ct = i;
+			return 0;
+		}
+	}
+	return 1;
 }
 
 int proxy_chain_list_load(proxy_chain_list *pc_list) {
