@@ -4,20 +4,20 @@
 # include "common.h"
 # include "debug.h"
 
-char *proxy_type_strmap[] = {
+const char *proxy_type_strmap[] = {
     "http",
     "socks4",
     "socks5",
 };
 
-char *chain_type_strmap[] = {
+const char *chain_type_strmap[] = {
     "dynamic_chain",
     "strict_chain",
     "random_chain",
     "round_robin_chain",
 };
 
-char *proxy_state_strmap[] = {
+const char *proxy_state_strmap[] = {
     "play",
     "down",
     "blocked",
