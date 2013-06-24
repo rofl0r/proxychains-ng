@@ -50,7 +50,8 @@ typedef enum {
 	DYNAMIC_TYPE,
 	STRICT_TYPE,
 	RANDOM_TYPE,
-	ROUND_ROBIN_TYPE
+	ROUND_ROBIN_TYPE,
+	MAX_CHAIN_TYPE
 } chain_type;
 
 typedef enum {
