@@ -25,6 +25,8 @@
 #define __CORE_HEADER
 #define BUFF_SIZE 8*1024  // used to read responses from proxies.
 #define     MAX_LOCALNET 64
+#define     MAX_CHAIN_LISTS 64
+#define     MAX_CHAIN 512
 
 #include "ip_type.h"
 
@@ -47,8 +49,10 @@ typedef enum {
 typedef enum {
 	DYNAMIC_TYPE,
 	STRICT_TYPE,
-	RANDOM_TYPE}
-chain_type;
+	RANDOM_TYPE,
+	ROUND_ROBIN_TYPE,
+	MAX_CHAIN_TYPE
+} chain_type;
 
 typedef enum {
 	PLAY_STATE,
@@ -76,9 +80,31 @@ typedef struct {
 	char pass[256];
 } proxy_data;
 
+typedef struct {
+	char *name;
+	chain_type ct;
+	proxy_data *pd;
+	unsigned int count;
+	unsigned int offset;
+	unsigned int max_chain;
+	int tcp_read_time_out;
+	int tcp_connect_time_out;
+} proxy_chain;
+
+typedef struct {
+	chain_type ct;
+	proxy_chain *pc[MAX_CHAIN_LISTS];
+	unsigned int count;
+	localaddr_arg localnet_addr[MAX_LOCALNET];
+	size_t num_localnet_addr;
+	int remote_dns_subnet; // -1 means no remote dns
+	int tcp_read_time_out;
+	int tcp_connect_time_out;
+	proxy_chain *selected;
+} proxy_chain_list;
+
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
-			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
-			 unsigned int max_chain );
+			 proxy_chain *pc );
 
 void proxychains_write_log(char *str, ...);
 

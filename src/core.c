@@ -40,10 +40,8 @@
 #include "shm.h"
 #include "allocator_thread.h"
 
-extern int tcp_read_time_out;
-extern int tcp_connect_time_out;
 extern int proxychains_quiet_mode;
-extern unsigned int remote_dns_subnet;
+extern proxy_chain_list *proxychains_chain_list;
 
 static int poll_retry(struct pollfd *fds, nfds_t nfsd, int timeout) {
 	int ret;
@@ -130,7 +128,7 @@ static int write_n_bytes(int fd, char *buff, size_t size) {
 	}
 }
 
-static int read_n_bytes(int fd, char *buff, size_t size) {
+static int read_n_bytes(int fd, char *buff, size_t size, int read_time_out) {
 	int ready;
 	size_t i;
 	struct pollfd pfd[1];
@@ -139,14 +137,14 @@ static int read_n_bytes(int fd, char *buff, size_t size) {
 	pfd[0].events = POLLIN;
 	for(i = 0; i < size; i++) {
 		pfd[0].revents = 0;
-		ready = poll_retry(pfd, 1, tcp_read_time_out);
+		ready = poll_retry(pfd, 1, read_time_out);
 		if(ready != 1 || !(pfd[0].revents & POLLIN) || 1 != read(fd, &buff[i], 1))
 			return -1;
 	}
 	return (int) size;
 }
 
-static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
+static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len, int connect_time_out) {
 	int ret, value;
 	socklen_t value_len;
 	struct pollfd pfd[1];
@@ -159,7 +157,7 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 	PDEBUG("\nconnect ret=%d\n", ret);
 	
 	if(ret == -1 && errno == EINPROGRESS) {
-		ret = poll_retry(pfd, 1, tcp_connect_time_out);
+		ret = poll_retry(pfd, 1, connect_time_out);
 		PDEBUG("\npoll ret=%d\n", ret);
 		if(ret == 1) {
 			value_len = sizeof(socklen_t);
@@ -187,7 +185,7 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 
 
 #define INVALID_INDEX 0xFFFFFFFFU
-static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, char *user, char *pass) {
+static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, char *user, char *pass, int read_time_out) {
 	char *dns_name = NULL;
 	char hostnamebuf[MSG_LEN_MAX];
 	size_t dns_len = 0;
@@ -198,7 +196,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
 	// the results returned from gethostbyname et al.)
 	// the hardcoded number 224 can now be changed using the config option remote_dns_subnet to i.e. 127
-	if(ip.octet[0] == remote_dns_subnet) {
+	if(ip.octet[0] == proxychains_chain_list->remote_dns_subnet) {
 		dns_len = at_get_host_for_ip(ip, hostnamebuf);
 		if(!dns_len) goto err;
 		else dns_name = hostnamebuf;
@@ -206,8 +204,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	
 	PDEBUG("host dns %s\n", dns_name ? dns_name : "<NULL>");
 
-	size_t ulen = strlen(user);
-	size_t passlen = strlen(pass);
+	size_t ulen = (user) ? strlen(user) : 0;
+	size_t passlen = (pass) ? strlen(pass) : 0;
 
 	if(ulen > 0xFF || passlen > 0xFF || dns_len > 0xFF) {
 		proxychains_write_log(LOG_PREFIX "error: maximum size of 255 for user/pass or domain name!\n");
@@ -230,7 +228,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				snprintf((char *) buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name,
 					 ntohs(port));
 
-				if(user[0]) {
+				if(ulen) {
 #define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1)
 					// 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator.
 					char src[HTTP_AUTH_MAX];
@@ -256,7 +254,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				len = 0;
 				// read header byte by byte.
 				while(len < BUFF_SIZE) {
-					if(1 == read_n_bytes(sock, (char *) (buff + len), 1))
+					if(1 == read_n_bytes(sock, (char *) (buff + len), 1, read_time_out))
 						len++;
 					else
 						goto err;
@@ -267,8 +265,10 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				}
 
 				// if not ok (200) or response greather than BUFF_SIZE return BLOCKED;
-				if(len == BUFF_SIZE || !(buff[9] == '2' && buff[10] == '0' && buff[11] == '0'))
+				if(len == BUFF_SIZE || !(buff[9] == '2' && buff[10] == '0' && buff[11] == '0')) {
+					PDEBUG("HTTP proxy blocked: buff=\"%s\"\n", buff);
 					return BLOCKED;
+				}
 
 				return SUCCESS;
 			}
@@ -301,7 +301,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				if((len + 8) != write_n_bytes(sock, (char *) buff, (8 + len)))
 					goto err;
 
-				if(8 != read_n_bytes(sock, (char *) buff, 8))
+				if(8 != read_n_bytes(sock, (char *) buff, 8, read_time_out))
 					goto err;
 
 				if(buff[0] != 0 || buff[1] != 90)
@@ -311,9 +311,9 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			}
 			break;
 		case SOCKS5_TYPE:{
-				if(user) {
+				if(ulen) {
 					buff[0] = 5;	//version
-					buff[1] = 2;	//nomber of methods
+					buff[1] = 2;	//number of methods
 					buff[2] = 0;	// no auth method
 					buff[3] = 2;	/// auth method -> username / password
 					if(4 != write_n_bytes(sock, (char *) buff, 4))
@@ -326,7 +326,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 						goto err;
 				}
 
-				if(2 != read_n_bytes(sock, (char *) buff, 2))
+				if(2 != read_n_bytes(sock, (char *) buff, 2, read_time_out))
 					goto err;
 
 				if(buff[0] != 5 || (buff[1] != 0 && buff[1] != 2)) {
@@ -356,7 +356,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 						goto err;
 
 
-					if(2 != read_n_bytes(sock, in, 2))
+					if(2 != read_n_bytes(sock, in, 2, read_time_out))
 						goto err;
 					if(in[0] != 1 || in[1] != 0) {
 						if(in[0] != 1)
@@ -388,7 +388,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				if(buff_iter != write_n_bytes(sock, (char *) buff, buff_iter))
 					goto err;
 
-				if(4 != read_n_bytes(sock, (char *) buff, 4))
+				if(4 != read_n_bytes(sock, (char *) buff, 4, read_time_out))
 					goto err;
 
 				if(buff[0] != 5 || buff[1] != 0)
@@ -404,14 +404,14 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 						break;
 					case 3:
 						len = 0;
-						if(1 != read_n_bytes(sock, (char *) &len, 1))
+						if(1 != read_n_bytes(sock, (char *) &len, 1, read_time_out))
 							goto err;
 						break;
 					default:
 						goto err;
 				}
 
-				if(len + 2 != read_n_bytes(sock, (char *) buff, len + 2))
+				if(len + 2 != read_n_bytes(sock, (char *) buff, len + 2, read_time_out))
 					goto err;
 
 				return SUCCESS;
@@ -427,8 +427,9 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 #define DT "Dynamic chain"
 #define ST "Strict chain"
 #define RT "Random chain"
+#define RRT "Round Robin chain"
 
-static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
+static int start_chain(int *fd, proxy_data * pd, char *begin_mark, int connect_time_out) {
 	struct sockaddr_in addr;
 	char ip_buf[16];
 
@@ -444,7 +445,7 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = (in_addr_t) pd->ip.as_int;
 	addr.sin_port = pd->port;
-	if(timed_connect(*fd, (struct sockaddr *) &addr, sizeof(addr))) {
+	if(timed_connect(*fd, (struct sockaddr *) &addr, sizeof(addr), connect_time_out)) {
 		pd->ps = DOWN_STATE;
 		goto error1;
 	}
@@ -511,7 +512,7 @@ static unsigned int calc_alive(proxy_data * pd, unsigned int proxy_count) {
 }
 
 
-static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
+static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto, int read_time_out) {
 	int retcode = -1;
 	char *hostname;
 	char hostname_buf[MSG_LEN_MAX];
@@ -519,7 +520,7 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 
 	PFUNC();
 
-	if(pto->ip.octet[0] == remote_dns_subnet) {
+	if(pto->ip.octet[0] == proxychains_chain_list->remote_dns_subnet) {
 		if(!at_get_host_for_ip(pto->ip, hostname_buf)) goto usenumericip;
 		else hostname = hostname_buf;
 	} else {
@@ -529,7 +530,7 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	}
 
 	proxychains_write_log(TP " %s:%d ", hostname, htons(pto->port));
-	retcode = tunnel_to(ns, pto->ip, pto->port, pfrom->pt, pfrom->user, pfrom->pass);
+	retcode = tunnel_to(ns, pto->ip, pto->port, pfrom->pt, pfrom->user, pfrom->pass, read_time_out);
 	switch (retcode) {
 		case SUCCESS:
 			pto->ps = BUSY_STATE;
@@ -549,20 +550,30 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 }
 
 int connect_proxy_chain(int sock, ip_type target_ip,
-			unsigned short target_port, proxy_data * pd,
-			unsigned int proxy_count, chain_type ct, unsigned int max_chain) {
+			unsigned short target_port,
+			proxy_chain *pc) {
 	proxy_data p4;
 	proxy_data *p1, *p2, *p3;
 	int ns = -1;
+	int rc = -1;
 	unsigned int offset = 0;
 	unsigned int alive_count = 0;
 	unsigned int curr_len = 0;
+	unsigned int curr_pos = 0;
+	unsigned int looped = 0; // went back to start of list in RR mode
+
+	proxy_data * pd = pc->pd;
+	unsigned int proxy_count = pc->count;
+	chain_type ct = pc->ct;
+	unsigned int max_chain = pc->max_chain;
 
 	p3 = &p4;
 
 	PFUNC();
 
 	again:
+	rc = -1;
+	DUMP_PROXY_CHAIN(pc);
 
 	switch (ct) {
 		case DYNAMIC_TYPE:
@@ -571,12 +582,12 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			do {
 				if(!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
 					goto error_more;
-			} while(SUCCESS != start_chain(&ns, p1, DT) && offset < proxy_count);
+			} while(SUCCESS != start_chain(&ns, p1, DT, pc->tcp_connect_time_out) && offset < proxy_count);
 			for(;;) {
 				p2 = select_proxy(FIFOLY, pd, proxy_count, &offset);
 				if(!p2)
 					break;
-				if(SUCCESS != chain_step(ns, p1, p2)) {
+				if(SUCCESS != chain_step(ns, p1, p2, pc->tcp_read_time_out)) {
 					PDEBUG("GOTO AGAIN 1\n");
 					goto again;
 				}
@@ -585,7 +596,53 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
-			if(SUCCESS != chain_step(ns, p1, p3))
+			if(SUCCESS != chain_step(ns, p1, p3, pc->tcp_read_time_out))
+				goto error;
+			break;
+
+		case ROUND_ROBIN_TYPE:
+			alive_count = calc_alive(pd, proxy_count);
+			curr_pos = offset = pc->offset;
+			if(alive_count < max_chain)
+				goto error_more;
+                        PDEBUG("1:rr_offset = %d, curr_pos = %d\n", offset, curr_pos);
+			/* Check from current RR offset til end */
+			for (;rc != SUCCESS;) {
+				if (!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
+					/* We've receached the end of the list, go to the start */
+ 					offset = 0;
+					looped++;
+					continue;
+				} else if (looped && rc > 0 && offset >= curr_pos) {
+ 					PDEBUG("GOTO MORE PROXIES 0\n");
+					/* We've gone back to the start and now past our starting position */
+					pc->offset = 0;
+ 					goto error_more;
+ 				}
+ 				PDEBUG("2:rr_offset = %d\n", offset);
+ 				rc=start_chain(&ns, p1, RRT, pc->tcp_connect_time_out);
+			}
+			/* Create rest of chain using RR */
+			for(curr_len = 1; curr_len < max_chain;) {
+				PDEBUG("3:rr_offset = %d, curr_len = %d, max_chain = %d\n", offset, curr_len, max_chain);
+				p2 = select_proxy(FIFOLY, pd, proxy_count, &offset);
+				if(!p2) {
+					/* Try from the beginning to where we started */
+					offset = 0;
+					continue;
+				} else if(SUCCESS != chain_step(ns, p1, p2, pc->tcp_read_time_out)) {
+					PDEBUG("GOTO AGAIN 1\n");
+					goto again;
+				} else
+					p1 = p2;
+				curr_len++;
+			}
+			//proxychains_write_log(TP);
+			p3->ip = target_ip;
+			p3->port = target_port;
+			pc->offset = offset+1;
+			PDEBUG("pd_offset = %d, curr_len = %d\n", pc->offset, curr_len);
+			if(SUCCESS != chain_step(ns, p1, p3, pc->tcp_read_time_out))
 				goto error;
 			break;
 
@@ -596,14 +653,14 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				PDEBUG("select_proxy failed\n");
 				goto error_strict;
 			}
-			if(SUCCESS != start_chain(&ns, p1, ST)) {
+			if(SUCCESS != start_chain(&ns, p1, ST, pc->tcp_connect_time_out)) {
 				PDEBUG("start_chain failed\n");
 				goto error_strict;
 			}
 			while(offset < proxy_count) {
 				if(!(p2 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
 					break;
-				if(SUCCESS != chain_step(ns, p1, p2)) {
+				if(SUCCESS != chain_step(ns, p1, p2, pc->tcp_read_time_out)) {
 					PDEBUG("chain_step failed\n");
 					goto error_strict;
 				}
@@ -612,7 +669,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
-			if(SUCCESS != chain_step(ns, p1, p3))
+			if(SUCCESS != chain_step(ns, p1, p3, pc->tcp_read_time_out))
 				goto error;
 			break;
 
@@ -624,11 +681,11 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			do {
 				if(!(p1 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
 					goto error_more;
-			} while(SUCCESS != start_chain(&ns, p1, RT) && offset < max_chain);
+			} while(SUCCESS != start_chain(&ns, p1, RT, pc->tcp_connect_time_out) && offset < max_chain);
 			while(++curr_len < max_chain) {
 				if(!(p2 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
 					goto error_more;
-				if(SUCCESS != chain_step(ns, p1, p2)) {
+				if(SUCCESS != chain_step(ns, p1, p2, pc->tcp_read_time_out)) {
 					PDEBUG("GOTO AGAIN 2\n");
 					goto again;
 				}
@@ -637,9 +694,12 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
-			if(SUCCESS != chain_step(ns, p1, p3))
+			if(SUCCESS != chain_step(ns, p1, p3, pc->tcp_read_time_out))
 				goto error;
-
+		default:
+			/* This should never happen */
+			proxychains_write_log("\nUnhandled chain type %d. This should never happen!\n", ct);
+			goto error;
 	}
 
 	proxychains_write_log(TP " OK\n");
