@@ -696,7 +696,10 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			p3->port = target_port;
 			if(SUCCESS != chain_step(ns, p1, p3, pc->tcp_read_time_out))
 				goto error;
-
+		default:
+			/* This should never happen */
+			proxychains_write_log("\nUnhandled chain type %d. This should never happen!\n", ct);
+			goto error;
 	}
 
 	proxychains_write_log(TP " OK\n");
