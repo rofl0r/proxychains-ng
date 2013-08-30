@@ -298,6 +298,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 /*******  HOOK FUNCTIONS  *******/
 
 int close(int fd) {
+	INIT();
 	/* prevent rude programs (like ssh) from closing our pipes */
 	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
 	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
