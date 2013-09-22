@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.5 README
+ProxyChains-NG ver 4.7 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -53,6 +53,13 @@ ProxyChains-NG ver 4.5 README
 Changelog:
 ----------
 
+Version 4.7:
+- new round_robin chaintype by crazz.
+- fix bug with lazy allocation when GCC constructor was not used.
+
+Version 4.6:
+- some cosmetic fixes to Makefile, fix a bug when non-numeric ip was
+  user as proxy server address.
 Version 4.5:
 - hook close() to prevent OpenSSH from messing with internal infrastructure.
   this caused ssh client to segfault when proxified.
@@ -153,4 +160,9 @@ specified by proxychains.conf
 Community:
 ----------
 #proxychains on irc.freenode.net
+
+Donations:
+----------
+bitcoins donations are welcome - please send to this address:
+1C9LBpuy56veBqw5N33sZMoZW8mwCw3tPh
 
