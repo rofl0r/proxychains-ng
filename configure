@@ -2,6 +2,18 @@
 
 prefix=/usr/local
 
+ismac() {
+	uname -s | grep Darwin >/dev/null
+}
+
+isx86_64() {
+	uname -m | grep -i X86_64 >/dev/null
+}
+
+isbsd() {
+	uname -s | grep BSD >/dev/null
+}
+
 usage() {
 	echo "supported arguments"
 	echo "--prefix=/path 		default: $prefix"
@@ -10,6 +22,7 @@ usage() {
 	echo "--libdir=/path		default: $prefix/lib"
 	echo "--includedir=/path	default: $prefix/include"
 	echo "--sysconfdir=/path	default: $prefix/etc"
+	ismac && isx86_64 && echo "--fat-binary : build for both i386 and x86_64 architectures on 64-bit Macs"
 	echo "--help : show this text"
 	exit 1
 }
@@ -21,6 +34,8 @@ spliteq() {
 	# or echo "$arg" | sed 's/[^=]*=//'
 }
 
+fat_binary=
+
 parsearg() {
 	case "$1" in
 	--prefix=*) prefix=`spliteq $1`;;
@@ -29,16 +44,9 @@ parsearg() {
 	--libdir=*) libdir=`spliteq $1`;;
 	--includedir=*) includedir=`spliteq $1`;;
 	--sysconfdir=*) sysconfdir=`spliteq $1`;;
+	--fat-binary) fat_binary=1;;
 	--help) usage;;
 	esac
-}
-
-ismac() {
-	uname -s | grep Darwin >/dev/null
-}
-
-isbsd() {
-	uname -s | grep BSD >/dev/null
 }
 
 while true ; do
@@ -85,6 +93,11 @@ if ismac ; then
 	echo NO_AS_NEEDED=>>config.mak
 	echo LDSO_SUFFIX=dylib>>config.mak
 	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
+	if isx86_64 && [ "$fat_binary" = 1 ] ; then
+		echo "Configuring a fat binary for i386 and x86_64"
+		echo MAC_CFLAGS+=-arch i386 -arch x86_64>>config.mak
+		echo LDFLAGS+=-arch i386 -arch x86_64>>config.mak
+	fi
 	echo LD_SET_SONAME=-Wl,-install_name,>>config.mak
 	echo INSTALL_FLAGS=-m>>config.mak
 elif isbsd ; then
@@ -93,5 +106,4 @@ elif isbsd ; then
 	echo INSTALL_FLAGS=-m>>config.mak
 fi
 
-echo done, now run make \&\& make install
-
+echo "Done, now run make && make install"
