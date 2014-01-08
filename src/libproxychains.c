@@ -304,7 +304,7 @@ int close(int fd) {
 	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
 		return true_close(fd);
 	}
-	errno = EINTR;
+	errno = EBADF;
 	return -1;
 }
 
