@@ -56,6 +56,10 @@ Changelog:
 Version 4.7:
 - new round_robin chaintype by crazz.
 - fix bug with lazy allocation when GCC constructor was not used.
+- new configure flag --fat-binary to create a "fat" binary/library on OS X
+- return EBADF rather than EINTR in close hook. 
+  it's legal for a program to retry close() calls when they receive
+  EINTR, which could cause an infinite loop, as seen in chromium.
 
 Version 4.6:
 - some cosmetic fixes to Makefile, fix a bug when non-numeric ip was
