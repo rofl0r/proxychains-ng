@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.7 README
+ProxyChains-NG ver 4.8 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,7 @@ ProxyChains-NG ver 4.7 README
 
 Changelog:
 ----------
+Version 4.8:
 
 Version 4.7:
 - new round_robin chaintype by crazz.
@@ -60,7 +61,6 @@ Version 4.7:
 - return EBADF rather than EINTR in close hook. 
   it's legal for a program to retry close() calls when they receive
   EINTR, which could cause an infinite loop, as seen in chromium.
-
 Version 4.6:
 - some cosmetic fixes to Makefile, fix a bug when non-numeric ip was
   user as proxy server address.
