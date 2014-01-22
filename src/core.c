@@ -847,7 +847,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 
 	p->ai_addr = &space->sockaddr_space;
 	if(node)
-		strncpy(space->addr_name, node, sizeof(space->addr_name));
+		snprintf(space->addr_name, sizeof(space->addr_name), "%s", node);
 	p->ai_canonname = space->addr_name;
 	p->ai_next = NULL;
 	p->ai_family = space->sockaddr_space.sa_family = AF_INET;
