@@ -6,12 +6,16 @@ netcreature@users.sourceforge.net
 main.c, remote-dns, thread safety, bugfixes, build system, 
 cleanups, mac support
 rofl0r.
-https://github.com/rofl0r/proxychains
+https://github.com/rofl0r/proxychains-ng
 
 localnet, bugfixes
 jianing yang.
 https://github.com/jianingy/proxychains
 https://sourceforge.net/projects/proxychains/forums/forum/644747/topic/3498696
+
+round-robin
+crass.
+https://github.com/crass/proxychains-ng
 
 poll_retry (fixes for signal handling)
 colin cross.
