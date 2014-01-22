@@ -57,7 +57,7 @@ Version 4.8:
   to test for a numeric ip instead of resolving it (fixes nmap).
 
 Version 4.7:
-- new round_robin chaintype by crazz.
+- new round_robin chaintype by crass.
 - fix bug with lazy allocation when GCC constructor was not used.
 - new configure flag --fat-binary to create a "fat" binary/library on OS X
 - return EBADF rather than EINTR in close hook. 
