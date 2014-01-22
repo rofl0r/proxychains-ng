@@ -53,6 +53,8 @@ ProxyChains-NG ver 4.8 README
 Changelog:
 ----------
 Version 4.8:
+- fix for odd cornercase where getaddrinfo was used with AI_NUMERICHOST
+  to test for a numeric ip instead of resolving it (fixes nmap).
 
 Version 4.7:
 - new round_robin chaintype by crazz.
