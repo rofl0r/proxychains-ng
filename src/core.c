@@ -825,8 +825,11 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 //      printf("proxy_getaddrinfo node %s service %s\n",node,service);
 	space = calloc(1, sizeof(struct addrinfo_data));
 	if(!space) goto err1;
-	
+
 	if(node && !inet_aton(node, &((struct sockaddr_in *) &space->sockaddr_space)->sin_addr)) {
+		/* some folks (nmap) use getaddrinfo() with AI_NUMERICHOST to check whether a string
+		   containing a numeric ip was passed. we must return failure in that case. */
+		if(hints && (hints->ai_flags & AI_NUMERICHOST)) return EAI_NONAME;
 		hp = proxy_gethostbyname(node, &ghdata);
 		if(hp)
 			memcpy(&((struct sockaddr_in *) &space->sockaddr_space)->sin_addr,
@@ -841,7 +844,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 
 	*res = p = &space->addrinfo_space;
 	assert((size_t)p == (size_t) space);
-	
+
 	p->ai_addr = &space->sockaddr_space;
 	if(node)
 		strncpy(space->addr_name, node, sizeof(space->addr_name));
@@ -857,7 +860,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	} else {
 		p->ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
 	}
-	
+
 	goto out;
 	err2:
 	free(space);
