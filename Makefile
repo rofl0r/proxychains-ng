@@ -48,11 +48,11 @@ CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DSYSCONFDIR=\"$(sysconfdir)\" -DDLL_NAME=\"
 
 all: $(ALL_LIBS) $(ALL_TOOLS)
 
-install-config:
+install-config: src/proxychains.conf
 	install -d $(DESTDIR)$(sysconfdir)
 	install $(INSTALL_FLAGS) 644 src/proxychains.conf $(DESTDIR)$(sysconfdir)/
 
-install: 
+install: $(ALL_LIBS) $(ALL_TOOLS)
 	install -d $(DESTDIR)$(bindir)/ $(DESTDIR)$(libdir)/
 	install $(INSTALL_FLAGS) 755 $(ALL_TOOLS) $(DESTDIR)$(bindir)/
 	install $(INSTALL_FLAGS) 644 $(ALL_LIBS) $(DESTDIR)$(libdir)/
