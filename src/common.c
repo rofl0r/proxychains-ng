@@ -59,7 +59,7 @@ char *get_config_path(char* default_path, char* pbuf, size_t bufsize) {
 	char *path = default_path;
 	if(check_path(path))
 		goto have;
-	
+
 	// priority 1: env var PROXYCHAINS_CONF_FILE
 	path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
 	if(check_path(path))
@@ -88,10 +88,10 @@ char *get_config_path(char* default_path, char* pbuf, size_t bufsize) {
 	path = "/etc/" PROXYCHAINS_CONF_FILE;
 	if(check_path(path))
 		goto have;
-	
+
 	perror("couldnt find configuration file");
 	exit(1);
-	
+
 	return NULL;
 	have:
 	return path;
