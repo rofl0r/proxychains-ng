@@ -125,10 +125,20 @@ int main(int argc, char *argv[]) {
 #ifdef IS_MAC
 	putenv("DYLD_FORCE_FLAT_NAMESPACE=1");
 #define LD_PRELOAD_ENV "DYLD_INSERT_LIBRARIES"
+#define LD_PRELOAD_SEP ":"
 #else
 #define LD_PRELOAD_ENV "LD_PRELOAD"
+/* all historic implementations of BSD and linux dynlinkers seem to support
+   space as LD_PRELOAD separator, with colon added only recently.
+   we use the old syntax for maximum compat */
+#define LD_PRELOAD_SEP " "
 #endif
-	snprintf(buf, sizeof(buf), LD_PRELOAD_ENV "=%s/%s", prefix, dll_name);
+	char *old_val = getenv(LD_PRELOAD_ENV);
+	snprintf(buf, sizeof(buf), LD_PRELOAD_ENV "=%s/%s%s%s",
+	         prefix, dll_name,
+	         /* append previous LD_PRELOAD content, if existent */
+	         old_val ? LD_PRELOAD_SEP : "",
+	         old_val ? old_val : "");
 	putenv(buf);
 	execvp(argv[start_argv], &argv[start_argv]);
 	perror("proxychains can't load process....");
