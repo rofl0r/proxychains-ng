@@ -62,7 +62,7 @@ static int putenv_prepend(char* string) {
 
     char orig[256];
 
-    strncpy(orig, string, sizeof(orig));
+    strcpy(orig, string);
     value = getenv(strtok(orig, "="));
 
     if(NULL == value)
