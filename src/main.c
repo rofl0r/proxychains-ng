@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
 	/* check if path of config file has not been passed via command line */
 	path = get_config_path(path, pbuf, sizeof(pbuf));
-	
+
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
 
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
 	// search DLL
 
 	set_own_dir(argv[0]);
-	
+
 	i = 0;
 
 	while(dll_dirs[i]) {
