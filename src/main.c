@@ -55,6 +55,25 @@ static void set_own_dir(const char *argv0) {
 	}
 }
 
+static int putenv_prepend(char* string) {
+    char *value;
+    char *vbuf = NULL;
+    size_t length;
+
+    char orig[256];
+
+    strncpy(orig, string, sizeof(orig));
+    value = getenv(strtok(orig, "="));
+
+    if(NULL == value)
+        return putenv(string);
+
+    length = strlen(string) + strlen(value) + 2; // separator and trailing \0
+    vbuf = (char*) calloc(length, sizeof(char));
+    snprintf(vbuf, length, "%s:%s", string, value);
+    return putenv(vbuf);
+}
+
 #define MAX_COMMANDLINE_FLAGS 2
 
 int main(int argc, char *argv[]) {
@@ -124,10 +143,10 @@ int main(int argc, char *argv[]) {
 
 #ifndef IS_MAC
 	snprintf(buf, sizeof(buf), "LD_PRELOAD=%s/%s", prefix, dll_name);
-	putenv(buf);
+	putenv_prepend(buf);
 #else
 	snprintf(buf, sizeof(buf), "DYLD_INSERT_LIBRARIES=%s/%s", prefix, dll_name);
-	putenv(buf);
+	putenv_prepend(buf);
 	putenv("DYLD_FORCE_FLAT_NAMESPACE=1");
 #endif
 	execvp(argv[start_argv], &argv[start_argv]);
