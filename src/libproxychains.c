@@ -192,7 +192,12 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				pd[count].ps = PLAY_STATE;
 				port_n = 0;
 
-				sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
+				int ret = sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
+				if(ret < 3 || ret == EOF) {
+					inv:
+					fprintf(stderr, "error: invalid item in proxylist section: %s", buff);
+					exit(1);
+				}
 
 				in_addr_t host_ip = inet_addr(host);
 				if(host_ip == INADDR_NONE) {
@@ -209,7 +214,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				} else if(!strcmp(type, "socks5")) {
 					pd[count].pt = SOCKS5_TYPE;
 				} else
-					continue;
+					goto inv;
 
 				if(pd[count].ip.as_int && port_n && pd[count].ip.as_int != (uint32_t) - 1)
 					count++;
