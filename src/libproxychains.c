@@ -291,6 +291,10 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 		}
 	}
 	fclose(file);
+	if(!count) {
+		fprintf(stderr, "error: no valid proxy found in config\n");
+		exit(1);
+	}
 	*proxy_count = count;
 	proxychains_got_chain_data = 1;
 }
