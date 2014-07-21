@@ -76,7 +76,7 @@ static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, ch
 static void* load_sym(char* symname, void* proxyfunc) {
 
 	void *funcptr = dlsym(RTLD_NEXT, symname);
-	
+
 	if(!funcptr) {
 		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
 		exit(1);
@@ -103,13 +103,13 @@ static void do_init(void) {
 	dumpstring_init(); // global string garbage can
 	core_initialize();
 	at_init();
-	
+
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
 
 	proxychains_write_log(LOG_PREFIX "DLL init\n");
-	
+
 	SETUP_SYM(connect);
 	SETUP_SYM(gethostbyname);
 	SETUP_SYM(getaddrinfo);
@@ -117,7 +117,7 @@ static void do_init(void) {
 	SETUP_SYM(gethostbyaddr);
 	SETUP_SYM(getnameinfo);
 	SETUP_SYM(close);
-	
+
 	init_l = 1;
 }
 
@@ -168,7 +168,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_read_time_out = 4 * 1000;
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
-	
+
 	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buff, sizeof(buff));
 	if( ( file = fopen(env, "r") ) == NULL )
 	{
@@ -186,7 +186,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 			if(list) {
 				if(count >= MAX_CHAIN)
 					break;
-				
+
 				memset(&pd[count], 0, sizeof(proxy_data));
 
 				pd[count].ps = PLAY_STATE;
@@ -416,15 +416,15 @@ void freeaddrinfo(struct addrinfo *res) {
 	return;
 }
 
-int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen, 
-	           char *host, socklen_t hostlen, char *serv, 
+int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
+	           char *host, socklen_t hostlen, char *serv,
 	           socklen_t servlen, int flags)
 {
 	char ip_buf[16];
 	int ret = 0;
 
 	INIT();
-	
+
 	PFUNC();
 
 	if(!proxychains_resolver) {
