@@ -59,7 +59,7 @@ $(DESTDIR)$(bindir)/%: %
 $(DESTDIR)$(libdir)/%: %
 	$(INSTALL) -D -m 644 $< $@
 
-$(DESTDIR)$(sysconfdir)/%: %
+$(DESTDIR)$(sysconfdir)/%: src/%
 	$(INSTALL) -D -m 644 $< $@
 
 install-libs: $(ALL_LIBS:%=$(DESTDIR)$(libdir)/%)
