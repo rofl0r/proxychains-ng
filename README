@@ -52,6 +52,9 @@ ProxyChains-NG ver 4.8 README
 
 Changelog:
 ----------
+Version 4.8.1:
+- fix regression in 4.8 install-config Makefile target
+
 Version 4.8:
 - fix for odd cornercase where getaddrinfo was used with AI_NUMERICHOST
   to test for a numeric ip instead of resolving it (fixes nmap).
