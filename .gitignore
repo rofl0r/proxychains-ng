@@ -1,3 +1,6 @@
+proxychains4
+*.bz2
+*.xz
 *.o
 *.so
 *.la
