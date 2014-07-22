@@ -55,6 +55,9 @@ Changelog:
 Version 4.8:
 - fix for odd cornercase where getaddrinfo was used with AI_NUMERICHOST
   to test for a numeric ip instead of resolving it (fixes nmap).
+- allow usage with programs that rely on LD_PRELOAD themselves
+- reject wrong entries in config file
+- print version number on startup
 
 Version 4.7:
 - new round_robin chaintype by crass.
