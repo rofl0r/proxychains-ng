@@ -99,11 +99,9 @@ if ismac ; then
 		echo LDFLAGS+=-arch i386 -arch x86_64>>config.mak
 	fi
 	echo LD_SET_SONAME=-Wl,-install_name,>>config.mak
-	echo INSTALL_FLAGS=-m>>config.mak
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
-	echo INSTALL_FLAGS=-m>>config.mak
 fi
 
 echo "Done, now run make && make install"

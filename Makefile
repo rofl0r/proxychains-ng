@@ -33,7 +33,7 @@ RANLIB  = $(CROSS_COMPILE)ranlib
 
 LDSO_SUFFIX = so
 LD_SET_SONAME = -Wl,-soname=
-INSTALL_FLAGS = -D -m
+INSTALL = ./tools/install.sh
 
 LDSO_PATHNAME = libproxychains4.$(LDSO_SUFFIX)
 
@@ -41,6 +41,7 @@ SHARED_LIBS = $(LDSO_PATHNAME)
 ALL_LIBS = $(SHARED_LIBS)
 PXCHAINS = proxychains4
 ALL_TOOLS = $(PXCHAINS)
+ALL_CONFIGS = src/proxychains.conf
 
 -include config.mak
 
@@ -50,14 +51,20 @@ CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DSYSCONFDIR=\"$(sysconfdir)\" -DDLL_NAME=\"
 
 all: $(ALL_LIBS) $(ALL_TOOLS)
 
-install-config: src/proxychains.conf
-	install -d $(DESTDIR)$(sysconfdir)
-	install $(INSTALL_FLAGS) 644 src/proxychains.conf $(DESTDIR)$(sysconfdir)/
+install: install-libs install-tools
 
-install: $(ALL_LIBS) $(ALL_TOOLS)
-	install -d $(DESTDIR)$(bindir)/ $(DESTDIR)$(libdir)/
-	install $(INSTALL_FLAGS) 755 $(ALL_TOOLS) $(DESTDIR)$(bindir)/
-	install $(INSTALL_FLAGS) 644 $(ALL_LIBS) $(DESTDIR)$(libdir)/
+$(DESTDIR)$(bindir)/%: %
+	$(INSTALL) -D -m 755 $< $@
+
+$(DESTDIR)$(libdir)/%: %
+	$(INSTALL) -D -m 644 $< $@
+
+$(DESTDIR)$(sysconfdir)/%: %
+	$(INSTALL) -D -m 644 $< $@
+
+install-libs: $(ALL_LIBS:%=$(DESTDIR)$(libdir)/%)
+install-tools: $(ALL_TOOLS:%=$(DESTDIR)$(bindir)/%)
+install-config: $(ALL_CONFIGS:src/%=$(DESTDIR)$(sysconfdir)/%)
 
 clean:
 	rm -f $(ALL_LIBS)
@@ -80,4 +87,4 @@ $(ALL_TOOLS): $(OBJS)
 	$(CC) src/main.o src/common.o -o $(PXCHAINS)
 
 
-.PHONY: all clean install install-config
+.PHONY: all clean install install-config install-libs install-tools
