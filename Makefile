@@ -15,10 +15,12 @@ sysconfdir=$(prefix)/etc
 
 SRCS = $(sort $(wildcard src/*.c))
 OBJS = $(SRCS:.c=.o)
-LOBJS = src/nameinfo.o \
+LOBJS = src/nameinfo.o src/version.o \
         src/core.o src/common.o src/libproxychains.o src/shm.o \
         src/allocator_thread.o src/ip_type.o src/stringdump.o \
         src/hostentdb.o src/hash.o src/debug.o
+
+GENH = src/version.h
 
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
@@ -61,6 +63,12 @@ clean:
 	rm -f $(ALL_LIBS)
 	rm -f $(ALL_TOOLS)
 	rm -f $(OBJS)
+	rm -f $(GENH)
+
+src/version.h: $(wildcard VERSION .git)
+	printf '#define VERSION "%s"\n' "$$(sh tools/version.sh)" > $@
+
+src/version.o: src/version.h
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<

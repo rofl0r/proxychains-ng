@@ -98,6 +98,8 @@ static void* load_sym(char* symname, void* proxyfunc) {
 #include "allocator_thread.h"
 #include "stringdump.h"
 
+const char *proxychains_get_version(void);
+
 static void do_init(void) {
 	srand(time(NULL));
 	dumpstring_init(); // global string garbage can
@@ -108,7 +110,7 @@ static void do_init(void) {
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
 	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
 
-	proxychains_write_log(LOG_PREFIX "DLL init\n");
+	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
 	SETUP_SYM(connect);
 	SETUP_SYM(gethostbyname);

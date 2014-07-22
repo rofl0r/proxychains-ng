@@ -8,6 +8,7 @@
 *.out
 *~
 *.patch
+version.h
 
 # Autoconf stuff 
 libtool
