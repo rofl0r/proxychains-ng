@@ -89,6 +89,7 @@ echo bindir=$bindir>>config.mak
 echo libdir=$libdir>>config.mak
 echo includedir=$includedir>>config.mak
 echo sysconfdir=$sysconfdir>>config.mak
+make_cmd=make
 if ismac ; then
 	echo NO_AS_NEEDED=>>config.mak
 	echo LDSO_SUFFIX=dylib>>config.mak
@@ -102,6 +103,7 @@ if ismac ; then
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
+	make_cmd=gmake
 fi
 
-echo "Done, now run make && make install"
+echo "Done, now run $make_cmd && $make_cmd install"
