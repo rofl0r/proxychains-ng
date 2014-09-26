@@ -81,10 +81,10 @@ src/version.o: src/version.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<
 
 $(LDSO_PATHNAME): $(LOBJS)
-	$(CC) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -o $@ $(LOBJS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -o $@ $(LOBJS)
 
 $(ALL_TOOLS): $(OBJS)
-	$(CC) src/main.o src/common.o -o $(PXCHAINS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) src/main.o src/common.o -o $(PXCHAINS)
 
 
 .PHONY: all clean install install-config install-libs install-tools
