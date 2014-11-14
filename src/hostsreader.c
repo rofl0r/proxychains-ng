@@ -29,26 +29,28 @@ int hostsreader_get(struct hostsreader *ctx, char* buf, size_t bufsize) {
 	while(1) {
 		if(!fgets(buf, bufsize, ctx->f)) return 0;
 		if(*buf == '#') continue;
-		ctx->ip = buf;
-		while(*buf && !isspace(*buf) && bufsize) {
-			buf++;
-			bufsize--;
+		char *p = buf;
+		size_t l = bufsize;
+		ctx->ip = p;
+		while(*p && !isspace(*p) && l) {
+			p++;
+			l--;
 		}
-		if(!bufsize || !*buf || buf == ctx->ip) continue;
-		*buf = 0;
-		buf++;
-		while(*buf && isspace(*buf) && bufsize) {
-			buf++;
-			bufsize--;
+		if(!l || !*p || p == ctx->ip) continue;
+		*p = 0;
+		p++;
+		while(*p && isspace(*p) && l) {
+			p++;
+			l--;
 		}
-		if(!bufsize || !*buf) continue;
+		if(!l || !*p) continue;
 		ctx->name = buf;
-		while(*buf && !isspace(*buf) && bufsize) {
-			buf++;
-			bufsize--;
+		while(*p && !isspace(*p) && l) {
+			p++;
+			l--;
 		}
-		if(!bufsize || !*buf) continue;
-		*buf = 0;
+		if(!l || !*p) continue;
+		*p = 0;
 		if(isnumericipv4(ctx->ip)) return 1;
 	}
 }
