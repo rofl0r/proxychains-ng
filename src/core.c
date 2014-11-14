@@ -719,11 +719,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	return -1;
 }
 
-#include "hostentdb.h"
-struct hostent_list hl;
-
 void core_initialize(void) {
-	hdb_init(&hl);
 }
 
 void core_unload(void) {
@@ -734,6 +730,7 @@ static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* 
 	data->hostent_space.h_name = data->addr_name;
 }
 
+extern ip_type hostsreader_get_numeric_ip_for_name(const char* name);
 struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data* data) {
 	PFUNC();
 	char buff[256];
@@ -758,10 +755,8 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 		goto retname;
 	}
 
-	memset(buff, 0, sizeof(buff));
-
 	// this iterates over the "known hosts" db, usually /etc/hosts
-	ip_type hdb_res = hdb_get(&hl, (char*) name);
+	ip_type hdb_res = hostsreader_get_numeric_ip_for_name(name);
 	if(hdb_res.as_int != ip_type_invalid.as_int) {
 		data->resolved_addr = hdb_res.as_int;
 		goto retname;
