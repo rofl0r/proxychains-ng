@@ -69,9 +69,11 @@ Version 4.7:
 - return EBADF rather than EINTR in close hook. 
   it's legal for a program to retry close() calls when they receive
   EINTR, which could cause an infinite loop, as seen in chromium.
+
 Version 4.6:
 - some cosmetic fixes to Makefile, fix a bug when non-numeric ip was
-  user as proxy server address.
+  used as proxy server address.
+
 Version 4.5:
 - hook close() to prevent OpenSSH from messing with internal infrastructure.
   this caused ssh client to segfault when proxified.
