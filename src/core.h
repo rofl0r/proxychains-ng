@@ -95,6 +95,10 @@ typedef int (*getaddrinfo_t)(const char *, const char *, const struct addrinfo *
 typedef int (*getnameinfo_t) (const struct sockaddr *, socklen_t, char *, 
 			      socklen_t, char *, socklen_t, int);
 
+typedef ssize_t (*sendto_t) (int sockfd, const void *buf, size_t len, int flags,
+			     const struct sockaddr *dest_addr, socklen_t addrlen);
+
+
 
 extern connect_t true_connect;
 extern gethostbyname_t true_gethostbyname;
