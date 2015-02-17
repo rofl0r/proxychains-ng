@@ -7,6 +7,10 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+#ifndef MSG_FASTOPEN
+#   define MSG_FASTOPEN 0x20000000
+#endif
+
 void error(const char *msg)
 {
 	perror(msg);

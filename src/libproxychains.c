@@ -482,9 +482,12 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 	return NULL;
 }
 
+#ifndef MSG_FASTOPEN
+#   define MSG_FASTOPEN 0x20000000
+#endif
+
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 	       const struct sockaddr *dest_addr, socklen_t addrlen) {
-#ifdef MSG_FASTOPEN
 	if (flags & MSG_FASTOPEN) {
 		if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
 			return -1;
@@ -493,6 +496,5 @@ ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 		addrlen = 0;
 		flags &= ~MSG_FASTOPEN;
 	}
-#endif
 	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
