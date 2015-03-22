@@ -52,6 +52,7 @@ getaddrinfo_t true_getaddrinfo;
 freeaddrinfo_t true_freeaddrinfo;
 getnameinfo_t true_getnameinfo;
 gethostbyaddr_t true_gethostbyaddr;
+sendto_t true_sendto;
 
 int tcp_read_time_out;
 int tcp_connect_time_out;
@@ -113,6 +114,7 @@ static void do_init(void) {
 	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
 	SETUP_SYM(connect);
+	SETUP_SYM(sendto);
 	SETUP_SYM(gethostbyname);
 	SETUP_SYM(getaddrinfo);
 	SETUP_SYM(freeaddrinfo);
@@ -478,4 +480,21 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 		return &he;
 	}
 	return NULL;
+}
+
+#ifndef MSG_FASTOPEN
+#   define MSG_FASTOPEN 0x20000000
+#endif
+
+ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+	       const struct sockaddr *dest_addr, socklen_t addrlen) {
+	if (flags & MSG_FASTOPEN) {
+		if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
+			return -1;
+		}
+		dest_addr = NULL;
+		addrlen = 0;
+		flags &= ~MSG_FASTOPEN;
+	}
+	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
