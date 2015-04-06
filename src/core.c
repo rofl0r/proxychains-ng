@@ -785,7 +785,7 @@ void proxy_freeaddrinfo(struct addrinfo *res) {
 	free(res);
 }
 
-#ifdef IS_MAC
+#if defined(IS_MAC) || defined(IS_OPENBSD)
 /* getservbyname on mac is using thread local storage, so we dont need mutex */
 static int getservbyname_r(const char* name, const char* proto, struct servent* result_buf, 
 			   char* buf, size_t buflen, struct servent** result) {
@@ -853,6 +853,9 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 		p->ai_flags = hints->ai_flags;
 		p->ai_protocol = hints->ai_protocol;
 	} else {
+#ifndef AI_V4MAPPED
+#define AI_V4MAPPED 0
+#endif
 		p->ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
 	}
 
