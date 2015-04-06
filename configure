@@ -14,6 +14,10 @@ isbsd() {
 	uname -s | grep BSD >/dev/null
 }
 
+isopenbsd() {
+	uname -s | grep OpenBSD >/dev/null
+}
+
 usage() {
 	echo "supported arguments"
 	echo "--prefix=/path 		default: $prefix"
@@ -104,6 +108,7 @@ if ismac ; then
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
+	isopenbsd && echo "CFLAGS+=-DIS_OPENBSD">>config.mak
 	make_cmd=gmake
 fi
 
