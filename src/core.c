@@ -786,7 +786,11 @@ void proxy_freeaddrinfo(struct addrinfo *res) {
 }
 
 #if defined(IS_MAC) || defined(IS_OPENBSD)
-/* getservbyname on mac is using thread local storage, so we dont need mutex */
+#ifdef IS_OPENBSD /* OpenBSD has its own incompatible getservbyname_r */
+#define getservbyname_r mygetservbyname_r
+#endif
+/* getservbyname on mac is using thread local storage, so we dont need mutex 
+   TODO: check if the same applies to OpenBSD */
 static int getservbyname_r(const char* name, const char* proto, struct servent* result_buf, 
 			   char* buf, size_t buflen, struct servent** result) {
 	PFUNC();
