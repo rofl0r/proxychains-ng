@@ -33,7 +33,6 @@ static const char *dll_name = DLL_NAME;
 
 static char own_dir[256];
 static const char *dll_dirs[] = {
-	".",
 	own_dir,
 	LIB_DIR,
 	"/lib",
