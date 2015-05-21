@@ -33,7 +33,9 @@ static const char *dll_name = DLL_NAME;
 
 static char own_dir[256];
 static const char *dll_dirs[] = {
+#ifndef SUPER_SECURE /* CVE-2015-3887 */
 	".",
+#endif
 	own_dir,
 	LIB_DIR,
 	"/lib",
@@ -48,7 +50,11 @@ static void set_own_dir(const char *argv0) {
 	while(l && argv0[l - 1] != '/')
 		l--;
 	if(l == 0)
+#ifdef SUPER_SECURE
+		memcpy(own_dir, "/dev/null/", 2);
+#else
 		memcpy(own_dir, ".", 2);
+#endif
 	else {
 		memcpy(own_dir, argv0, l - 1);
 		own_dir[l] = 0;
