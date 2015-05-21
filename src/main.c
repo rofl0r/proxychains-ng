@@ -51,7 +51,7 @@ static void set_own_dir(const char *argv0) {
 		l--;
 	if(l == 0)
 #ifdef SUPER_SECURE
-		memcpy(own_dir, "/dev/null/", 2);
+		memcpy(own_dir, "/dev/null/", 11);
 #else
 		memcpy(own_dir, ".", 2);
 #endif
