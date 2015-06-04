@@ -25,7 +25,7 @@ GENH = src/version.h
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
 LIBDL   = -ldl
-LDFLAGS = -fPIC $(NO_AS_NEEDED)
+PX_LDFLAGS = -fPIC $(NO_AS_NEEDED)
 INC     = 
 PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
@@ -46,7 +46,7 @@ ALL_CONFIGS = src/proxychains.conf
 -include config.mak
 
 CFLAGS+=$(USER_CFLAGS) $(MAC_CFLAGS)
-LDFLAGS+=$(USER_LDFLAGS)
+LDFLAGS = $(USER_LDFLAGS) $(PX_LDFLAGS)
 CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DSYSCONFDIR=\"$(sysconfdir)\" -DDLL_NAME=\"$(LDSO_PATHNAME)\"
 
 
