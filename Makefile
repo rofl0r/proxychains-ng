@@ -82,7 +82,7 @@ src/version.o: src/version.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<
 
 $(LDSO_PATHNAME): $(LOBJS)
-	$(CC) -shared $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -lpthread $(LIBDL) -o $@ $(LOBJS)
+	$(CC) -shared -lpthread $(LIBDL) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -o $@ $(LOBJS)
 
 $(ALL_TOOLS): $(OBJS)
 	$(CC) $(LDFLAGS) src/main.o src/common.o -o $(PXCHAINS)
