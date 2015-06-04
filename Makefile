@@ -25,7 +25,7 @@ GENH = src/version.h
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
 LIBDL   = -ldl
-LDFLAGS = -fPIC $(NO_AS_NEEDED)
+LDFLAGS = -shared -fPIC $(NO_AS_NEEDED) $(LIBDL) -lpthread
 INC     = 
 PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
@@ -46,7 +46,6 @@ ALL_CONFIGS = src/proxychains.conf
 -include config.mak
 
 CFLAGS+=$(USER_CFLAGS) $(MAC_CFLAGS)
-LDFLAGS+=$(USER_LDFLAGS)
 CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DSYSCONFDIR=\"$(sysconfdir)\" -DDLL_NAME=\"$(LDSO_PATHNAME)\"
 
 
@@ -82,10 +81,10 @@ src/version.o: src/version.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<
 
 $(LDSO_PATHNAME): $(LOBJS)
-	$(CC) -shared -lpthread $(LIBDL) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -o $@ $(LOBJS)
+	$(CC) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) -o $@ $(LOBJS)
 
 $(ALL_TOOLS): $(OBJS)
-	$(CC) $(LDFLAGS) src/main.o src/common.o -o $(PXCHAINS)
+	$(CC) src/main.o src/common.o -o $(PXCHAINS)
 
 
 .PHONY: all clean install install-config install-libs install-tools
