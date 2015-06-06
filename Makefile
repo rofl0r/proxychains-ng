@@ -16,8 +16,8 @@ sysconfdir=$(prefix)/etc
 SRCS = $(sort $(wildcard src/*.c))
 OBJS = $(SRCS:.c=.o)
 LOBJS = src/nameinfo.o src/version.o \
-        src/core.o src/common.o src/libproxychains.o src/shm.o \
-        src/allocator_thread.o src/ip_type.o src/stringdump.o \
+        src/core.o src/common.o src/libproxychains.o \
+        src/allocator_thread.o src/ip_type.o \
         src/hostsreader.o src/hash.o src/debug.o
 
 GENH = src/version.h

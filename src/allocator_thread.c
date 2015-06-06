@@ -10,12 +10,10 @@
 #include <stddef.h>
 #include <errno.h>
 #include "allocator_thread.h"
-#include "shm.h"
 #include "debug.h"
 #include "ip_type.h"
 #include "mutex.h"
 #include "hash.h"
-#include "stringdump.h"
 
 /* stuff for our internal translation table */
 
@@ -29,6 +27,12 @@ typedef struct {
 	uint32_t capa;
 	string_hash_tuple** list;
 } internal_ip_lookup_table;
+
+static void *dumpstring(char* s, size_t len) {
+	char* p = malloc(len);
+	if(p) memcpy(p, s, len);
+	return p;
+}
 
 pthread_mutex_t internal_ips_lock;
 internal_ip_lookup_table *internal_ips = NULL;

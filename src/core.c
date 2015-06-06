@@ -37,7 +37,6 @@
 
 #include "core.h"
 #include "common.h"
-#include "shm.h"
 #include "allocator_thread.h"
 
 extern int tcp_read_time_out;

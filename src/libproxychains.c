@@ -95,15 +95,12 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 #define SETUP_SYM(X) do { true_ ## X = load_sym( # X, X ); } while(0)
 
-#include "shm.h"
 #include "allocator_thread.h"
-#include "stringdump.h"
 
 const char *proxychains_get_version(void);
 
 static void do_init(void) {
 	srand(time(NULL));
-	dumpstring_init(); // global string garbage can
 	core_initialize();
 	at_init();
 
