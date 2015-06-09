@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.9 README
+ProxyChains-NG ver 4.10 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,10 @@ ProxyChains-NG ver 4.9 README
 
 Changelog:
 ----------
+Version 4.10
+- fix regression in linking order with custom LDFLAGS
+- fix segfault in DNS mapping code in programs with > ~400 different lookups
+
 Version 4.9
 - fix a security issue CVE-2015-3887
 - add sendto hook to handle MSG_FASTOPEN flag
