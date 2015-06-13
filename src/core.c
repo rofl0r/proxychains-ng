@@ -226,29 +226,19 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 					pc_stringfromipv4(&ip.octet[0], ip_buf);
 					dns_name = ip_buf;
 				}
-
-				snprintf((char *) buff, sizeof(buff), "CONNECT %s:%d HTTP/1.0\r\n", dns_name,
-					 ntohs(port));
-
+				#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1) /* 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator. */
+				char src[HTTP_AUTH_MAX];
+				char dst[(4 * HTTP_AUTH_MAX)];
 				if(user[0]) {
-#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1)
-					// 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator.
-					char src[HTTP_AUTH_MAX];
-					char dst[(4 * HTTP_AUTH_MAX)];
-
-					memcpy(src, user, ulen);
-					memcpy(src + ulen, ":", 1);
-					memcpy(src + ulen + 1, pass, passlen);
-					src[ulen + 1 + passlen] = 0;
-
+					snprintf(src, sizeof(src), "%s:%s", user, pass);
 					encode_base_64(src, dst, sizeof(dst));
-					strcat((char *) buff, "Proxy-Authorization: Basic ");
-					strcat((char *) buff, dst);
-					strcat((char *) buff, "\r\n\r\n");
-				} else
-					strcat((char *) buff, "\r\n");
+				} else dst[0] = 0;
 
-				len = strlen((char *) buff);
+				len = snprintf((char *) buff, sizeof(buff),
+				               "CONNECT %s:%d HTTP/1.0\r\n%s%s%s\r\n",
+				                dns_name,  ntohs(port),
+				                user[0] ? "Proxy-Authorization: Basic " : dst,
+				                dst, user[0] ? "\r\n" : dst);
 
 				if(len != send(sock, buff, len, 0))
 					goto err;
