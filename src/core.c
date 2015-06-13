@@ -313,20 +313,13 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			}
 			break;
 		case SOCKS5_TYPE:{
-				if(user) {
-					buff[0] = 5;	//version
-					buff[1] = 2;	//nomber of methods
-					buff[2] = 0;	// no auth method
-					buff[3] = 2;	/// auth method -> username / password
-					if(4 != write_n_bytes(sock, (char *) buff, 4))
-						goto err;
-				} else {
-					buff[0] = 5;	//version
-					buff[1] = 1;	//nomber of methods
-					buff[2] = 0;	// no auth method
-					if(3 != write_n_bytes(sock, (char *) buff, 3))
-						goto err;
-				}
+				int n_methods = user ? 2 : 1;
+				buff[0] = 5;	// version
+				buff[1] = n_methods ;	// number of methods
+				buff[2] = 0;	// no auth method
+				if(user) buff[3] = 2;    /// auth method -> username / password
+				if(2+n_methods != write_n_bytes(sock, (char *) buff, 2+n_methods))
+					goto err;
 
 				if(2 != read_n_bytes(sock, (char *) buff, 2))
 					goto err;
