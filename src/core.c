@@ -432,21 +432,20 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 #define RRT "Round Robin chain"
 
 static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
-	struct sockaddr_in addr;
-	char ip_buf[16];
-
 	*fd = socket(PF_INET, SOCK_STREAM, 0);
 	if(*fd == -1)
 		goto error;
 	
+	char ip_buf[16];
 	pc_stringfromipv4(&pd->ip.octet[0], ip_buf);
 	proxychains_write_log(LOG_PREFIX "%s " TP " %s:%d ",
 			      begin_mark, ip_buf, htons(pd->port));
 	pd->ps = PLAY_STATE;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = (in_addr_t) pd->ip.as_int;
-	addr.sin_port = pd->port;
+	struct sockaddr_in addr = {
+		.sin_family = AF_INET,
+		.sin_port = pd->port,
+		.sin_addr.s_addr = (in_addr_t) pd->ip.as_int
+	};
 	if(timed_connect(*fd, (struct sockaddr *) &addr, sizeof(addr))) {
 		pd->ps = DOWN_STATE;
 		goto error1;
