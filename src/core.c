@@ -222,186 +222,184 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 	switch (pt) {
 		case HTTP_TYPE:{
-				if(!dns_len) {
-					pc_stringfromipv4(&ip.octet[0], ip_buf);
-					dns_name = ip_buf;
-				}
-				#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1) /* 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator. */
-				char src[HTTP_AUTH_MAX];
-				char dst[(4 * HTTP_AUTH_MAX)];
-				if(user[0]) {
-					snprintf(src, sizeof(src), "%s:%s", user, pass);
-					encode_base_64(src, dst, sizeof(dst));
-				} else dst[0] = 0;
-
-				len = snprintf((char *) buff, sizeof(buff),
-				               "CONNECT %s:%d HTTP/1.0\r\n%s%s%s\r\n",
-				                dns_name,  ntohs(port),
-				                user[0] ? "Proxy-Authorization: Basic " : dst,
-				                dst, user[0] ? "\r\n" : dst);
-
-				if(len != send(sock, buff, len, 0))
-					goto err;
-
-				len = 0;
-				// read header byte by byte.
-				while(len < BUFF_SIZE) {
-					if(1 == read_n_bytes(sock, (char *) (buff + len), 1))
-						len++;
-					else
-						goto err;
-					if(len > 4 &&
-					   buff[len - 1] == '\n' &&
-					   buff[len - 2] == '\r' && buff[len - 3] == '\n' && buff[len - 4] == '\r')
-						break;
-				}
-
-				// if not ok (200) or response greather than BUFF_SIZE return BLOCKED;
-				if(len == BUFF_SIZE || !(buff[9] == '2' && buff[10] == '0' && buff[11] == '0')) {
-					PDEBUG("HTTP proxy blocked: buff=\"%s\"\n", buff);
-					return BLOCKED;
-				}
-
-				return SUCCESS;
+			if(!dns_len) {
+				pc_stringfromipv4(&ip.octet[0], ip_buf);
+				dns_name = ip_buf;
 			}
-			break;
+			#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1) /* 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator. */
+			char src[HTTP_AUTH_MAX];
+			char dst[(4 * HTTP_AUTH_MAX)];
+			if(user[0]) {
+				snprintf(src, sizeof(src), "%s:%s", user, pass);
+				encode_base_64(src, dst, sizeof(dst));
+			} else dst[0] = 0;
 
+			len = snprintf((char *) buff, sizeof(buff),
+			               "CONNECT %s:%d HTTP/1.0\r\n%s%s%s\r\n",
+			                dns_name,  ntohs(port),
+			                user[0] ? "Proxy-Authorization: Basic " : dst,
+			                dst, user[0] ? "\r\n" : dst);
+
+			if(len != send(sock, buff, len, 0))
+				goto err;
+
+			len = 0;
+			// read header byte by byte.
+			while(len < BUFF_SIZE) {
+				if(1 == read_n_bytes(sock, (char *) (buff + len), 1))
+					len++;
+				else
+					goto err;
+				if(len > 4 &&
+				   buff[len - 1] == '\n' &&
+				   buff[len - 2] == '\r' && buff[len - 3] == '\n' && buff[len - 4] == '\r')
+					break;
+			}
+
+			// if not ok (200) or response greather than BUFF_SIZE return BLOCKED;
+			if(len == BUFF_SIZE || !(buff[9] == '2' && buff[10] == '0' && buff[11] == '0')) {
+				PDEBUG("HTTP proxy blocked: buff=\"%s\"\n", buff);
+				return BLOCKED;
+			}
+
+			return SUCCESS;
+		}
+		break;
 		case SOCKS4_TYPE:{
-				buff[0] = 4;	// socks version
-				buff[1] = 1;	// connect command
-				memcpy(&buff[2], &port, 2);	// dest port
-				if(dns_len) {
-					ip.octet[0] = 0;
-					ip.octet[1] = 0;
-					ip.octet[2] = 0;
-					ip.octet[3] = 1;
-				}
-				memcpy(&buff[4], &ip, 4);	// dest host
-				len = ulen + 1;	// username
-				if(len > 1)
-					memcpy(&buff[8], user, len);
-				else {
-					buff[8] = 0;
-				}
-
-				// do socksv4a dns resolution on the server
-				if(dns_len) {
-					memcpy(&buff[8 + len], dns_name, dns_len + 1);
-					len += dns_len + 1;
-				}
-
-				if((len + 8) != write_n_bytes(sock, (char *) buff, (8 + len)))
-					goto err;
-
-				if(8 != read_n_bytes(sock, (char *) buff, 8))
-					goto err;
-
-				if(buff[0] != 0 || buff[1] != 90)
-					return BLOCKED;
-
-				return SUCCESS;
+			buff[0] = 4;	// socks version
+			buff[1] = 1;	// connect command
+			memcpy(&buff[2], &port, 2);	// dest port
+			if(dns_len) {
+				ip.octet[0] = 0;
+				ip.octet[1] = 0;
+				ip.octet[2] = 0;
+				ip.octet[3] = 1;
 			}
-			break;
+			memcpy(&buff[4], &ip, 4);	// dest host
+			len = ulen + 1;	// username
+			if(len > 1)
+				memcpy(&buff[8], user, len);
+			else {
+				buff[8] = 0;
+			}
+
+			// do socksv4a dns resolution on the server
+			if(dns_len) {
+				memcpy(&buff[8 + len], dns_name, dns_len + 1);
+				len += dns_len + 1;
+			}
+
+			if((len + 8) != write_n_bytes(sock, (char *) buff, (8 + len)))
+				goto err;
+
+			if(8 != read_n_bytes(sock, (char *) buff, 8))
+				goto err;
+
+			if(buff[0] != 0 || buff[1] != 90)
+				return BLOCKED;
+
+			return SUCCESS;
+		}
+		break;
 		case SOCKS5_TYPE:{
-				int n_methods = user ? 2 : 1;
-				buff[0] = 5;	// version
-				buff[1] = n_methods ;	// number of methods
-				buff[2] = 0;	// no auth method
-				if(user) buff[3] = 2;    /// auth method -> username / password
-				if(2+n_methods != write_n_bytes(sock, (char *) buff, 2+n_methods))
+			int n_methods = user ? 2 : 1;
+			buff[0] = 5;	// version
+			buff[1] = n_methods ;	// number of methods
+			buff[2] = 0;	// no auth method
+			if(user) buff[3] = 2;    /// auth method -> username / password
+			if(2+n_methods != write_n_bytes(sock, (char *) buff, 2+n_methods))
+				goto err;
+
+			if(2 != read_n_bytes(sock, (char *) buff, 2))
+				goto err;
+
+			if(buff[0] != 5 || (buff[1] != 0 && buff[1] != 2)) {
+				if(buff[0] == 5 && buff[1] == 0xFF)
+					return BLOCKED;
+				else
 					goto err;
-
-				if(2 != read_n_bytes(sock, (char *) buff, 2))
-					goto err;
-
-				if(buff[0] != 5 || (buff[1] != 0 && buff[1] != 2)) {
-					if(buff[0] == 5 && buff[1] == 0xFF)
-						return BLOCKED;
-					else
-						goto err;
-				}
-
-				if(buff[1] == 2) {
-					// authentication
-					char in[2];
-					char out[515];
-					char *cur = out;
-					size_t c;
-					*cur++ = 1;	// version
-					c = ulen & 0xFF;
-					*cur++ = c;
-					memcpy(cur, user, c);
-					cur += c;
-					c = passlen & 0xFF;
-					*cur++ = c;
-					memcpy(cur, pass, c);
-					cur += c;
-
-					if((cur - out) != write_n_bytes(sock, out, cur - out))
-						goto err;
-
-
-					if(2 != read_n_bytes(sock, in, 2))
-						goto err;
-					if(in[0] != 1 || in[1] != 0) {
-						if(in[0] != 1)
-							goto err;
-						else
-							return BLOCKED;
-					}
-				}
-				int buff_iter = 0;
-				buff[buff_iter++] = 5;	// version
-				buff[buff_iter++] = 1;	// connect
-				buff[buff_iter++] = 0;	// reserved
-
-				if(!dns_len) {
-					buff[buff_iter++] = 1;	// ip v4
-					memcpy(buff + buff_iter, &ip, 4);	// dest host
-					buff_iter += 4;
-				} else {
-					buff[buff_iter++] = 3;	//dns
-					buff[buff_iter++] = dns_len & 0xFF;
-					memcpy(buff + buff_iter, dns_name, dns_len);
-					buff_iter += dns_len;
-				}
-
-				memcpy(buff + buff_iter, &port, 2);	// dest port
-				buff_iter += 2;
-
-
-				if(buff_iter != write_n_bytes(sock, (char *) buff, buff_iter))
-					goto err;
-
-				if(4 != read_n_bytes(sock, (char *) buff, 4))
-					goto err;
-
-				if(buff[0] != 5 || buff[1] != 0)
-					goto err;
-
-				switch (buff[3]) {
-
-					case 1:
-						len = 4;
-						break;
-					case 4:
-						len = 16;
-						break;
-					case 3:
-						len = 0;
-						if(1 != read_n_bytes(sock, (char *) &len, 1))
-							goto err;
-						break;
-					default:
-						goto err;
-				}
-
-				if(len + 2 != read_n_bytes(sock, (char *) buff, len + 2))
-					goto err;
-
-				return SUCCESS;
 			}
-			break;
+
+			if(buff[1] == 2) {
+				// authentication
+				char in[2];
+				char out[515];
+				char *cur = out;
+				size_t c;
+				*cur++ = 1;	// version
+				c = ulen & 0xFF;
+				*cur++ = c;
+				memcpy(cur, user, c);
+				cur += c;
+				c = passlen & 0xFF;
+				*cur++ = c;
+				memcpy(cur, pass, c);
+				cur += c;
+
+				if((cur - out) != write_n_bytes(sock, out, cur - out))
+					goto err;
+
+
+				if(2 != read_n_bytes(sock, in, 2))
+					goto err;
+				if(in[0] != 1 || in[1] != 0) {
+					if(in[0] != 1)
+						goto err;
+					else
+						return BLOCKED;
+				}
+			}
+			int buff_iter = 0;
+			buff[buff_iter++] = 5;	// version
+			buff[buff_iter++] = 1;	// connect
+			buff[buff_iter++] = 0;	// reserved
+
+			if(!dns_len) {
+				buff[buff_iter++] = 1;	// ip v4
+				memcpy(buff + buff_iter, &ip, 4);	// dest host
+				buff_iter += 4;
+			} else {
+				buff[buff_iter++] = 3;	//dns
+				buff[buff_iter++] = dns_len & 0xFF;
+				memcpy(buff + buff_iter, dns_name, dns_len);
+				buff_iter += dns_len;
+			}
+
+			memcpy(buff + buff_iter, &port, 2);	// dest port
+			buff_iter += 2;
+
+
+			if(buff_iter != write_n_bytes(sock, (char *) buff, buff_iter))
+				goto err;
+
+			if(4 != read_n_bytes(sock, (char *) buff, 4))
+				goto err;
+
+			if(buff[0] != 5 || buff[1] != 0)
+				goto err;
+
+			switch (buff[3]) {
+				case 1:
+					len = 4;
+					break;
+				case 4:
+					len = 16;
+					break;
+				case 3:
+					len = 0;
+					if(1 != read_n_bytes(sock, (char *) &len, 1))
+						goto err;
+					break;
+				default:
+					goto err;
+			}
+
+			if(len + 2 != read_n_bytes(sock, (char *) buff, len + 2))
+				goto err;
+
+			return SUCCESS;
+		}
+		break;
 	}
 
 	err:
