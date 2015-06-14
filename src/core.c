@@ -227,7 +227,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1) /* 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator. */
 			char src[HTTP_AUTH_MAX];
 			char dst[(4 * HTTP_AUTH_MAX)];
-			if(user[0]) {
+			if(ulen) {
 				snprintf(src, sizeof(src), "%s:%s", user, pass);
 				encode_base_64(src, dst, sizeof(dst));
 			} else dst[0] = 0;
@@ -235,8 +235,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			len = snprintf((char *) buff, sizeof(buff),
 			               "CONNECT %s:%d HTTP/1.0\r\n%s%s%s\r\n",
 			                dns_name,  ntohs(port),
-			                user[0] ? "Proxy-Authorization: Basic " : dst,
-			                dst, user[0] ? "\r\n" : dst);
+			                ulen ? "Proxy-Authorization: Basic " : dst,
+			                dst, ulen ? "\r\n" : dst);
 
 			if(len != send(sock, buff, len, 0))
 				goto err;
@@ -300,11 +300,11 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 		}
 		break;
 		case SOCKS5_TYPE:{
-			int n_methods = user ? 2 : 1;
+			int n_methods = ulen ? 2 : 1;
 			buff[0] = 5;	// version
 			buff[1] = n_methods ;	// number of methods
 			buff[2] = 0;	// no auth method
-			if(user) buff[3] = 2;    /// auth method -> username / password
+			if(ulen) buff[3] = 2;    /// auth method -> username / password
 			if(2+n_methods != write_n_bytes(sock, (char *) buff, 2+n_methods))
 				goto err;
 
