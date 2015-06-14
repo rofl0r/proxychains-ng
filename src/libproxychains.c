@@ -308,7 +308,9 @@ int close(int fd) {
 }
 
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
+	INIT();
 	PFUNC();
+
 	int socktype = 0, flags = 0, ret = 0;
 	socklen_t optlen = 0;
 	ip_type dest_ip;
@@ -318,7 +320,6 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	unsigned short port;
 	size_t i;
 	int remote_dns_connect = 0;
-	INIT();
 	optlen = sizeof(socktype);
 	getsockopt(sock, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
 	if(!(SOCKFAMILY(*addr) == AF_INET && socktype == SOCK_STREAM))
@@ -365,7 +366,6 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 static struct gethostbyname_data ghbndata;
 struct hostent *gethostbyname(const char *name) {
 	INIT();
-
 	PDEBUG("gethostbyname: %s\n", name);
 
 	if(proxychains_resolver)
@@ -377,45 +377,36 @@ struct hostent *gethostbyname(const char *name) {
 }
 
 int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
-	int ret = 0;
-
 	INIT();
-
 	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
 	if(proxychains_resolver)
-		ret = proxy_getaddrinfo(node, service, hints, res);
+		return proxy_getaddrinfo(node, service, hints, res);
 	else
-		ret = true_getaddrinfo(node, service, hints, res);
-
-	return ret;
+		return true_getaddrinfo(node, service, hints, res);
 }
 
 void freeaddrinfo(struct addrinfo *res) {
 	INIT();
-
 	PDEBUG("freeaddrinfo %p \n", res);
 
 	if(!proxychains_resolver)
 		true_freeaddrinfo(res);
 	else
 		proxy_freeaddrinfo(res);
-	return;
 }
 
 int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	           char *host, socklen_t hostlen, char *serv,
 	           socklen_t servlen, int flags)
 {
-	char ip_buf[16];
-	int ret = 0;
-
 	INIT();
-
 	PFUNC();
 
+	char ip_buf[16];
+
 	if(!proxychains_resolver) {
-		ret = true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
+		return true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 	} else {
 		if(salen < sizeof(struct sockaddr_in) || SOCKFAMILY(*sa) != AF_INET)
 			return EAI_FAMILY;
@@ -429,19 +420,18 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 				return EAI_OVERFLOW;
 		}
 	}
-	return ret;
+	return 0;
 }
 
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
+	INIT();
+	PDEBUG("TODO: proper gethostbyaddr hook\n");
+
 	static char buf[16];
 	static char ipv4[4];
 	static char *list[2];
 	static char *aliases[1];
 	static struct hostent he;
-
-	INIT();
-
-	PDEBUG("TODO: proper gethostbyaddr hook\n");
 
 	if(!proxychains_resolver)
 		return true_gethostbyaddr(addr, len, type);
@@ -471,6 +461,8 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 	       const struct sockaddr *dest_addr, socklen_t addrlen) {
+	INIT();
+	PFUNC();
 	if (flags & MSG_FASTOPEN) {
 		if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
 			return -1;
