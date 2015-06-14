@@ -218,8 +218,6 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	unsigned char buff[BUFF_SIZE];
 	char ip_buf[16];
 	
-	//memset (buff, 0, sizeof(buff));
-
 	switch (pt) {
 		case HTTP_TYPE:{
 			if(!dns_len) {
