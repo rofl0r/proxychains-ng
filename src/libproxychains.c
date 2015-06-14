@@ -312,9 +312,8 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	int socktype = 0, flags = 0, ret = 0;
 	socklen_t optlen = 0;
 	ip_type dest_ip;
-#ifdef DEBUG
-	char str[256];
-#endif
+	DEBUGDECL(char str[256]);
+
 	struct in_addr *p_addr_in;
 	unsigned short port;
 	size_t i;
@@ -328,12 +327,10 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	p_addr_in = &((struct sockaddr_in *) addr)->sin_addr;
 	port = ntohs(((struct sockaddr_in *) addr)->sin_port);
 
-#ifdef DEBUG
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
 	PDEBUG("target: %s\n", inet_ntop(AF_INET, p_addr_in, str, sizeof(str)));
 	PDEBUG("port: %d\n", port);
-#endif
 
 	// check if connect called from proxydns
         remote_dns_connect = (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
