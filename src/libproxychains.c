@@ -122,17 +122,6 @@ static void do_init(void) {
 	init_l = 1;
 }
 
-#if 0
-/* FIXME this is currently unused.
- * it is not strictly needed.
- * maybe let it be called by a gcc destructor, if that doesnt
- * have negative consequences (e.g. when a child calles exit) */
-static void unload(void) {
-	at_close();
-	core_unload();
-}
-#endif
-
 static void init_lib_wrapper(const char* caller) {
 #ifndef DEBUG
 	(void) caller;
