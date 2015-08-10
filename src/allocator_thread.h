@@ -11,8 +11,8 @@ extern int resp_pipefd[2];
 
 void at_init(void);
 void at_close(void);
-size_t at_get_host_for_ip(ip_type ip, char* readbuf);
-ip_type at_get_ip_for_host(char* host, size_t len);
+size_t at_get_host_for_ip(ip_type4 ip, char* readbuf);
+ip_type4 at_get_ip_for_host(char* host, size_t len);
 
 //RcB: DEP "allocator_thread.c"
 #endif

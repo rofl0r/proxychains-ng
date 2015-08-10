@@ -189,13 +189,14 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					exit(1);
 				}
 
-				in_addr_t host_ip = inet_addr(host);
-				if(host_ip == INADDR_NONE) {
+				memset(&pd[count].ip, 0, sizeof(pd[count].ip));
+				pd[count].ip.is_v6 = !!strchr(host, ':');
+				pd[count].port = htons((unsigned short) port_n);
+				ip_type* host_ip = &pd[count].ip;
+				if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
 					fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
 					exit(1);
 				}
-				pd[count].ip.as_int = (uint32_t) host_ip;
-				pd[count].port = htons((unsigned short) port_n);
 
 				if(!strcmp(type, "http")) {
 					pd[count].pt = HTTP_TYPE;
@@ -206,7 +207,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				} else
 					goto inv;
 
-				if(pd[count].ip.as_int && port_n && pd[count].ip.as_int != (uint32_t) - 1)
+				if(port_n)
 					count++;
 			} else {
 				if(strstr(buff, "[ProxyList]")) {
@@ -317,26 +318,32 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	DEBUGDECL(char str[256]);
 
 	struct in_addr *p_addr_in;
+	struct in6_addr *p_addr_in6;
 	unsigned short port;
 	size_t i;
 	int remote_dns_connect = 0;
 	optlen = sizeof(socktype);
+	sa_family_t fam = SOCKFAMILY(*addr);
 	getsockopt(sock, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
-	if(!(SOCKFAMILY(*addr) == AF_INET && socktype == SOCK_STREAM))
+	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_STREAM))
 		return true_connect(sock, addr, len);
 
+	int v6 = dest_ip.is_v6 = fam == AF_INET6;
+
 	p_addr_in = &((struct sockaddr_in *) addr)->sin_addr;
-	port = ntohs(((struct sockaddr_in *) addr)->sin_port);
+	p_addr_in6 = &((struct sockaddr_in6 *) addr)->sin6_addr;
+	port = !v6 ? ntohs(((struct sockaddr_in *) addr)->sin_port)
+	           : ntohs(((struct sockaddr_in6 *) addr)->sin6_port);
 
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
-	PDEBUG("target: %s\n", inet_ntop(AF_INET, p_addr_in, str, sizeof(str)));
+	PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? p_addr_in6 : p_addr_in, str, sizeof(str)));
 	PDEBUG("port: %d\n", port);
 
 	// check if connect called from proxydns
-        remote_dns_connect = (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
+        remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
 
-	for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
+	if (!v6) for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
 		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
 		   == (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr)) {
 			if(!localnet_addr[i].port || localnet_addr[i].port == port) {
@@ -350,11 +357,11 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	if(flags & O_NONBLOCK)
 		fcntl(sock, F_SETFL, !O_NONBLOCK);
 
-	dest_ip.as_int = SOCKADDR(*addr);
+	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
 
 	ret = connect_proxy_chain(sock,
 				  dest_ip,
-				  SOCKPORT(*addr),
+				  htons(port),
 				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
 
 	fcntl(sock, F_SETFL, flags);

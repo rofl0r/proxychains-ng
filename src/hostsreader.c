@@ -73,16 +73,16 @@ char* hostsreader_get_ip_for_name(const char* name, char* buf, size_t bufsize) {
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-ip_type hostsreader_get_numeric_ip_for_name(const char* name) {
+ip_type4 hostsreader_get_numeric_ip_for_name(const char* name) {
 	char *hres;
 	char buf[320];
 	if((hres = hostsreader_get_ip_for_name(name, buf, sizeof buf))) {
 		struct in_addr c;
 		inet_aton(hres, &c);
-		ip_type res;
+		ip_type4 res;
 		memcpy(res.octet, &c.s_addr, 4);
 		return res;
-	} else return ip_type_invalid;
+	} else return ip_type_invalid.addr.v4;
 }
 
 #ifdef HOSTSREADER_TEST

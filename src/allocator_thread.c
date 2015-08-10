@@ -38,16 +38,16 @@ pthread_mutex_t internal_ips_lock;
 internal_ip_lookup_table *internal_ips = NULL;
 internal_ip_lookup_table internal_ips_buf;
 
-uint32_t index_from_internal_ip(ip_type internalip) {
+uint32_t index_from_internal_ip(ip_type4 internalip) {
 	PFUNC();
-	ip_type tmp = internalip;
+	ip_type4 tmp = internalip;
 	uint32_t ret;
 	ret = tmp.octet[3] + (tmp.octet[2] << 8) + (tmp.octet[1] << 16);
 	ret -= 1;
 	return ret;
 }
 
-char *string_from_internal_ip(ip_type internalip) {
+char *string_from_internal_ip(ip_type4 internalip) {
 	PFUNC();
 	char *res = NULL;
 	uint32_t index = index_from_internal_ip(internalip);
@@ -57,11 +57,11 @@ char *string_from_internal_ip(ip_type internalip) {
 }
 
 extern unsigned int remote_dns_subnet;
-ip_type make_internal_ip(uint32_t index) {
-	ip_type ret;
+ip_type4 make_internal_ip(uint32_t index) {
+	ip_type4 ret;
 	index++; // so we can start at .0.0.1
 	if(index > 0xFFFFFF)
-		return ip_type_invalid;
+		return ip_type_invalid.addr.v4;
 	ret.octet[0] = remote_dns_subnet & 0xFF;
 	ret.octet[1] = (index & 0xFF0000) >> 16;
 	ret.octet[2] = (index & 0xFF00) >> 8;
@@ -69,10 +69,10 @@ ip_type make_internal_ip(uint32_t index) {
 	return ret;
 }
 
-static ip_type ip_from_internal_list(char* name, size_t len) {
+static ip_type4 ip_from_internal_list(char* name, size_t len) {
 	uint32_t hash = dalias_hash((char *) name);
 	size_t i;
-	ip_type res;
+	ip_type4 res;
 	void* new_mem;
 	// see if we already have this dns entry saved.
 	if(internal_ips->counter) {
@@ -99,7 +99,7 @@ static ip_type ip_from_internal_list(char* name, size_t len) {
 	}
 
 	res = make_internal_ip(internal_ips->counter);
-	if(res.as_int == ip_type_invalid.as_int)
+	if(res.as_int == ip_type_invalid.addr.v4.as_int)
 		goto err_plus_unlock;
 
 	string_hash_tuple tmp = { 0 };
@@ -128,7 +128,7 @@ static ip_type ip_from_internal_list(char* name, size_t len) {
 	err_plus_unlock:
 	
 	PDEBUG("return err\n");
-	return ip_type_invalid;
+	return ip_type_invalid.addr.v4;
 }
 
 /* stuff for communication with the allocator thread */
@@ -205,7 +205,7 @@ static void* threadfunc(void* x) {
 	struct at_msghdr msg;
 	union { 
 		char host[MSG_LEN_MAX];
-		ip_type ip;
+		ip_type4 ip;
 	} readbuf;
 	while((ret = getmessage(ATD_SERVER, &msg, &readbuf))) {
 		switch(msg.msgtype) {
@@ -213,7 +213,7 @@ static void* threadfunc(void* x) {
 				/* client wants an ip for a DNS name. iterate our list and check if we have an existing entry.
 					* if not, create a new one. */
 				readbuf.ip = ip_from_internal_list(readbuf.host, msg.datalen - 1);
-				msg.datalen = sizeof(ip_type);
+				msg.datalen = sizeof(ip_type4);
 				break;
 			case ATM_GETNAME: {
 				char *host = string_from_internal_ip(readbuf.ip);
@@ -237,8 +237,8 @@ static void* threadfunc(void* x) {
 
 /* API to access the internal ip mapping */
 
-ip_type at_get_ip_for_host(char* host, size_t len) {
-	ip_type readbuf;
+ip_type4 at_get_ip_for_host(char* host, size_t len) {
+	ip_type4 readbuf;
 	MUTEX_LOCK(&internal_ips_lock);
 	if(len > MSG_LEN_MAX) goto inv;
 	struct at_msghdr msg = {.msgtype = ATM_GETIP, .datalen = len + 1 };
@@ -246,14 +246,14 @@ ip_type at_get_ip_for_host(char* host, size_t len) {
 	   getmessage(ATD_CLIENT, &msg, &readbuf));
 	else {
 		inv:
-		readbuf = ip_type_invalid;
+		readbuf = ip_type_invalid.addr.v4;
 	}
 	MUTEX_UNLOCK(&internal_ips_lock);
 	return readbuf;
 }
 
-size_t at_get_host_for_ip(ip_type ip, char* readbuf) {
-	struct at_msghdr msg = {.msgtype = ATM_GETNAME, .datalen = sizeof(ip_type) };
+size_t at_get_host_for_ip(ip_type4 ip, char* readbuf) {
+	struct at_msghdr msg = {.msgtype = ATM_GETNAME, .datalen = sizeof(ip_type4) };
 	size_t res = 0;
 	MUTEX_LOCK(&internal_ips_lock);
 	if(sendmessage(ATD_SERVER, &msg, &ip) && getmessage(ATD_CLIENT, &msg, readbuf)) {

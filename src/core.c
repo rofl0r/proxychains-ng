@@ -198,8 +198,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
 	// the results returned from gethostbyname et al.)
 	// the hardcoded number 224 can now be changed using the config option remote_dns_subnet to i.e. 127
-	if(ip.octet[0] == remote_dns_subnet) {
-		dns_len = at_get_host_for_ip(ip, hostnamebuf);
+	if(!ip.is_v6 && ip.addr.v4.octet[0] == remote_dns_subnet) {
+		dns_len = at_get_host_for_ip(ip.addr.v4, hostnamebuf);
 		if(!dns_len) goto err;
 		else dns_name = hostnamebuf;
 	}
@@ -216,12 +216,16 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 	int len;
 	unsigned char buff[BUFF_SIZE];
-	char ip_buf[16];
+	char ip_buf[INET6_ADDRSTRLEN];
+	int v6 = ip.is_v6;
 	
 	switch (pt) {
 		case HTTP_TYPE:{
 			if(!dns_len) {
-				pc_stringfromipv4(&ip.octet[0], ip_buf);
+				if(!inet_ntop(v6?AF_INET6:AF_INET,ip.addr.v6,ip_buf,sizeof ip_buf)) {
+					proxychains_write_log(LOG_PREFIX "error: ip address conversion failed\n");
+					goto err;
+				}
 				dns_name = ip_buf;
 			}
 			#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1) /* 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator. */
@@ -264,16 +268,20 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 		}
 		break;
 		case SOCKS4_TYPE:{
+			if(v6) {
+				proxychains_write_log(LOG_PREFIX "error: SOCKS4 doesnt support ipv6 addresses\n");
+				goto err;
+			}
 			buff[0] = 4;	// socks version
 			buff[1] = 1;	// connect command
 			memcpy(&buff[2], &port, 2);	// dest port
 			if(dns_len) {
-				ip.octet[0] = 0;
-				ip.octet[1] = 0;
-				ip.octet[2] = 0;
-				ip.octet[3] = 1;
+				ip.addr.v4.octet[0] = 0;
+				ip.addr.v4.octet[1] = 0;
+				ip.addr.v4.octet[2] = 0;
+				ip.addr.v4.octet[3] = 1;
 			}
-			memcpy(&buff[4], &ip, 4);	// dest host
+			memcpy(&buff[4], &ip.addr.v4, 4);	// dest host
 			len = ulen + 1;	// username
 			if(len > 1)
 				memcpy(&buff[8], user, len);
@@ -353,9 +361,9 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			buff[buff_iter++] = 0;	// reserved
 
 			if(!dns_len) {
-				buff[buff_iter++] = 1;	// ip v4
-				memcpy(buff + buff_iter, &ip, 4);	// dest host
-				buff_iter += 4;
+				buff[buff_iter++] = v6 ? 4 : 1;	// ip v4/v6
+				memcpy(buff + buff_iter, ip.addr.v6, v6?16:4);	// dest host
+				buff_iter += v6?16:4;
 			} else {
 				buff[buff_iter++] = 3;	//dns
 				buff[buff_iter++] = dns_len & 0xFF;
@@ -411,21 +419,30 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 #define RRT "Round Robin chain"
 
 static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
-	*fd = socket(PF_INET, SOCK_STREAM, 0);
+	int v6 = pd->ip.is_v6;
+
+	*fd = socket(v6?PF_INET6:PF_INET, SOCK_STREAM, 0);
 	if(*fd == -1)
 		goto error;
 	
-	char ip_buf[16];
-	pc_stringfromipv4(&pd->ip.octet[0], ip_buf);
+	char ip_buf[INET6_ADDRSTRLEN];
+	if(!inet_ntop(v6?AF_INET6:AF_INET,pd->ip.addr.v6,ip_buf,sizeof ip_buf))
+		goto error;
+
 	proxychains_write_log(LOG_PREFIX "%s " TP " %s:%d ",
 			      begin_mark, ip_buf, htons(pd->port));
 	pd->ps = PLAY_STATE;
 	struct sockaddr_in addr = {
 		.sin_family = AF_INET,
 		.sin_port = pd->port,
-		.sin_addr.s_addr = (in_addr_t) pd->ip.as_int
+		.sin_addr.s_addr = (in_addr_t) pd->ip.addr.v4.as_int
 	};
-	if(timed_connect(*fd, (struct sockaddr *) &addr, sizeof(addr))) {
+	struct sockaddr_in6 addr6 = {
+		.sin6_family = AF_INET6,
+		.sin6_port = pd->port,
+	};
+	if(v6) memcpy(&addr6.sin6_addr.s6_addr, pd->ip.addr.v6, 16);
+	if(timed_connect(*fd, (struct sockaddr *) (v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr))) {
 		pd->ps = DOWN_STATE;
 		goto error1;
 	}
@@ -496,16 +513,22 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	int retcode = -1;
 	char *hostname;
 	char hostname_buf[MSG_LEN_MAX];
-	char ip_buf[16];
+	char ip_buf[INET6_ADDRSTRLEN];
+	int v6 = pto->ip.is_v6;
 
 	PFUNC();
 
-	if(pto->ip.octet[0] == remote_dns_subnet) {
-		if(!at_get_host_for_ip(pto->ip, hostname_buf)) goto usenumericip;
+	if(!v6 && pto->ip.addr.v4.octet[0] == remote_dns_subnet) {
+		if(!at_get_host_for_ip(pto->ip.addr.v4, hostname_buf)) goto usenumericip;
 		else hostname = hostname_buf;
 	} else {
 	usenumericip:
-		pc_stringfromipv4(&pto->ip.octet[0], ip_buf);
+		if(!inet_ntop(v6?AF_INET6:AF_INET,pto->ip.addr.v6,ip_buf,sizeof ip_buf)) {
+			pto->ps = DOWN_STATE;
+			proxychains_write_log("<--ip conversion error!\n");
+			close(ns);
+			return SOCKET_ERROR;
+		}
 		hostname = ip_buf;
 	}
 
@@ -707,7 +730,7 @@ static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* 
 	data->hostent_space.h_name = data->addr_name;
 }
 
-extern ip_type hostsreader_get_numeric_ip_for_name(const char* name);
+extern ip_type4 hostsreader_get_numeric_ip_for_name(const char* name);
 struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data* data) {
 	PFUNC();
 	char buff[256];
@@ -728,19 +751,19 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	if(!strcmp(buff, name)) {
 		data->resolved_addr = inet_addr(buff);
 		if(data->resolved_addr == (in_addr_t) (-1))
-			data->resolved_addr = (in_addr_t) (ip_type_localhost.as_int);
+			data->resolved_addr = (in_addr_t) (ip_type_localhost.addr.v4.as_int);
 		goto retname;
 	}
 
 	// this iterates over the "known hosts" db, usually /etc/hosts
-	ip_type hdb_res = hostsreader_get_numeric_ip_for_name(name);
-	if(hdb_res.as_int != ip_type_invalid.as_int) {
+	ip_type4 hdb_res = hostsreader_get_numeric_ip_for_name(name);
+	if(hdb_res.as_int != ip_type_invalid.addr.v4.as_int) {
 		data->resolved_addr = hdb_res.as_int;
 		goto retname;
 	}
 	
 	data->resolved_addr = at_get_ip_for_host((char*) name, strlen(name)).as_int;
-	if(data->resolved_addr == (in_addr_t) ip_type_invalid.as_int) return NULL;
+	if(data->resolved_addr == (in_addr_t) ip_type_invalid.addr.v4.as_int) return NULL;
 
 	retname:
 
