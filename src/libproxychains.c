@@ -307,7 +307,10 @@ int close(int fd) {
 	errno = EBADF;
 	return -1;
 }
-
+static int is_v4inv6(const struct in6_addr *a) {
+	return a->s6_addr32[0] == 0 && a->s6_addr32[1] == 0 &&
+	       a->s6_addr16[4] == 0 && a->s6_addr16[5] == 0xffff;
+}
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	INIT();
 	PFUNC();
@@ -334,6 +337,12 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	p_addr_in6 = &((struct sockaddr_in6 *) addr)->sin6_addr;
 	port = !v6 ? ntohs(((struct sockaddr_in *) addr)->sin_port)
 	           : ntohs(((struct sockaddr_in6 *) addr)->sin6_port);
+	struct in_addr v4inv6;
+	if(v6 && is_v4inv6(p_addr_in6)) {
+		memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr32[3], 4);
+		v6 = dest_ip.is_v6 = 0;
+		p_addr_in = &v4inv6;
+	}
 
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
