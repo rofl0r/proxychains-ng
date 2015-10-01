@@ -18,6 +18,20 @@ isopenbsd() {
 	uname -s | grep OpenBSD >/dev/null
 }
 
+check_compile() {
+	printf "checking %s ... " "$1"
+	local tmp=$(mktemp)
+	printf "$3" > "$tmp".c
+	local res=0
+	$CC $CPPFLAGS $2 $CFLAGS -c "$tmp".c -o "$tmp".o >/dev/null 2>&1 \
+	|| res=1
+	rm -f "$tmp".c "$tmp".o
+	test x$res = x0 && \
+	{ printf "yes\n" ; test x"$2" = x || CPPFLAGS="$CPPFLAGS $2" ; } \
+	|| printf "no\n"
+	return $res
+}
+
 usage() {
 	echo "supported arguments"
 	echo "--prefix=/path 		default: $prefix"
@@ -88,6 +102,14 @@ fi
 if [ -z "$CC" ] ; then
 	CC=cc
 fi
+
+check_compile 'whether netinet/in.h defines s6_addr16' "" \
+'#include <netinet/in.h>\nint main(int a, char**c){struct in6_addr x={.s6_addr32[0]=a};return x.s6_addr16[0]; }' \
+|| {
+check_compile 'whether netinet/in.h defines __u6_addr.__u6_addr16' \
+'-Ds6_addr16=__u6_addr.__u6_addr16 -Ds6_addr32=__u6_addr.__u6_addr32' \
+'#include <netinet/in.h>\nint main(int a, char**c){struct in6_addr x={.s6_addr32[0]=a};return x.s6_addr16[0]; }'
+}
 
 echo CC?=$CC>config.mak
 [ -z "$CPPFLAGS" ] || echo CPPFLAGS?=$CPPFLAGS>>config.mak
