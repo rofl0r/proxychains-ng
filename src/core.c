@@ -237,7 +237,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			} else dst[0] = 0;
 
 			len = snprintf((char *) buff, sizeof(buff),
-			               "CONNECT %s:%d HTTP/1.0\r\n%s%s%s\r\n",
+			               "CONNECT %1$s:%2$d HTTP/1.0\r\nHost: %1$s:%2$d\r\n%3$s%4$s%5$s\r\n",
 			                dns_name,  ntohs(port),
 			                ulen ? "Proxy-Authorization: Basic " : dst,
 			                dst, ulen ? "\r\n" : dst);
