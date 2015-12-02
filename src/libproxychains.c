@@ -99,6 +99,17 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 const char *proxychains_get_version(void);
 
+static void setup_hooks(void) {
+	SETUP_SYM(connect);
+	SETUP_SYM(sendto);
+	SETUP_SYM(gethostbyname);
+	SETUP_SYM(getaddrinfo);
+	SETUP_SYM(freeaddrinfo);
+	SETUP_SYM(gethostbyaddr);
+	SETUP_SYM(getnameinfo);
+	SETUP_SYM(close);
+}
+
 static void do_init(void) {
 	srand(time(NULL));
 	core_initialize();
@@ -110,14 +121,7 @@ static void do_init(void) {
 
 	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
-	SETUP_SYM(connect);
-	SETUP_SYM(sendto);
-	SETUP_SYM(gethostbyname);
-	SETUP_SYM(getaddrinfo);
-	SETUP_SYM(freeaddrinfo);
-	SETUP_SYM(gethostbyaddr);
-	SETUP_SYM(getnameinfo);
-	SETUP_SYM(close);
+	setup_hooks();
 
 	init_l = 1;
 }
