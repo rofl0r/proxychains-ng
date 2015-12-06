@@ -350,7 +350,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
-	PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? p_addr_in6 : p_addr_in, str, sizeof(str)));
+	PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
 	PDEBUG("port: %d\n", port);
 
 	// check if connect called from proxydns
