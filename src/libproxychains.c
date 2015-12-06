@@ -423,17 +423,34 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	INIT();
 	PFUNC();
 
-	char ip_buf[16];
-
 	if(!proxychains_resolver) {
 		return true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 	} else {
-		if(salen < sizeof(struct sockaddr_in) || SOCKFAMILY(*sa) != AF_INET)
+		if(!salen || !(SOCKFAMILY(*sa) == AF_INET || SOCKFAMILY(*sa) == AF_INET6))
+			return EAI_FAMILY;
+		int v6 = SOCKFAMILY(*sa) == AF_INET6;
+		if(salen < (v6?sizeof(struct sockaddr_in6):sizeof(struct sockaddr_in)))
 			return EAI_FAMILY;
 		if(hostlen) {
-			pc_stringfromipv4((unsigned char*) &(SOCKADDR_2(*sa)), ip_buf);
-			if(snprintf(host, hostlen, "%s", ip_buf) >= hostlen)
+			unsigned char v4inv6buf[4];
+			const void *ip = v6 ? (void*)&((struct sockaddr_in6*)sa)->sin6_addr
+			                    : (void*)&((struct sockaddr_in*)sa)->sin_addr;
+			unsigned scopeid = 0;
+			if(v6) {
+				if(is_v4inv6(&((struct sockaddr_in6*)sa)->sin6_addr)) {
+					memcpy(v4inv6buf, &((struct sockaddr_in6*)sa)->sin6_addr.s6_addr32[3], 4);
+					ip = v4inv6buf;
+					v6 = 0;
+				} else
+					scopeid = ((struct sockaddr_in6 *)sa)->sin6_scope_id;
+			}
+			if(!inet_ntop(v6?AF_INET6:AF_INET,ip,host,hostlen))
 				return EAI_OVERFLOW;
+			if(scopeid) {
+				size_t l = strlen(host);
+				if(snprintf(host+l, hostlen-l, "%%%u", scopeid) >= hostlen-l)
+					return EAI_OVERFLOW;
+			}
 		}
 		if(servlen) {
 			if(snprintf(serv, servlen, "%d", ntohs(SOCKPORT(*sa))) >= servlen)
