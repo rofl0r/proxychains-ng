@@ -44,7 +44,7 @@ int hostsreader_get(struct hostsreader *ctx, char* buf, size_t bufsize) {
 			l--;
 		}
 		if(!l || !*p) continue;
-		ctx->name = buf;
+		ctx->name = p;
 		while(*p && !isspace(*p) && l) {
 			p++;
 			l--;
