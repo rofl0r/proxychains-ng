@@ -32,6 +32,27 @@ check_compile() {
 	return $res
 }
 
+check_define() {
+	printf "checking whether \$CC defines %s ... " "$1"
+	local res=1
+	$CC $CPPFLAGS $CFLAGS -dM -E - </dev/null | grep "$1" >/dev/null && res=0
+	test x$res = x0 && printf "yes\n" || printf "no\n"
+	return $res
+}
+
+check_compile_run() {
+	printf "checking %s ... " "$1"
+	local tmp=$(mktemp)
+	printf "$2" > "$tmp".c
+	local res=0
+	$CC $CPPFLAGS $CFLAGS "$tmp".c -o "$tmp".out >/dev/null 2>&1 \
+	|| res=1
+	test x$res = x0 && { "$tmp".out || res=1 ; }
+	rm -f "$tmp".c "$tmp".o "$tmp".out
+	test x$res = x0 && printf "yes\n" || printf "no\n"
+	return $res
+}
+
 usage() {
 	echo "supported arguments"
 	echo "--prefix=/path 		default: $prefix"
@@ -110,6 +131,11 @@ check_compile 'whether netinet/in.h defines __u6_addr.__u6_addr16' \
 '-Ds6_addr16=__u6_addr.__u6_addr16 -Ds6_addr32=__u6_addr.__u6_addr32' \
 '#include <netinet/in.h>\nint main(int a, char**c){struct in6_addr x={.s6_addr32[0]=a};return x.s6_addr16[0]; }'
 }
+
+check_define __OpenBSD__ && \
+check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
+'#include <stdio.h>\n#include<stdlib.h>\nint close(int x){exit(0);}int main(){fclose(stdin);return 1;}' && \
+CPPFLAGS="$CPPFLAGS -DBROKEN_FCLOSE"
 
 echo CC?=$CC>config.mak
 [ -z "$CPPFLAGS" ] || echo CPPFLAGS?=$CPPFLAGS>>config.mak

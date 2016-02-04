@@ -290,7 +290,9 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 			}
 		}
 	}
+#ifndef BROKEN_FCLOSE
 	fclose(file);
+#endif
 	if(!count) {
 		fprintf(stderr, "error: no valid proxy found in config\n");
 		exit(1);
