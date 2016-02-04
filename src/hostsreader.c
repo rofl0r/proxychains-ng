@@ -86,9 +86,11 @@ ip_type4 hostsreader_get_numeric_ip_for_name(const char* name) {
 }
 
 #ifdef HOSTSREADER_TEST
-int main() {
+#include "ip_type.c"
+int main(int a, char**b) {
 	char buf[256];
-	char * ret = hostsreader_get_ip_for_name("goo", buf, sizeof buf);
+	if(a != 2) return 1;
+	char * ret = hostsreader_get_ip_for_name(b[1], buf, sizeof buf);
 	printf("%s\n", ret ? ret : "null");
 }
 #endif
