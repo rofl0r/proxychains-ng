@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.10 README
+ProxyChains-NG ver 4.11 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,11 @@ ProxyChains-NG ver 4.10 README
 
 Changelog:
 ----------
+Version 4.11
+- preliminary IPv6 support
+- fixed bug in hostsreader
+- preliminary support for usage on OpenBSD (caveat emptor)
+
 Version 4.10
 - fix regression in linking order with custom LDFLAGS
 - fix segfault in DNS mapping code in programs with > ~400 different lookups
