@@ -181,6 +181,30 @@ Usage Example:
 in this example it will resolve targethost.com through proxy(or chained proxies)
 specified by proxychains.conf
 
+Known Problems:
+---------------
+- newer versions of nmap try to determine the network interface to use
+  even if it's not needed (like when doing simple syn scans which use the
+  standard POSIX socket API. this results in errors when proxychains hands
+  out an ip address to a reserved address space.
+  possible workarounds: disable proxy_dns, use a numeric ip, or use nmap's
+  native support for SOCKS proxies.
+
+- Mac OS X 10.11 (El Capitan) ships with a new security feature called SIP
+  that prevents hooking of system apps.
+  workarounds are to partially disable SIP by issuing
+  csrutil enable --without debug in recovery mode,
+  or to copy the system binary into the home directory and run it from there.
+  see github issue #78 for details.
+
+- the glibc dynlinker has a bug or security feature that inhibits dlopen()ed
+  modules from being subject to the same dlsym hooks as installed for the main
+  program. this mainly affects scripting languages such as perl or python
+  that heavily rely on dlopen() for modules written in C to work.
+  there are unconfirmed reports that it works as root though.
+  musl libc is unaffected from the bug.
+
+
 Community:
 ----------
 #proxychains on irc.freenode.net
