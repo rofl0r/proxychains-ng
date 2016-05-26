@@ -110,6 +110,9 @@ static void setup_hooks(void) {
 	SETUP_SYM(close);
 }
 
+static int close_fds[16];
+static int close_fds_cnt = 0;
+
 static void do_init(void) {
 	srand(time(NULL));
 	core_initialize();
@@ -122,6 +125,8 @@ static void do_init(void) {
 	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
 	setup_hooks();
+
+	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
 
 	init_l = 1;
 }
@@ -305,14 +310,17 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 
 int close(int fd) {
 	if(!init_l) {
-		SETUP_SYM(close);
-		return true_close(fd);
+		if(close_fds_cnt>=(sizeof close_fds/sizeof close_fds[0])) goto err;
+		close_fds[close_fds_cnt++] = fd;
+		errno = 0;
+		return 0;
 	}
 	/* prevent rude programs (like ssh) from closing our pipes */
 	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
 	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
 		return true_close(fd);
 	}
+	err:
 	errno = EBADF;
 	return -1;
 }
