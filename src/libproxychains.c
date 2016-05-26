@@ -93,7 +93,7 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 #define INIT() init_lib_wrapper(__FUNCTION__)
 
-#define SETUP_SYM(X) do { true_ ## X = load_sym( # X, X ); } while(0)
+#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
 
 #include "allocator_thread.h"
 
@@ -304,7 +304,10 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 /*******  HOOK FUNCTIONS  *******/
 
 int close(int fd) {
-	INIT();
+	if(!init_l) {
+		SETUP_SYM(close);
+		return true_close(fd);
+	}
 	/* prevent rude programs (like ssh) from closing our pipes */
 	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
 	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
