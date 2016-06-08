@@ -25,7 +25,7 @@ GENH = src/version.h
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
 LIBDL   = -ldl
-LDFLAGS = -shared -fPIC $(NO_AS_NEEDED) $(LIBDL) -lpthread
+LDFLAGS = -fPIC $(NO_AS_NEEDED) $(LIBDL) -lpthread
 INC     = 
 PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
@@ -82,7 +82,7 @@ src/version.o: src/version.h
 
 $(LDSO_PATHNAME): $(LOBJS)
 	$(CC) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) $(USER_LDFLAGS) \
-		-o $@ $(LOBJS)
+		-shared -o $@ $(LOBJS)
 
 $(ALL_TOOLS): $(OBJS)
 	$(CC) src/main.o src/common.o $(USER_LDFLAGS) -o $(PXCHAINS)
