@@ -285,7 +285,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					char *pc;
 					int len;
 					pc = strchr(buff, '=');
-					len = atoi(++pc);
+					len = pc ? atoi(++pc) : 0;
 					proxychains_max_chain = (len ? len : 1);
 				} else if(strstr(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
