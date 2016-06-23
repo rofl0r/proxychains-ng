@@ -285,6 +285,10 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					char *pc;
 					int len;
 					pc = strchr(buff, '=');
+					if(!pc) {
+						fprintf(stderr, "error: missing equals sign '=' in chain_len directive.\n");
+						exit(1);
+					}
 					len = atoi(++pc);
 					proxychains_max_chain = (len ? len : 1);
 				} else if(strstr(buff, "quiet_mode")) {
