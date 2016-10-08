@@ -2,6 +2,17 @@
 
 prefix=/usr/local
 
+# Get a temporary filename
+i=0
+set -C
+while : ; do i=$(($i+1))
+tmpc="./conf$$-$PPID-$i.c"
+2>|/dev/null > "$tmpc" && break
+test "$i" -gt 50 && fail "$0: cannot create temporary file $tmpc"
+done
+set +C
+trap 'rm "$tmpc"' EXIT INT QUIT TERM HUP
+
 ismac() {
 	uname -s | grep Darwin >/dev/null
 }
@@ -20,12 +31,10 @@ isopenbsd() {
 
 check_compile() {
 	printf "checking %s ... " "$1"
-	local tmp=$(mktemp)
-	printf "$3" > "$tmp".c
+	printf "$3" > "$tmpc"
 	local res=0
-	$CC $CPPFLAGS $2 $CFLAGS -c "$tmp".c -o "$tmp".o >/dev/null 2>&1 \
+	$CC $CPPFLAGS $2 $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	|| res=1
-	rm -f "$tmp".c "$tmp".o
 	test x$res = x0 && \
 	{ printf "yes\n" ; test x"$2" = x || CPPFLAGS="$CPPFLAGS $2" ; } \
 	|| printf "no\n"
@@ -42,13 +51,12 @@ check_define() {
 
 check_compile_run() {
 	printf "checking %s ... " "$1"
-	local tmp=$(mktemp)
-	printf "$2" > "$tmp".c
+	printf "$2" > "$tmpc"
 	local res=0
-	$CC $CPPFLAGS $CFLAGS "$tmp".c -o "$tmp".out >/dev/null 2>&1 \
+	$CC $CPPFLAGS $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
 	|| res=1
-	test x$res = x0 && { "$tmp".out || res=1 ; }
-	rm -f "$tmp".c "$tmp".o "$tmp".out
+	test x$res = x0 && { "$tmpc".out || res=1 ; }
+	rm -f "$tmpc".out
 	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
 }
