@@ -17,3 +17,6 @@ version.h
 libtool
 config.*
 stamp-h
+
+# Vim swap/working files.
+*.sw[opa]
