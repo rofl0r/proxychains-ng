@@ -464,7 +464,7 @@ static proxy_data *select_proxy(select_type how, proxy_data * pd, unsigned int p
 		case RANDOMLY:
 			do {
 				k++;
-				i = 0 + (unsigned int) (proxy_count * 1.0 * rand() / (RAND_MAX + 1.0));
+				i = rand() % proxy_count;
 			} while(pd[i].ps != PLAY_STATE && k < proxy_count * 100);
 			break;
 		case FIFOLY:
