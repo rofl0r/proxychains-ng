@@ -1,4 +1,5 @@
 proxychains4
+libproxychains4.dylib
 *.bz2
 *.xz
 *.o
