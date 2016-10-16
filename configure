@@ -1,6 +1,7 @@
 #!/bin/sh
 
 prefix=/usr/local
+OUR_CPPFLAGS=
 
 # Get a temporary filename
 i=0
@@ -33,10 +34,10 @@ check_compile() {
 	printf "checking %s ... " "$1"
 	printf "$3" > "$tmpc"
 	local res=0
-	$CC $CPPFLAGS $2 $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
+	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	|| res=1
 	test x$res = x0 && \
-	{ printf "yes\n" ; test x"$2" = x || CPPFLAGS="$CPPFLAGS $2" ; } \
+	{ printf "yes\n" ; test x"$2" = x || OUR_CPPFLAGS="$OUR_CPPFLAGS $2" ; } \
 	|| printf "no\n"
 	return $res
 }
@@ -44,7 +45,7 @@ check_compile() {
 check_define() {
 	printf "checking whether \$CC defines %s ... " "$1"
 	local res=1
-	$CC $CPPFLAGS $CFLAGS -dM -E - </dev/null | grep "$1" >/dev/null && res=0
+	$CC $OUR_CPPFLAGS $CPPFLAGS $CFLAGS -dM -E - </dev/null | grep "$1" >/dev/null && res=0
 	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
 }
@@ -53,7 +54,7 @@ check_compile_run() {
 	printf "checking %s ... " "$1"
 	printf "$2" > "$tmpc"
 	local res=0
-	$CC $CPPFLAGS $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
+	$CC $OUR_CPPFLAGS $CPPFLAGS $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
 	|| res=1
 	test x$res = x0 && { "$tmpc".out || res=1 ; }
 	rm -f "$tmpc".out
@@ -143,7 +144,7 @@ check_compile 'whether netinet/in.h defines __u6_addr.__u6_addr16' \
 check_define __OpenBSD__ && \
 check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
 '#include <stdio.h>\n#include<stdlib.h>\nint close(int x){exit(0);}int main(){fclose(stdin);return 1;}' && \
-CPPFLAGS="$CPPFLAGS -DBROKEN_FCLOSE"
+OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 
 echo CC?=$CC>config.mak
 [ -z "$CPPFLAGS" ] || echo CPPFLAGS?=$CPPFLAGS>>config.mak
@@ -155,7 +156,8 @@ echo bindir=$bindir>>config.mak
 echo libdir=$libdir>>config.mak
 echo includedir=$includedir>>config.mak
 echo sysconfdir=$sysconfdir>>config.mak
-[ "$ignore_cve" = "no" ] && echo CPPFLAGS+= -DSUPER_SECURE>>config.mak
+[ "$ignore_cve" = "no" ] && echo "CPPFLAGS+= -DSUPER_SECURE">>config.mak
+[ -z "$OUR_CPPFLAGS" ] || echo "CPPFLAGS+= $OUR_CPPFLAGS" >>config.mak
 make_cmd=make
 if ismac ; then
 	echo NO_AS_NEEDED=>>config.mak
