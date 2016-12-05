@@ -269,7 +269,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 		break;
 		case SOCKS4_TYPE:{
 			if(v6) {
-				proxychains_write_log(LOG_PREFIX "error: SOCKS4 doesnt support ipv6 addresses\n");
+				proxychains_write_log(LOG_PREFIX "error: SOCKS4 doesn't support ipv6 addresses\n");
 				goto err;
 			}
 			buff[0] = 4;	// socks version
