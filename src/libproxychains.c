@@ -74,15 +74,19 @@ static int init_l = 0;
 
 static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
 
-static void* load_sym(char* symname, void* proxyfunc) {
+typedef void (*func_t)(void);
 
-	void *funcptr = dlsym(RTLD_NEXT, symname);
+static func_t load_sym(const char* symname, func_t proxyfunc) {
+
+	func_t funcptr = NULL;
+	*(void **) (&funcptr) = dlsym(RTLD_NEXT, symname);
 
 	if(!funcptr) {
 		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
 		exit(1);
 	} else {
-		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, funcptr, proxyfunc);
+		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n",
+		       symname, *(void **) (&funcptr), *(void **) (&proxyfunc));
 	}
 	if(funcptr == proxyfunc) {
 		PDEBUG1("circular reference detected, aborting!\n");
@@ -93,7 +97,7 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 #define INIT() init_lib_wrapper(__func__)
 
-#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
+#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = (X ## _t) load_sym( # X, (func_t) X ); } while(0)
 
 #include "allocator_thread.h"
 
