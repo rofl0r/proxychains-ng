@@ -238,7 +238,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				} else if(strstr(buff, "tcp_connect_time_out")) {
 					sscanf(buff, "%s %d", user, &tcp_connect_time_out);
 				} else if(strstr(buff, "remote_dns_subnet")) {
-					sscanf(buff, "%s %d", user, &remote_dns_subnet);
+					sscanf(buff, "%s %u", user, &remote_dns_subnet);
 					if(remote_dns_subnet >= 256) {
 						fprintf(stderr,
 							"remote_dns_subnet: invalid value. requires a number between 0 and 255.\n");
