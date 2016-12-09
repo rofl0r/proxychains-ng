@@ -586,7 +586,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				if(!p2)
 					break;
 				if(SUCCESS != chain_step(ns, p1, p2)) {
-					PDEBUG("GOTO AGAIN 1\n");
+					PDEBUG1("GOTO AGAIN 1\n");
 					goto again;
 				}
 				p1 = p2;
@@ -612,7 +612,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 					looped++;
 					continue;
 				} else if (looped && rc > 0 && offset >= curr_pos) {
- 					PDEBUG("GOTO MORE PROXIES 0\n");
+ 					PDEBUG1("GOTO MORE PROXIES 0\n");
 					/* We've gone back to the start and now past our starting position */
 					proxychains_proxy_offset = 0;
  					goto error_more;
@@ -629,7 +629,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 					offset = 0;
 					continue;
 				} else if(SUCCESS != chain_step(ns, p1, p2)) {
-					PDEBUG("GOTO AGAIN 1\n");
+					PDEBUG1("GOTO AGAIN 1\n");
 					goto again;
 				} else
 					p1 = p2;
@@ -648,18 +648,18 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			alive_count = calc_alive(pd, proxy_count);
 			offset = 0;
 			if(!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
-				PDEBUG("select_proxy failed\n");
+				PDEBUG1("select_proxy failed\n");
 				goto error_strict;
 			}
 			if(SUCCESS != start_chain(&ns, p1, ST)) {
-				PDEBUG("start_chain failed\n");
+				PDEBUG1("start_chain failed\n");
 				goto error_strict;
 			}
 			while(offset < proxy_count) {
 				if(!(p2 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
 					break;
 				if(SUCCESS != chain_step(ns, p1, p2)) {
-					PDEBUG("chain_step failed\n");
+					PDEBUG1("chain_step failed\n");
 					goto error_strict;
 				}
 				p1 = p2;
@@ -684,7 +684,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				if(!(p2 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
 					goto error_more;
 				if(SUCCESS != chain_step(ns, p1, p2)) {
-					PDEBUG("GOTO AGAIN 2\n");
+					PDEBUG1("GOTO AGAIN 2\n");
 					goto again;
 				}
 				p1 = p2;
@@ -710,7 +710,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	error_more:
 	proxychains_write_log("\n!!!need more proxies!!!\n");
 	error_strict:
-	PDEBUG("error\n");
+	PDEBUG1("error\n");
 	
 	release_all(pd, proxy_count);
 	if(ns != -1)
@@ -769,7 +769,7 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 
 	gethostbyname_data_setstring(data, (char*) name);
 	
-	PDEBUG("return hostent space\n");
+	PDEBUG1("return hostent space\n");
 	
 	return &data->hostent_space;
 }

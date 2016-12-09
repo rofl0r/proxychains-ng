@@ -18,7 +18,7 @@ void DUMP_PROXY_CHAIN(proxy_data *pchain, unsigned int count) {
 		if (*pchain->user || *pchain->pass) {
 			PSTDERR(" [u=%s,p=%s]", pchain->user, pchain->pass);
 		}
-		PSTDERR("\n");
+		PSTDERR1("\n");
 	}
 }
 

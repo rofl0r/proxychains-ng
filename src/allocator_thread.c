@@ -86,14 +86,14 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 	}
 	// grow list if needed.
 	if(internal_ips->capa < internal_ips->counter + 1) {
-		PDEBUG("realloc\n");
+		PDEBUG1("realloc\n");
 		new_mem = realloc(internal_ips->list, (internal_ips->capa + 16) * sizeof(void *));
 		if(new_mem) {
 			internal_ips->capa += 16;
 			internal_ips->list = new_mem;
 		} else {
 	oom:
-			PDEBUG("out of mem\n");
+			PDEBUG1("out of mem\n");
 			goto err_plus_unlock;
 		}
 	}
@@ -127,7 +127,7 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 	return res;
 	err_plus_unlock:
 	
-	PDEBUG("return err\n");
+	PDEBUG1("return err\n");
 	return ip_type_invalid.addr.v4;
 }
 

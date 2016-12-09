@@ -85,7 +85,7 @@ static void* load_sym(char* symname, void* proxyfunc) {
 		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, funcptr, proxyfunc);
 	}
 	if(funcptr == proxyfunc) {
-		PDEBUG("circular reference detected, aborting!\n");
+		PDEBUG1("circular reference detected, aborting!\n");
 		abort();
 	}
 	return funcptr;
@@ -377,7 +377,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
 		   == (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr)) {
 			if(!localnet_addr[i].port || localnet_addr[i].port == port) {
-				PDEBUG("accessing localnet using true_connect\n");
+				PDEBUG1("accessing localnet using true_connect\n");
 				return true_connect(sock, addr, len);
 			}
 		}
@@ -479,7 +479,7 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 	INIT();
-	PDEBUG("TODO: proper gethostbyaddr hook\n");
+	PDEBUG1("TODO: proper gethostbyaddr hook\n");
 
 	static char buf[16];
 	static char ipv4[4];
