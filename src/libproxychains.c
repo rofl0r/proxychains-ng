@@ -45,6 +45,10 @@
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
 #define     MAX_CHAIN 512
 
+#if defined __GNUC_PREREQ && __GNUC_PREREQ(4, 7)
+# define HAVE_GCC_DIAGNOSTIC
+#endif
+
 close_t true_close;
 connect_t true_connect;
 gethostbyname_t true_gethostbyname;
@@ -336,7 +340,15 @@ static int is_v4inv6(const struct in6_addr *a) {
 	return a->s6_addr32[0] == 0 && a->s6_addr32[1] == 0 &&
 	       a->s6_addr16[4] == 0 && a->s6_addr16[5] == 0xffff;
 }
+
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 int connect(int sock, const struct sockaddr *addr, socklen_t len) {
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic pop
+#endif
 	INIT();
 	PFUNC();
 
@@ -517,8 +529,15 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 #   define MSG_FASTOPEN 0x20000000
 #endif
 
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 	       const struct sockaddr *dest_addr, socklen_t addrlen) {
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic pop
+#endif
 	INIT();
 	PFUNC();
 	if (flags & MSG_FASTOPEN) {
