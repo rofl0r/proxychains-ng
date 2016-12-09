@@ -289,7 +289,8 @@ void at_init(void) {
 void at_close(void) {
 	PFUNC();
 	const int msg = ATM_EXIT;
-	write(req_pipefd[1], &msg, sizeof(int));
+	if(write(req_pipefd[1], &msg, sizeof(int)) == -1)
+		perror("write"); // Just acknowledge the error.
 	pthread_join(allocator_thread, NULL);
 	close(req_pipefd[0]);
 	close(req_pipefd[1]);
