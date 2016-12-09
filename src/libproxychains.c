@@ -425,7 +425,7 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 
 void freeaddrinfo(struct addrinfo *res) {
 	INIT();
-	PDEBUG("freeaddrinfo %p \n", res);
+	PDEBUG("freeaddrinfo %p \n", (void *) res);
 
 	if(!proxychains_resolver)
 		true_freeaddrinfo(res);
