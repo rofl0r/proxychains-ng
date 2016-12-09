@@ -22,4 +22,10 @@ void DUMP_PROXY_CHAIN(proxy_data *pchain, unsigned int count) {
 	}
 }
 
+#else
+
+// Do not allow this translation unit to end up empty
+// for non-DEBUG builds, to satisfy ISO C standards.
+typedef int __appease_iso_compilers__;
+
 #endif
