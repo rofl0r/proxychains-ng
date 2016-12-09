@@ -35,7 +35,15 @@ void DUMP_PROXY_CHAIN(proxy_data *pchain, unsigned int count);
 #define PSTDERR1(msg) PSTDERR("%s", msg)
 #define PDEBUG1(msg) PDEBUG("%s", msg)
 
-# define PFUNC() do { PDEBUG("pid[%d]:%s\n", getpid(), __FUNCTION__); } while(0)
+#if !defined __STDC_VERSION__ || __STDC_VERSION__ < 199901L
+# if defined __GNUC__ && __GNUC__ >= 2
+#  define __func__ __FUNCTION__
+# else
+#  define __func__ "<unknown>"
+# endif
+#endif
+
+#define PFUNC() do { PDEBUG("pid[%d]:%s\n", getpid(), __func__); } while(0)
 
 #endif
 

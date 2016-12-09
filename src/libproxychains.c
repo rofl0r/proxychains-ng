@@ -91,7 +91,7 @@ static void* load_sym(char* symname, void* proxyfunc) {
 	return funcptr;
 }
 
-#define INIT() init_lib_wrapper(__FUNCTION__)
+#define INIT() init_lib_wrapper(__func__)
 
 #define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
 
@@ -135,7 +135,7 @@ static void init_lib_wrapper(const char* caller) {
 #ifndef DEBUG
 	(void) caller;
 #endif
-	if(!init_l) PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
+	if(!init_l) PDEBUG("%s called from %s\n", __func__,  caller);
 	pthread_once(&init_once, do_init);
 }
 
