@@ -45,7 +45,7 @@ ALL_CONFIGS = src/proxychains.conf
 
 -include config.mak
 
-CFLAGS+=$(USER_CFLAGS) $(MAC_CFLAGS)
+CFLAGS+=$(USER_CFLAGS) $(MAC_CFLAGS) -Wno-pedantic
 CFLAGS_MAIN=-DLIB_DIR=\"$(libdir)\" -DSYSCONFDIR=\"$(sysconfdir)\" -DDLL_NAME=\"$(LDSO_PATHNAME)\"
 
 
