@@ -244,7 +244,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			                ulen ? "Proxy-Authorization: Basic " : dst,
 			                dst, ulen ? "\r\n" : dst);
 
-			if(len != send(sock, buff, len, 0))
+			if(len < 0 || len != send(sock, buff, len, 0))
 				goto err;
 
 			len = 0;
