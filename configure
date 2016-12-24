@@ -146,10 +146,10 @@ check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
 '#include <stdio.h>\n#include<stdlib.h>\nint close(int x){exit(0);}int main(){fclose(stdin);return 1;}' && \
 OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 
-echo CC=$CC>config.mak
-[ -z "$CPPFLAGS" ] || echo CPPFLAGS=$CPPFLAGS>>config.mak
-[ -z "$CFLAGS" ] || echo USER_CFLAGS=$CFLAGS>>config.mak
-[ -z "$LDFLAGS" ] || echo USER_LDFLAGS=$LDFLAGS>>config.mak
+echo "CC=$CC">config.mak
+[ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
+[ -z "$CFLAGS" ] || echo "USER_CFLAGS=$CFLAGS">>config.mak
+[ -z "$LDFLAGS" ] || echo "USER_LDFLAGS=$LDFLAGS">>config.mak
 echo prefix=$prefix>>config.mak
 echo exec_prefix=$exec_prefix>>config.mak
 echo bindir=$bindir>>config.mak
