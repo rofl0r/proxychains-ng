@@ -176,24 +176,61 @@ static int wait_data(int readfd) {
 	return 1;
 }
 
+static int trywrite(int fd, void* buf, size_t bytes) {
+	ssize_t ret;
+	unsigned char *out = buf;
+again:
+	ret = write(fd, out, bytes);
+	switch(ret) {
+		case -1:
+			if(errno == EINTR) goto again;
+		case  0:
+			return 0;
+		default:
+			if(ret == bytes || !bytes) return 1;
+			out += ret;
+			bytes -= ret;
+			goto again;
+	}
+}
+
 static int sendmessage(enum at_direction dir, struct at_msghdr *hdr, void* data) {
 	static int* destfd[ATD_MAX] = { [ATD_SERVER] = &req_pipefd[1], [ATD_CLIENT] = &resp_pipefd[1] };
-	int ret = write(*destfd[dir], hdr, sizeof *hdr) == sizeof *hdr;
+	int ret = trywrite(*destfd[dir], hdr, sizeof *hdr);
 	if(ret && hdr->datalen) {
 		assert(hdr->datalen <= MSG_LEN_MAX);
-		ret = write(*destfd[dir], data, hdr->datalen) == hdr->datalen;
+		ret = trywrite(*destfd[dir], data, hdr->datalen);
 	}
 	return ret;
 }
 
+static int tryread(int fd, void* buf, size_t bytes) {
+	ssize_t ret;
+	unsigned char *out = buf;
+again:
+	ret = read(fd, out, bytes);
+	switch(ret) {
+		case -1:
+			if(errno == EINTR) goto again;
+		case  0:
+			return 0;
+		default:
+			if(ret == bytes || !bytes) return 1;
+			out += ret;
+			bytes -= ret;
+			goto again;
+	}
+}
+
 static int getmessage(enum at_direction dir, struct at_msghdr *hdr, void* data) {
 	static int* readfd[ATD_MAX] = { [ATD_SERVER] = &req_pipefd[0], [ATD_CLIENT] = &resp_pipefd[0] };
-	int ret;
+	ssize_t ret;
 	if((ret = wait_data(*readfd[dir]))) {
-		ret = read(*readfd[dir], hdr, sizeof *hdr) == sizeof(*hdr);
+		if(!tryread(*readfd[dir], hdr, sizeof *hdr))
+			return 0;
 		assert(hdr->datalen <= MSG_LEN_MAX);
-		if(ret && hdr->datalen) {
-			ret = read(*readfd[dir], data, hdr->datalen) == hdr->datalen;
+		if(hdr->datalen) {
+			ret = tryread(*readfd[dir], data, hdr->datalen);
 		}
 	}
 	return ret;
