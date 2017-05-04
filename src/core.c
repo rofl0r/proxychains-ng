@@ -700,8 +700,10 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	}
 
 	proxychains_write_log(TP " OK\n");
+	int flags = fcntl(sock, F_GETFL, 0);
 	dup2(ns, sock);
 	close(ns);
+	fcntl(sock, F_SETFL, flags);
 	return 0;
 	error:
 	if(ns != -1)
