@@ -154,10 +154,19 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 
 	pfd[0].fd = sock;
 	pfd[0].events = POLLOUT;
-	fcntl(sock, F_SETFL, O_NONBLOCK);
+	int flags = fcntl(sock, F_GETFL, 0);
+	/* put socket temporarily into nonblocking mode so we can enforce
+	 * the timeout. */
+	if(!(flags & O_NONBLOCK))
+		fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 	ret = true_connect(sock, addr, len);
 	PDEBUG("\nconnect ret=%d\n", ret);
-	
+
+	/* if the socket was already non-blocking, we assume the app takes
+	 * care of handling the timeouts itself. */
+	if(flags & O_NONBLOCK)
+		return ret;
+
 	if(ret == -1 && errno == EINPROGRESS) {
 		ret = poll_retry(pfd, 1, tcp_connect_time_out);
 		PDEBUG("\npoll ret=%d\n", ret);
@@ -181,7 +190,7 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 			ret = -1;
 	}
 
-	fcntl(sock, F_SETFL, !O_NONBLOCK);
+	fcntl(sock, F_SETFL, flags);
 	return ret;
 }
 
