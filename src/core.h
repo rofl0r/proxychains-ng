@@ -28,6 +28,16 @@
 
 #include "ip_type.h"
 
+#if defined(__APPLE__) || defined(__darwin__)
+/* OSX don't define these. */
+#ifndef s6_addr16
+#define s6_addr16 __u6_addr.__u6_addr16
+#endif
+#ifndef s6_addr32
+#define s6_addr32 __u6_addr.__u6_addr32
+#endif
+#endif
+
 /*error codes*/
 typedef enum {
 	SUCCESS=0,
