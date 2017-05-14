@@ -112,8 +112,8 @@ void proxychains_write_log(char *str, ...) {
 		va_start(arglist, str);
 		vsnprintf(buff, sizeof(buff), str, arglist);
 		va_end(arglist);
-		fprintf(stderr, "%s", buff);
-		fflush(stderr);
+		fprintf(stdout, "%s", buff);
+		fflush(stdout);
 	}
 }
 
