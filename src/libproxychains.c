@@ -45,6 +45,10 @@
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
 #define     MAX_CHAIN 512
 
+#if defined __GNUC_PREREQ && __GNUC_PREREQ(4, 7)
+# define HAVE_GCC_DIAGNOSTIC
+#endif
+
 close_t true_close;
 connect_t true_connect;
 gethostbyname_t true_gethostbyname;
@@ -74,26 +78,30 @@ static int init_l = 0;
 
 static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
 
-static void* load_sym(char* symname, void* proxyfunc) {
+typedef void (*func_t)(void);
 
-	void *funcptr = dlsym(RTLD_NEXT, symname);
+static func_t load_sym(const char* symname, func_t proxyfunc) {
+
+	func_t funcptr = NULL;
+	*(void **) (&funcptr) = dlsym(RTLD_NEXT, symname);
 
 	if(!funcptr) {
 		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
 		exit(1);
 	} else {
-		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, funcptr, proxyfunc);
+		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n",
+		       symname, *(void **) (&funcptr), *(void **) (&proxyfunc));
 	}
 	if(funcptr == proxyfunc) {
-		PDEBUG("circular reference detected, aborting!\n");
+		PDEBUG1("circular reference detected, aborting!\n");
 		abort();
 	}
 	return funcptr;
 }
 
-#define INIT() init_lib_wrapper(__FUNCTION__)
+#define INIT() init_lib_wrapper(__func__)
 
-#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
+#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = (X ## _t) load_sym( # X, (func_t) X ); } while(0)
 
 #include "allocator_thread.h"
 
@@ -135,7 +143,7 @@ static void init_lib_wrapper(const char* caller) {
 #ifndef DEBUG
 	(void) caller;
 #endif
-	if(!init_l) PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
+	if(!init_l) PDEBUG("%s called from %s\n", __func__,  caller);
 	pthread_once(&init_once, do_init);
 }
 
@@ -332,7 +340,15 @@ static int is_v4inv6(const struct in6_addr *a) {
 	return a->s6_addr32[0] == 0 && a->s6_addr32[1] == 0 &&
 	       a->s6_addr16[4] == 0 && a->s6_addr16[5] == 0xffff;
 }
-int connect(int sock, const struct sockaddr *addr, unsigned int len) {
+
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+int connect(int sock, const struct sockaddr *addr, socklen_t len) {
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic pop
+#endif
 	INIT();
 	PFUNC();
 
@@ -377,7 +393,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
 		   == (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr)) {
 			if(!localnet_addr[i].port || localnet_addr[i].port == port) {
-				PDEBUG("accessing localnet using true_connect\n");
+				PDEBUG1("accessing localnet using true_connect\n");
 				return true_connect(sock, addr, len);
 			}
 		}
@@ -479,7 +495,7 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 	INIT();
-	PDEBUG("TODO: proper gethostbyaddr hook\n");
+	PDEBUG1("TODO: proper gethostbyaddr hook\n");
 
 	static char buf[16];
 	static char ipv4[4];
@@ -513,8 +529,15 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 #   define MSG_FASTOPEN 0x20000000
 #endif
 
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
 	       const struct sockaddr *dest_addr, socklen_t addrlen) {
+#if defined HAVE_GCC_DIAGNOSTIC
+# pragma GCC diagnostic pop
+#endif
 	INIT();
 	PFUNC();
 	if (flags & MSG_FASTOPEN) {
