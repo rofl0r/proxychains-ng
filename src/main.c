@@ -97,7 +97,7 @@ int main(int argc, char *argv[]) {
 	path = get_config_path(path, pbuf, sizeof(pbuf));
 
 	if(!quiet)
-		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
+		fprintf(stdout, LOG_PREFIX "config file found: %s\n", path);
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 	if(!quiet)
-		fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
+		fprintf(stdout, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
 
 #ifdef IS_MAC
 	putenv("DYLD_FORCE_FLAT_NAMESPACE=1");
