@@ -191,7 +191,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				pd[count].ps = PLAY_STATE;
 				port_n = 0;
 
-				int ret = sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
+				int ret = sscanf(buff, "%1023s %1023s %d %255s %255s", type, host, &port_n, pd[count].user, pd[count].pass);
 				if(ret < 3 || ret == EOF) {
 					inv:
 					fprintf(stderr, "error: invalid item in proxylist section: %s", buff);
@@ -230,18 +230,18 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				} else if(strstr(buff, "round_robin_chain")) {
 					*ct = ROUND_ROBIN_TYPE;
 				} else if(strstr(buff, "tcp_read_time_out")) {
-					sscanf(buff, "%s %d", user, &tcp_read_time_out);
+					sscanf(buff, "%1023s %d", user, &tcp_read_time_out);
 				} else if(strstr(buff, "tcp_connect_time_out")) {
-					sscanf(buff, "%s %d", user, &tcp_connect_time_out);
+					sscanf(buff, "%1023s %d", user, &tcp_connect_time_out);
 				} else if(strstr(buff, "remote_dns_subnet")) {
-					sscanf(buff, "%s %u", user, &remote_dns_subnet);
+					sscanf(buff, "%1023s %u", user, &remote_dns_subnet);
 					if(remote_dns_subnet >= 256) {
 						fprintf(stderr,
 							"remote_dns_subnet: invalid value. requires a number between 0 and 255.\n");
 						exit(1);
 					}
 				} else if(strstr(buff, "localnet")) {
-					if(sscanf(buff, "%s %21[^/]/%15s", user, local_in_addr_port, local_netmask) < 3) {
+					if(sscanf(buff, "%1023s %21[^/]/%15s", user, local_in_addr_port, local_netmask) < 3) {
 						fprintf(stderr, "localnet format error");
 						exit(1);
 					}
