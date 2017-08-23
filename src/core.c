@@ -830,7 +830,10 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	if(node && !inet_aton(node, &((struct sockaddr_in *) &space->sockaddr_space)->sin_addr)) {
 		/* some folks (nmap) use getaddrinfo() with AI_NUMERICHOST to check whether a string
 		   containing a numeric ip was passed. we must return failure in that case. */
-		if(hints && (hints->ai_flags & AI_NUMERICHOST)) return EAI_NONAME;
+		if(hints && (hints->ai_flags & AI_NUMERICHOST)) {
+			free(space);
+			return EAI_NONAME;
+		}
 		hp = proxy_gethostbyname(node, &ghdata);
 		if(hp)
 			memcpy(&((struct sockaddr_in *) &space->sockaddr_space)->sin_addr,
