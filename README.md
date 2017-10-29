@@ -18,7 +18,7 @@ iptables based solution instead; this is much more robust.
 Supported Platforms: Linux, BSD, Mac.
 
 
-> ### Attentaion
+> ### Attention
 > 
 > this program can be used to circumvent censorship.
 > doing so can be VERY DANGEROUS in certain countries.
@@ -223,7 +223,7 @@ specified by proxychains.conf
 
 ### Community:
 
-> #proxychains on irc.freenode.net
+`#proxychains` on irc.freenode.net
 
 ### Donations:
 
