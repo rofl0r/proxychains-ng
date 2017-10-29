@@ -19,32 +19,33 @@ Supported Platforms: Linux, BSD, Mac.
 
 
 > ### Attentaion
-
+> 
 > this program can be used to circumvent censorship.
 > doing so can be VERY DANGEROUS in certain countries.
-
+> 
 > ALWAYS MAKE SURE THAT PROXYCHAINS WORKS AS EXPECTED BEFORE USING IT FOR ANYTHING SERIOUS.
-
+> 
 > this involves both the program and the proxy that you're going to use.
-
+> 
 > for example, you can connect to some "what is my ip" service like ifconfig.me to make sure that it's not using your real ip.
-
+> 
 > ONLY USE PROXYCHAINS IF YOU KNOW WHAT YOU'RE DOING.
-
+> 
 > THE AUTHORS AND MAINTAINERS OF PROXYCHAINS DO NOT TAKE ANY RESPONSIBILITY FOR ANY ABUSE OR MISUSE OF THIS SOFTWARE AND THE RESULTING CONSEQUENCES.
 
 ### Installation
 
+It needs a working C compiler, preferably gcc
 ```
-# needs a working C compiler, preferably gcc
 ./configure --prefix=/usr --sysconfdir=/etc
 make
 [optional] sudo make install
 [optional] sudo make install-config (installs proxychains.conf)
+```
 
 if you dont install, you can use proxychains from the build directory
-like this: ./proxychains4 -f src/proxychains.conf telnet google.com 80
-```
+like this: `./proxychains4 -f src/proxychains.conf telnet google.com 80`
+
 
 ### Changelog:
 
