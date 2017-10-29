@@ -18,20 +18,20 @@ iptables based solution instead; this is much more robust.
 Supported Platforms: Linux, BSD, Mac.
 
 
-> ### Attention
-> 
-> this program can be used to circumvent censorship.
-> doing so can be VERY DANGEROUS in certain countries.
-> 
-> ALWAYS MAKE SURE THAT PROXYCHAINS WORKS AS EXPECTED BEFORE USING IT FOR ANYTHING SERIOUS.
-> 
-> this involves both the program and the proxy that you're going to use.
-> 
-> for example, you can connect to some "what is my ip" service like ifconfig.me to make sure that it's not using your real ip.
-> 
-> ONLY USE PROXYCHAINS IF YOU KNOW WHAT YOU'RE DOING.
-> 
-> THE AUTHORS AND MAINTAINERS OF PROXYCHAINS DO NOT TAKE ANY RESPONSIBILITY FOR ANY ABUSE OR MISUSE OF THIS SOFTWARE AND THE RESULTING CONSEQUENCES.
+### Attention
+
+this program can be used to circumvent censorship.
+doing so can be VERY DANGEROUS in certain countries.
+
+__ALWAYS MAKE SURE THAT PROXYCHAINS WORKS AS EXPECTED BEFORE USING IT FOR ANYTHING SERIOUS.__
+
+this involves both the program and the proxy that you're going to use.
+ 
+for example, you can connect to some "what is my ip" service like ifconfig.me to make sure that it's not using your real ip.
+
+__ONLY USE PROXYCHAINS IF YOU KNOW WHAT YOU'RE DOING.__
+
+__THE AUTHORS AND MAINTAINERS OF PROXYCHAINS DO NOT TAKE ANY RESPONSIBILITY FOR ANY ABUSE OR MISUSE OF THIS SOFTWARE AND THE RESULTING CONSEQUENCES.__
 
 ### Installation
 
