@@ -1,3 +1,8 @@
+#undef _GNU_SOURCE
+#define _GNU_SOURCE
+#undef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#include <limits.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -151,7 +156,6 @@ struct at_msghdr {
 };
 
 static pthread_t allocator_thread;
-static pthread_attr_t allocator_thread_attr;
 int req_pipefd[2];
 int resp_pipefd[2];
 
@@ -309,6 +313,15 @@ static void initpipe(int* fds) {
 	}
 }
 
+#ifndef MAX
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#endif
+
+#if !defined(PTHREAD_STACK_MIN) || defined(__APPLE__)
+/* MAC says its min is 8KB, but then crashes in our face. thx hunkOLard */
+#define PTHREAD_STACK_MIN 64*1024
+#endif
+
 /* initialize with pointers to shared memory. these will
  * be used to place responses and arguments */
 void at_init(void) {
@@ -318,9 +331,11 @@ void at_init(void) {
 	memset(internal_ips, 0, sizeof *internal_ips);
 	initpipe(req_pipefd);
 	initpipe(resp_pipefd);
+	pthread_attr_t allocator_thread_attr;
 	pthread_attr_init(&allocator_thread_attr);
-	pthread_attr_setstacksize(&allocator_thread_attr, 16 * 1024);
+	pthread_attr_setstacksize(&allocator_thread_attr, MAX(16 * 1024, PTHREAD_STACK_MIN));
 	pthread_create(&allocator_thread, &allocator_thread_attr, threadfunc, 0);
+	pthread_attr_destroy(&allocator_thread_attr);
 }
 
 void at_close(void) {
@@ -332,6 +347,5 @@ void at_close(void) {
 	close(req_pipefd[1]);
 	close(resp_pipefd[0]);
 	close(resp_pipefd[1]);
-	pthread_attr_destroy(&allocator_thread_attr);
 	MUTEX_DESTROY(&internal_ips_lock);
 }
