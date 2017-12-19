@@ -289,6 +289,7 @@ ip_type4 at_get_ip_for_host(char* host, size_t len) {
 		inv:
 		readbuf = ip_type_invalid.addr.v4;
 	}
+	assert(msg.msgtype == ATM_GETIP);
 	MUTEX_UNLOCK(internal_ips_lock);
 	return readbuf;
 }
@@ -301,6 +302,7 @@ size_t at_get_host_for_ip(ip_type4 ip, char* readbuf) {
 		if((ptrdiff_t) msg.datalen <= 0) res = 0;
 		else res = msg.datalen - 1;
 	}
+	assert(msg.msgtype == ATM_GETNAME);
 	MUTEX_UNLOCK(internal_ips_lock);
 	return res;
 }
