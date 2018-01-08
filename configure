@@ -141,13 +141,19 @@ if [ -z "$CC" ] ; then
 	CC=cc
 fi
 
-check_compile 'whether netinet/in.h defines s6_addr16' "" \
-'#include <netinet/in.h>\nint main(int a, char**c){struct in6_addr x={.s6_addr32[0]=a};return x.s6_addr16[0]; }' \
-|| {
-check_compile 'whether netinet/in.h defines __u6_addr.__u6_addr16' \
-'-Ds6_addr16=__u6_addr.__u6_addr16 -Ds6_addr32=__u6_addr.__u6_addr32' \
-'#include <netinet/in.h>\nint main(int a, char**c){struct in6_addr x={.s6_addr32[0]=a};return x.s6_addr16[0]; }'
-}
+for i in 16 32; do
+	check_compile "whether netinet/in.h defines s6_addr$i" "" \
+	'#include <netinet/in.h>\nint main(int a, char**c){'"struct in6_addr x={.s6_addr$i[0]=a};return x.s6_addr$i[0];"' }' \
+	|| {
+		check_compile "whether netinet/in.h defines __u6_addr.__u6_addr$i" \
+		"-Ds6_addr$i=__u6_addr.__u6_addr$i" \
+		'#include <netinet/in.h>\nint main(int a, char**c){'"struct in6_addr x={.s6_addr$i[0]=a};return x.s6_addr$i[0];"' }' || \
+		check_compile "whether netinet/in.h defines _S6_un._S6_u$i" \
+		"-Ds6_addr$i=_S6_un._S6_u$i" \
+		'#include <netinet/in.h>\nint main(int a, char**c){'"struct in6_addr x={.s6_addr$i[0]=a};return x.s6_addr$i[0];"' }' || \
+		OUR_CPPFLAGS="$OUR_CPPFLAGS -DNO_S6_ADDR$i"
+	}
+done
 
 check_define __OpenBSD__ && \
 check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \

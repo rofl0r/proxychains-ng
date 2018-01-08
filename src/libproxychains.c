@@ -336,7 +336,7 @@ int close(int fd) {
 }
 static int is_v4inv6(const struct in6_addr *a) {
 	return a->s6_addr32[0] == 0 && a->s6_addr32[1] == 0 &&
-#ifdef IS_SOLARIS
+#ifdef NO_S6_ADDR16
 	       a->s6_addr[8] == 0 && a->s6_addr[9] == 0 && a->s6_addr[10] == 0xff && a->s6_addr[11] == 0xff;
 #else
 	       a->s6_addr16[4] == 0 && a->s6_addr16[5] == 0xffff;
