@@ -30,6 +30,7 @@ INC     =
 PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
 RANLIB  = $(CROSS_COMPILE)ranlib
+SOCKET_LIBS =
 
 LDSO_SUFFIX = so
 LD_SET_SONAME = -Wl,-soname=
@@ -82,7 +83,7 @@ src/version.o: src/version.h
 
 $(LDSO_PATHNAME): $(LOBJS)
 	$(CC) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) $(USER_LDFLAGS) \
-		-shared -o $@ $(LOBJS)
+		-shared -o $@ $(LOBJS) $(SOCKET_LIBS)
 
 $(ALL_TOOLS): $(OBJS)
 	$(CC) src/main.o src/common.o $(USER_LDFLAGS) -o $(PXCHAINS)

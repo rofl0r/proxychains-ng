@@ -188,6 +188,7 @@ elif issolaris; then
 		echo "NO_AS_NEEDED=" >> config.mak
 		echo "LD_SET_SONAME=-Wl,-h," >> config.mak
 	fi
+	echo "SOCKET_LIBS=-lsocket -lnsl" >> config.mak
 fi
 
 echo "Done, now run $make_cmd && $make_cmd install"
