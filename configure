@@ -34,7 +34,7 @@ issolaris() {
 	[ "`uname -s`" = SunOS ]
 }
 
-isgunld() {
+isgnuld() {
 	ld --version 2> /dev/null | grep -Fq GNU
 }
 
@@ -190,7 +190,7 @@ elif isbsd ; then
 	make_cmd=gmake
 elif issolaris; then
 	echo "CFLAGS+=-DIS_SOLARIS -D__EXTENSIONS__" >> config.mak
-	if ! isgunld; then
+	if ! isgnuld; then
 		echo "NO_AS_NEEDED=" >> config.mak
 		echo "LD_SET_SONAME=-Wl,-h," >> config.mak
 	fi
