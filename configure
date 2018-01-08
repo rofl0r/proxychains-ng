@@ -30,6 +30,10 @@ isopenbsd() {
 	uname -s | grep OpenBSD >/dev/null
 }
 
+issolaris() {
+	[ "`uname -s`" = SunOS ]
+}
+
 check_compile() {
 	printf "checking %s ... " "$1"
 	printf "$3" > "$tmpc"
@@ -174,6 +178,8 @@ elif isbsd ; then
 	echo "CFLAGS+=-DIS_BSD">>config.mak
 	isopenbsd && echo "CFLAGS+=-DIS_OPENBSD">>config.mak
 	make_cmd=gmake
+elif issolaris; then
+	echo "CFLAGS+=-DIS_SOLARIS -D__EXTENSIONS__" >> config.mak
 fi
 
 echo "Done, now run $make_cmd && $make_cmd install"

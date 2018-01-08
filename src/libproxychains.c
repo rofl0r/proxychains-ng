@@ -38,6 +38,12 @@
 #include "core.h"
 #include "common.h"
 
+#ifdef IS_SOLARIS
+#ifndef s6_addr32
+#define s6_addr32 _S6_un._S6_u32
+#endif
+#endif
+
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
 #define     SOCKADDR(x)     (satosin(x)->sin_addr.s_addr)
 #define     SOCKADDR_2(x)     (satosin(x)->sin_addr)
@@ -330,7 +336,11 @@ int close(int fd) {
 }
 static int is_v4inv6(const struct in6_addr *a) {
 	return a->s6_addr32[0] == 0 && a->s6_addr32[1] == 0 &&
+#ifdef IS_SOLARIS
+	       a->s6_addr[8] == 0 && a->s6_addr[9] == 0 && a->s6_addr[10] == 0xff && a->s6_addr[11] == 0xff;
+#else
 	       a->s6_addr16[4] == 0 && a->s6_addr16[5] == 0xffff;
+#endif
 }
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	INIT();

@@ -10,7 +10,11 @@
 #undef _POSIX_C_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #undef _XOPEN_SOURCE
+#ifdef IS_SOLARIS	/* Solaris doesn't recognize this macro greater than 600 */
+#define _XOPEN_SOURCE 600
+#else
 #define _XOPEN_SOURCE 700
+#endif
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
