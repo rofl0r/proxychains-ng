@@ -16,7 +16,8 @@ set +C
 trap 'rm "$tmpc"' EXIT INT QUIT TERM HUP
 
 isgnuld() {
-	ld --version 2> /dev/null | grep -Fq GNU
+	local ld="`$CC --print-prog-name=ld 2> /dev/null`" || return 1
+	[ -x "$ld" ] && "$ld" --version 2> /dev/null | grep -Fq GNU
 }
 
 check_compile() {
