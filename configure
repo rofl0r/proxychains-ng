@@ -169,8 +169,6 @@ check_define __sun && check_define __SVR4 && solaris_detected=true
 issolaris && for i in 700 600; do
 	check_compile_add_cppflag "whether _XOPEN_SOURCE=$i is suitable for C99 mode" "-D_XOPEN_SOURCE=$i" "#include <unistd.h>" && break
 done
-check_link "whether we can use -Wl,--no-as-needed" "-Wl,--no-as-needed" \
-"int main() { return 0; }" || echo NO_AS_NEEDED= >> config.mak
 
 echo "CC=$CC">config.mak
 [ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
@@ -184,6 +182,9 @@ echo includedir=$includedir>>config.mak
 echo sysconfdir=$sysconfdir>>config.mak
 [ "$ignore_cve" = "no" ] && echo "CPPFLAGS+= -DSUPER_SECURE">>config.mak
 [ -z "$OUR_CPPFLAGS" ] || echo "CPPFLAGS+= $OUR_CPPFLAGS" >>config.mak
+
+check_link "whether we can use -Wl,--no-as-needed" "-Wl,--no-as-needed" \
+"int main() { return 0; }" || echo NO_AS_NEEDED= >> config.mak
 
 LD_SONAME_FLAG=
 printf "checking what's the option to use in linker to set library name ... "
