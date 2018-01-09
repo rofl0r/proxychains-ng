@@ -2,6 +2,7 @@
 
 prefix=/usr/local
 OUR_CPPFLAGS=
+C99_CFLAGS="-std=c99"
 
 # Get a temporary filename
 i=0
@@ -14,11 +15,15 @@ done
 set +C
 trap 'rm "$tmpc"' EXIT INT QUIT TERM HUP
 
+isgnuld() {
+	ld --version 2> /dev/null | grep -Fq GNU
+}
+
 check_compile() {
 	printf "checking %s ... " "$1"
 	printf "$3" > "$tmpc"
 	local res=0
-	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
+	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $C99_CFLAGS $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	|| res=1
 	test x$res = x0 && \
 	{ printf "yes\n" ; test x"$2" = x || OUR_CPPFLAGS="$OUR_CPPFLAGS $2" ; } \
@@ -29,7 +34,7 @@ check_compile() {
 check_define() {
 	printf "checking whether \$CC defines %s ... " "$1"
 	local res=1
-	$CC $OUR_CPPFLAGS $CPPFLAGS $CFLAGS -dM -E - </dev/null | grep "$1" >/dev/null && res=0
+	$CC $OUR_CPPFLAGS $CPPFLAGS $C99_CFLAGS $CFLAGS -dM -E - </dev/null | grep "$1" >/dev/null && res=0
 	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
 }
@@ -38,7 +43,7 @@ check_compile_run() {
 	printf "checking %s ... " "$1"
 	printf "$2" > "$tmpc"
 	local res=0
-	$CC $OUR_CPPFLAGS $CPPFLAGS $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
+	$CC $OUR_CPPFLAGS $CPPFLAGS $C99_CFLAGS $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
 	|| res=1
 	test x$res = x0 && { "$tmpc".out || res=1 ; }
 	rm -f "$tmpc".out
@@ -130,7 +135,13 @@ mac_64=false
 ismac64() {
 	$mac_64
 }
+solaris_detected=false
+issolaris() {
+	$solaris_detected
+}
 
+check_compile "whether fine to define _GNU_SOURCE" "-D_GNU_SOURCE" \
+'#include <unistd.h>\nint main() { return 0; }'
 
 check_define __APPLE__ && {
 	mac_detected=true
@@ -144,6 +155,10 @@ check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
 '#include <stdio.h>\n#include<stdlib.h>\nint close(int x){exit(0);}int main(){fclose(stdin);return 1;}' && \
 OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 }
+check_define __sun && check_define __SVR4 && solaris_detected=true
+issolaris && for i in 700 600; do
+	check_compile "whether _XOPEN_SOURCE=$i is suitable for C99 mode" "-D_XOPEN_SOURCE=$i" "#include <unistd.h>" && break
+done
 
 echo "CC=$CC">config.mak
 [ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
@@ -172,6 +187,13 @@ elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
 	make_cmd=gmake
+elif issolaris; then
+	echo "CFLAGS+=-DIS_SOLARIS -D__EXTENSIONS__" >> config.mak
+	if ! isgnuld; then
+		echo "NO_AS_NEEDED=" >> config.mak
+		echo "LD_SET_SONAME=-Wl,-h," >> config.mak
+	fi
+	echo "SOCKET_LIBS=-lsocket -lnsl" >> config.mak
 fi
 
 echo "Done, now run $make_cmd && $make_cmd install"
