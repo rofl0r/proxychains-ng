@@ -49,7 +49,7 @@ check_compile_run() {
 	return $res
 }
 
-check_link_slient() {
+check_link_silent() {
 	printf "$2" > "$tmpc"
 	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $C99_CFLAGS $CFLAGS "$tmpc" -o /dev/null >/dev/null 2>&1
 }
@@ -57,7 +57,7 @@ check_link_slient() {
 check_link() {
 	printf "checking %s ... " "$1"
 	local res=0
-	check_link_slient "$2" "$3" || res=1
+	check_link_silent "$2" "$3" || res=1
 	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
 }
@@ -187,7 +187,7 @@ check_link "whether we can use -Wl,--no-as-needed" "-Wl,--no-as-needed" \
 LD_SONAME_FLAG=
 printf "checking what's the option to use in linker to set library name ... "
 for o in --soname -h -soname -install_name; do
-	check_link_slient "-shared -Wl,$o,libconftest.so" "void test_func(int a) {}" && LD_SONAME_FLAG=$o && break
+	check_link_silent "-shared -Wl,$o,libconftest.so" "void test_func(int a) {}" && LD_SONAME_FLAG=$o && break
 done
 if [ -z "$LD_SONAME_FLAG" ]; then
 	printf '\ncannot find an option to set library name\n'
