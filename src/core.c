@@ -787,8 +787,8 @@ void proxy_freeaddrinfo(struct addrinfo *res) {
 	free(res);
 }
 
-#if defined(IS_MAC) || defined(IS_OPENBSD)
-#ifdef IS_OPENBSD /* OpenBSD has its own incompatible getservbyname_r */
+#if defined(IS_MAC) || defined(IS_OPENBSD) || defined(IS_SOLARIS)
+#if defined(IS_OPENBSD) || defined(IS_SOLARIS) /* OpenBSD and Solaris has its own incompatible getservbyname_r */
 #define getservbyname_r mygetservbyname_r
 #endif
 /* getservbyname on mac is using thread local storage, so we dont need mutex 
