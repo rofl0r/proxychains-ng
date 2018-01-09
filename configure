@@ -1,7 +1,7 @@
 #!/bin/sh
 
 prefix=/usr/local
-OUR_CPPFLAGS=
+OUR_CPPFLAGS="-D_GNU_SOURCE"
 C99_CFLAGS="-std=c99"
 
 # Get a temporary filename
@@ -15,21 +15,18 @@ done
 set +C
 trap 'rm "$tmpc"' EXIT INT QUIT TERM HUP
 
-isgnuld() {
-	local ld="`$CC --print-prog-name=ld 2> /dev/null`" || return 1
-	[ -x "$ld" ] && "$ld" --version 2> /dev/null | grep -Fq GNU
-}
-
 check_compile() {
 	printf "checking %s ... " "$1"
-	printf "$3" > "$tmpc"
+	printf %s "$3" > "$tmpc"
 	local res=0
 	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $C99_CFLAGS $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	|| res=1
-	test x$res = x0 && \
-	{ printf "yes\n" ; test x"$2" = x || OUR_CPPFLAGS="$OUR_CPPFLAGS $2" ; } \
-	|| printf "no\n"
+	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
+}
+
+check_compile_add_cppflag() {
+	check_compile "$@" && OUR_CPPFLAGS="$OUR_CPPFLAGS $2"
 }
 
 check_define() {
@@ -42,12 +39,27 @@ check_define() {
 
 check_compile_run() {
 	printf "checking %s ... " "$1"
-	printf "$2" > "$tmpc"
+	printf %s "$2" > "$tmpc"
 	local res=0
 	$CC $OUR_CPPFLAGS $CPPFLAGS $C99_CFLAGS $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
 	|| res=1
 	test x$res = x0 && { "$tmpc".out || res=1 ; }
 	rm -f "$tmpc".out
+	test x$res = x0 && printf "yes\n" || printf "no\n"
+	return $res
+}
+
+check_link_slient() {
+	printf %s "$2" > "$tmpc"
+	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $C99_CFLAGS $CFLAGS "$tmpc" -o /dev/null >/dev/null 2>&1
+}
+
+check_link() {
+	printf "checking %s ... " "$1"
+	printf %s "$2" > "$tmpc"
+	local res=0
+	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $C99_CFLAGS $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
+	check_link_slient "$2" "$3" || res=1
 	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
 }
@@ -141,9 +153,6 @@ issolaris() {
 	$solaris_detected
 }
 
-check_compile "whether fine to define _GNU_SOURCE" "-D_GNU_SOURCE" \
-'#include <unistd.h>\nint main() { return 0; }'
-
 check_define __APPLE__ && {
 	mac_detected=true
 	check_define __x86_64__ && mac_64=true
@@ -158,8 +167,10 @@ OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 }
 check_define __sun && check_define __SVR4 && solaris_detected=true
 issolaris && for i in 700 600; do
-	check_compile "whether _XOPEN_SOURCE=$i is suitable for C99 mode" "-D_XOPEN_SOURCE=$i" "#include <unistd.h>" && break
+	check_compile_add_cppflag "whether _XOPEN_SOURCE=$i is suitable for C99 mode" "-D_XOPEN_SOURCE=$i" "#include <unistd.h>" && break
 done
+check_link "whether we can use -Wl,--no-as-needed" "-Wl,--no-as-needed" \
+"int main() { return 0; }" || echo NO_AS_NEEDED= >> config.mak
 
 echo "CC=$CC">config.mak
 [ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
@@ -173,9 +184,21 @@ echo includedir=$includedir>>config.mak
 echo sysconfdir=$sysconfdir>>config.mak
 [ "$ignore_cve" = "no" ] && echo "CPPFLAGS+= -DSUPER_SECURE">>config.mak
 [ -z "$OUR_CPPFLAGS" ] || echo "CPPFLAGS+= $OUR_CPPFLAGS" >>config.mak
+
+LD_SONAME_FLAG=
+printf "checking what's the option to use in linker to set library name ... "
+for o in --soname -h -soname -install_name; do
+	check_link_slient "-shared -Wl,$o,libconftest.so" "void test_func(int a) {}" && LD_SONAME_FLAG=$o && break
+done
+if [ -z "$LD_SONAME_FLAG" ]; then
+	printf '\ncannot find an option to set library name\n'
+	exit 1
+fi
+echo "$LD_SONAME_FLAG"
+echo "LD_SET_SONAME = -Wl,$LD_SONAME_FLAG," >> config.mak
+
 make_cmd=make
 if ismac ; then
-	echo NO_AS_NEEDED=>>config.mak
 	echo LDSO_SUFFIX=dylib>>config.mak
 	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
 	if ismac64 && [ "$fat_binary" = 1 ] ; then
@@ -183,17 +206,12 @@ if ismac ; then
 		echo MAC_CFLAGS+=-arch i386 -arch x86_64>>config.mak
 		echo LDFLAGS+=-arch i386 -arch x86_64>>config.mak
 	fi
-	echo LD_SET_SONAME=-Wl,-install_name,>>config.mak
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
 	make_cmd=gmake
 elif issolaris; then
 	echo "CFLAGS+=-DIS_SOLARIS -D__EXTENSIONS__" >> config.mak
-	if ! isgnuld; then
-		echo "NO_AS_NEEDED=" >> config.mak
-		echo "LD_SET_SONAME=-Wl,-h," >> config.mak
-	fi
 	echo "SOCKET_LIBS=-lsocket -lnsl" >> config.mak
 fi
 
