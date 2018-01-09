@@ -22,7 +22,7 @@ LOBJS = src/nameinfo.o src/version.o \
 
 GENH = src/version.h
 
-CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
+CFLAGS  += -Wall -O0 -g -std=c99 -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
 LIBDL   = -ldl
 LDFLAGS = -fPIC $(NO_AS_NEEDED) $(LIBDL) -lpthread

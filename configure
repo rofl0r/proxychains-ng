@@ -142,6 +142,9 @@ if [ -z "$CC" ] ; then
 	CC=cc
 fi
 
+check_compile "whether fine to define _GNU_SOURCE" "-D_GNU_SOURCE" \
+'#include <unistd.h>\nint main() { return 0; }'
+
 for i in 700 600; do
 	check_compile "whether _XOPEN_SOURCE=$i is suitable for C99 mode" "-D_XOPEN_SOURCE=$i" "#include <unistd.h>" && break
 done
