@@ -14,22 +14,6 @@ done
 set +C
 trap 'rm "$tmpc"' EXIT INT QUIT TERM HUP
 
-ismac() {
-	uname -s | grep Darwin >/dev/null
-}
-
-isx86_64() {
-	uname -m | grep -i X86_64 >/dev/null
-}
-
-isbsd() {
-	uname -s | grep BSD >/dev/null
-}
-
-isopenbsd() {
-	uname -s | grep OpenBSD >/dev/null
-}
-
 check_compile() {
 	printf "checking %s ... " "$1"
 	printf "$3" > "$tmpc"
@@ -73,7 +57,7 @@ usage() {
 	echo "--ignore-cve              default: no"
 	echo "	if set to yes ignores CVE-2015-3887 and makes it possible"
 	echo "	to preload from current dir (insecure)"
-	ismac && isx86_64 && echo "--fat-binary : build for both i386 and x86_64 architectures on 64-bit Macs"
+	echo "--fat-binary : build for both i386 and x86_64 architectures on 64-bit Macs"
 	echo "--help : show this text"
 	exit 1
 }
@@ -133,10 +117,33 @@ if [ -z "$CC" ] ; then
 	CC=cc
 fi
 
-check_define __OpenBSD__ && \
+
+bsd_detected=false
+isbsd() {
+	$bsd_detected
+}
+mac_detected=false
+ismac() {
+	$mac_detected
+}
+mac_64=false
+ismac64() {
+	$mac_64
+}
+
+
+check_define __APPLE__ && {
+	mac_detected=true
+	check_define __x86_64__ && mac_64=true
+}
+check_define __FreeBSD__ && bsd_detected=true
+check_define __OpenBSD__ && {
+bsd_detected=true
+echo "CFLAGS+=-DIS_OPENBSD">>config.mak
 check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
 '#include <stdio.h>\n#include<stdlib.h>\nint close(int x){exit(0);}int main(){fclose(stdin);return 1;}' && \
 OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
+}
 
 echo "CC=$CC">config.mak
 [ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
@@ -155,7 +162,7 @@ if ismac ; then
 	echo NO_AS_NEEDED=>>config.mak
 	echo LDSO_SUFFIX=dylib>>config.mak
 	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
-	if isx86_64 && [ "$fat_binary" = 1 ] ; then
+	if ismac64 && [ "$fat_binary" = 1 ] ; then
 		echo "Configuring a fat binary for i386 and x86_64"
 		echo MAC_CFLAGS+=-arch i386 -arch x86_64>>config.mak
 		echo LDFLAGS+=-arch i386 -arch x86_64>>config.mak
@@ -164,7 +171,6 @@ if ismac ; then
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
-	isopenbsd && echo "CFLAGS+=-DIS_OPENBSD">>config.mak
 	make_cmd=gmake
 fi
 
