@@ -329,8 +329,7 @@ int close(int fd) {
 	return -1;
 }
 static int is_v4inv6(const struct in6_addr *a) {
-	return a->s6_addr32[0] == 0 && a->s6_addr32[1] == 0 &&
-	       a->s6_addr16[4] == 0 && a->s6_addr16[5] == 0xffff;
+	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
 int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	INIT();
@@ -360,7 +359,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	           : ntohs(((struct sockaddr_in6 *) addr)->sin6_port);
 	struct in_addr v4inv6;
 	if(v6 && is_v4inv6(p_addr_in6)) {
-		memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr32[3], 4);
+		memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr[12], 4);
 		v6 = dest_ip.is_v6 = 0;
 		p_addr_in = &v4inv6;
 	}
@@ -455,7 +454,7 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 			unsigned scopeid = 0;
 			if(v6) {
 				if(is_v4inv6(&((struct sockaddr_in6*)sa)->sin6_addr)) {
-					memcpy(v4inv6buf, &((struct sockaddr_in6*)sa)->sin6_addr.s6_addr32[3], 4);
+					memcpy(v4inv6buf, &((struct sockaddr_in6*)sa)->sin6_addr.s6_addr[12], 4);
 					ip = v4inv6buf;
 					v6 = 0;
 				} else
