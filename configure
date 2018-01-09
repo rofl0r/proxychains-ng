@@ -57,7 +57,6 @@ check_link_slient() {
 check_link() {
 	printf "checking %s ... " "$1"
 	local res=0
-	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $C99_CFLAGS $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	check_link_slient "$2" "$3" || res=1
 	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
