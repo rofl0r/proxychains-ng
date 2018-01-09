@@ -17,7 +17,7 @@ trap 'rm "$tmpc"' EXIT INT QUIT TERM HUP
 
 check_compile() {
 	printf "checking %s ... " "$1"
-	printf %s "$3" > "$tmpc"
+	printf "$3" > "$tmpc"
 	local res=0
 	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $C99_CFLAGS $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	|| res=1
@@ -39,7 +39,7 @@ check_define() {
 
 check_compile_run() {
 	printf "checking %s ... " "$1"
-	printf %s "$2" > "$tmpc"
+	printf "$2" > "$tmpc"
 	local res=0
 	$CC $OUR_CPPFLAGS $CPPFLAGS $C99_CFLAGS $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
 	|| res=1
@@ -50,13 +50,13 @@ check_compile_run() {
 }
 
 check_link_slient() {
-	printf %s "$2" > "$tmpc"
+	printf "$2" > "$tmpc"
 	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $C99_CFLAGS $CFLAGS "$tmpc" -o /dev/null >/dev/null 2>&1
 }
 
 check_link() {
 	printf "checking %s ... " "$1"
-	printf %s "$2" > "$tmpc"
+	printf "$2" > "$tmpc"
 	local res=0
 	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $C99_CFLAGS $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	check_link_slient "$2" "$3" || res=1
