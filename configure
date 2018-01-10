@@ -164,8 +164,9 @@ check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
 OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 }
 check_define __sun && check_define __SVR4 && solaris_detected=true
-issolaris && for i in 700 600; do
-	check_compile_add_cppflag "whether _XOPEN_SOURCE=$i is suitable for C99 mode" "-D_XOPEN_SOURCE=$i" "#include <unistd.h>" && break
+issolaris && for i in 200809L 200112L; do
+	check_compile_add_cppflag "whether _POSIX_C_SOURCE=$i is suitable for C99 mode" "-DMAX_POSIX_VERSION=$i" \
+	'#define _POSIX_C_SOURCE MAX_POSIX_VERSION\n#include <unistd.h>' && break
 done
 
 echo "CC=$CC">config.mak

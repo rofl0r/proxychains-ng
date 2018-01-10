@@ -1,7 +1,8 @@
 #undef _GNU_SOURCE
 #define _GNU_SOURCE
-#undef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
+//#ifndef _POSIX_C_SOURCE
+//#define _POSIX_C_SOURCE MAX_POSIX_VERSION
+//#endif
 #define _DARWIN_C_SOURCE
 #include <limits.h>
 #include <pthread.h>
