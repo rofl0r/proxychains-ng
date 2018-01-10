@@ -46,6 +46,19 @@ check_compile_run() {
 	return $res
 }
 
+check_link_silent() {
+	printf "$2" > "$tmpc"
+	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $CFLAGS "$tmpc" -o /dev/null >/dev/null 2>&1
+}
+
+check_link() {
+	printf "checking %s ... " "$1"
+	local res=0
+	check_link_silent "$2" "$3" || res=1
+	test x$res = x0 && printf "yes\n" || printf "no\n"
+	return $res
+}
+
 usage() {
 	echo "supported arguments"
 	echo "--prefix=/path            default: $prefix"
@@ -130,7 +143,10 @@ mac_64=false
 ismac64() {
 	$mac_64
 }
-
+solaris_detected=false
+issolaris() {
+	$solaris_detected
+}
 
 check_define __APPLE__ && {
 	mac_detected=true
@@ -144,6 +160,7 @@ check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
 '#include <stdio.h>\n#include<stdlib.h>\nint close(int x){exit(0);}int main(){fclose(stdin);return 1;}' && \
 OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 }
+check_define __sun && check_define __SVR4 && solaris_detected=true
 
 echo "CC=$CC">config.mak
 [ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
@@ -157,9 +174,24 @@ echo includedir=$includedir>>config.mak
 echo sysconfdir=$sysconfdir>>config.mak
 [ "$ignore_cve" = "no" ] && echo "CPPFLAGS+= -DSUPER_SECURE">>config.mak
 [ -z "$OUR_CPPFLAGS" ] || echo "CPPFLAGS+= $OUR_CPPFLAGS" >>config.mak
+
+check_link "whether we can use -Wl,--no-as-needed" "-Wl,--no-as-needed" \
+"int main() { return 0; }" || echo NO_AS_NEEDED= >> config.mak
+
+LD_SONAME_FLAG=
+printf "checking what's the option to use in linker to set library name ... "
+for o in --soname -h -soname -install_name; do
+	check_link_silent "-shared -Wl,$o,libconftest.so" "void test_func(int a) {}" && LD_SONAME_FLAG=$o && break
+done
+if [ -z "$LD_SONAME_FLAG" ]; then
+	printf '\ncannot find an option to set library name\n'
+	exit 1
+fi
+echo "$LD_SONAME_FLAG"
+echo "LD_SET_SONAME = -Wl,$LD_SONAME_FLAG," >> config.mak
+
 make_cmd=make
 if ismac ; then
-	echo NO_AS_NEEDED=>>config.mak
 	echo LDSO_SUFFIX=dylib>>config.mak
 	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
 	if ismac64 && [ "$fat_binary" = 1 ] ; then
@@ -167,11 +199,13 @@ if ismac ; then
 		echo MAC_CFLAGS+=-arch i386 -arch x86_64>>config.mak
 		echo LDFLAGS+=-arch i386 -arch x86_64>>config.mak
 	fi
-	echo LD_SET_SONAME=-Wl,-install_name,>>config.mak
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
 	make_cmd=gmake
+elif issolaris; then
+	echo "CFLAGS+=-DIS_SOLARIS -D__EXTENSIONS__" >> config.mak
+	echo "SOCKET_LIBS=-lsocket -lnsl" >> config.mak
 fi
 
 echo "Done, now run $make_cmd && $make_cmd install"
