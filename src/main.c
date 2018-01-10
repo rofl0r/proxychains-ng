@@ -8,9 +8,9 @@
  ***************************************************************************/
 
 #undef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
+#define _POSIX_C_SOURCE 200112L
 #undef _XOPEN_SOURCE
-#define _XOPEN_SOURCE 700
+#define _XOPEN_SOURCE 600
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
