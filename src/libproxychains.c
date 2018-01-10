@@ -45,6 +45,12 @@
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
 #define     MAX_CHAIN 512
 
+#ifdef IS_SOLARIS
+#undef connect
+int __xnet_connect(int sock, const struct sockaddr *addr, unsigned int len);
+connect_t true___xnet_connect;
+#endif
+
 close_t true_close;
 connect_t true_connect;
 gethostbyname_t true_gethostbyname;
@@ -108,6 +114,9 @@ static void setup_hooks(void) {
 	SETUP_SYM(gethostbyaddr);
 	SETUP_SYM(getnameinfo);
 	SETUP_SYM(close);
+#ifdef IS_SOLARIS
+	SETUP_SYM(__xnet_connect);
+#endif
 }
 
 static int close_fds[16];
@@ -398,6 +407,12 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 		errno = ECONNREFUSED;
 	return ret;
 }
+
+#ifdef IS_SOLARIS
+int __xnet_connect(int sock, const struct sockaddr *addr, unsigned int len) {
+	return connect(sock, addr, len);
+}
+#endif
 
 static struct gethostbyname_data ghbndata;
 struct hostent *gethostbyname(const char *name) {
