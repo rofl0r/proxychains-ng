@@ -7,10 +7,12 @@
  *                                                                         *
  ***************************************************************************/
 
-#undef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200809L
-#undef _XOPEN_SOURCE
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE MAX_POSIX_VERSION
+#endif
+#ifndef IS_SOLARIS
 #define _XOPEN_SOURCE 700
+#endif
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
