@@ -350,8 +350,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 				if(2 != read_n_bytes(sock, in, 2))
 					goto err;
-				if(in[0] != 1 || in[1] != 0) {
-					if(in[0] != 1)
+				if(in[0] != 5 || in[1] != 0) {
+					if(in[0] != 5)
 						goto err;
 					else
 						return BLOCKED;
