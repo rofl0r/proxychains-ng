@@ -72,6 +72,9 @@ int main(int argc, char *argv[]) {
 	size_t i;
 	const char *prefix = NULL;
 
+	if(argc == 2 && !strcmp(argv[1], "--help"))
+		return usage(argv);
+
 	for(i = 0; i < MAX_COMMANDLINE_FLAGS; i++) {
 		if(start_argv < argc && argv[start_argv][0] == '-') {
 			if(argv[start_argv][1] == 'q') {
