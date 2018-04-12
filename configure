@@ -130,6 +130,7 @@ if [ -z "$CC" ] ; then
 	CC=cc
 fi
 
+echo > config.mak
 
 bsd_detected=false
 isbsd() {
@@ -162,7 +163,7 @@ OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 }
 check_define __sun && check_define __SVR4 && solaris_detected=true
 
-echo "CC=$CC">config.mak
+echo "CC=$CC">>config.mak
 [ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
 [ -z "$CFLAGS" ] || echo "USER_CFLAGS=$CFLAGS">>config.mak
 [ -z "$LDFLAGS" ] || echo "USER_LDFLAGS=$LDFLAGS">>config.mak
