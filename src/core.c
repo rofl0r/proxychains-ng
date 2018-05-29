@@ -350,12 +350,15 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 				if(2 != read_n_bytes(sock, in, 2))
 					goto err;
-				if(in[0] != 5 || in[1] != 0) {
-					if(in[0] != 5)
-						goto err;
-					else
-						return BLOCKED;
-				}
+	/* according to RFC 1929 the version field for the user/pass auth sub-
+	   negotiation should be 1, which is kinda counter-intuitive, so there
+	   are some socks5 proxies that return 5 instead. other programs like
+	   curl work fine when the version is 5, so let's do the same and accept
+	   either of them. */
+				if(!(in[0] == 5 || in[0] == 1))
+					goto err;
+				if(in[1] != 0)
+					return BLOCKED;
 			}
 			int buff_iter = 0;
 			buff[buff_iter++] = 5;	// version
