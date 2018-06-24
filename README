@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.12 README
+ProxyChains-NG ver 4.13 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,12 @@ ProxyChains-NG ver 4.12 README
 
 Changelog:
 ----------
+Version 4.13
+- fix robustness of DNS lookup thread and a segfault
+- fix socks5 user/pass auth on non-conforming servers
+- fix memory leak
+- add support for Solaris
+
 Version 4.12
 - fix several build issues
   - for MAC
