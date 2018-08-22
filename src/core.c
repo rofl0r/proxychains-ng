@@ -617,6 +617,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
  					offset = 0;
 					looped++;
 					if (looped > rr_loop_max) {
+						proxychains_proxy_offset = 0;
 						goto error_more;
 					} else {
 						PDEBUG("rr_type all proxies down, release all\n");
@@ -625,12 +626,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 						usleep(10000 * looped);
 						continue;
 					}
-				} else if (looped && rc > 0 && offset >= curr_pos) {
- 					PDEBUG("GOTO MORE PROXIES 0\n");
-					/* We've gone back to the start and now past our starting position */
-					proxychains_proxy_offset = 0;
- 					goto error_more;
- 				}
+				}
  				PDEBUG("2:rr_offset = %d\n", offset);
  				rc=start_chain(&ns, p1, RRT);
 			}
