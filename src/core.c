@@ -569,6 +569,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	unsigned int curr_len = 0;
 	unsigned int curr_pos = 0;
 	unsigned int looped = 0; // went back to start of list in RR mode
+	int rr_loop_max = 14;
 
 	p3 = &p4;
 
@@ -615,13 +616,17 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 					/* We've reached the end of the list, go to the start */
  					offset = 0;
 					looped++;
-					continue;
-				} else if (looped && rc > 0 && offset >= curr_pos) {
- 					PDEBUG("GOTO MORE PROXIES 0\n");
-					/* We've gone back to the start and now past our starting position */
-					proxychains_proxy_offset = 0;
- 					goto error_more;
- 				}
+					if (looped > rr_loop_max) {
+						proxychains_proxy_offset = 0;
+						goto error_more;
+					} else {
+						PDEBUG("rr_type all proxies down, release all\n");
+						release_all(pd, proxy_count);
+						/* Each loop we wait 10ms more */
+						usleep(10000 * looped);
+						continue;
+					}
+				}
  				PDEBUG("2:rr_offset = %d\n", offset);
  				rc=start_chain(&ns, p1, RRT);
 			}
