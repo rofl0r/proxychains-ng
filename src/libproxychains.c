@@ -73,6 +73,7 @@ int proxychains_resolver = 0;
 localaddr_arg localnet_addr[MAX_LOCALNET];
 size_t num_localnet_addr = 0;
 unsigned int remote_dns_subnet = 224;
+unsigned int proxychains_max_retry = 14;
 
 pthread_once_t init_once = PTHREAD_ONCE_INIT;
 
@@ -399,6 +400,16 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					}
 					len = atoi(++pc);
 					proxychains_max_chain = (len ? len : 1);
+				} else if(strstr(buff, "max_retry")) {
+					char *pc;
+					int len;
+					pc = strchr(buff, '=');
+					if(!pc) {
+						fprintf(stderr, "error: missing equals sign '=' in max_retry directive.\n");
+						exit(1);
+					}
+					len = atoi(++pc);
+					proxychains_max_retry = (len >= 0 ? len : proxychains_max_retry);
 				} else if(strstr(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
 				} else if(strstr(buff, "proxy_dns")) {
@@ -499,7 +510,8 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	ret = connect_proxy_chain(sock,
 				  dest_ip,
 				  htons(port),
-				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
+				  proxychains_pd, proxychains_proxy_count, proxychains_ct,
+				  proxychains_max_chain, proxychains_max_retry);
 
 	fcntl(sock, F_SETFL, flags);
 	if(ret != SUCCESS)

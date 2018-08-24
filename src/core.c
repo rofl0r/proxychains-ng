@@ -559,7 +559,8 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 
 int connect_proxy_chain(int sock, ip_type target_ip,
 			unsigned short target_port, proxy_data * pd,
-			unsigned int proxy_count, chain_type ct, unsigned int max_chain) {
+			unsigned int proxy_count, chain_type ct, unsigned int max_chain,
+			unsigned int max_retry) {
 	proxy_data p4;
 	proxy_data *p1, *p2, *p3;
 	int ns = -1;
@@ -567,9 +568,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	unsigned int offset = 0;
 	unsigned int alive_count = 0;
 	unsigned int curr_len = 0;
-	unsigned int curr_pos = 0;
 	unsigned int looped = 0; // went back to start of list in RR mode
-	int rr_loop_max = 14;
 
 	p3 = &p4;
 
@@ -606,17 +605,17 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 		case ROUND_ROBIN_TYPE:
 			alive_count = calc_alive(pd, proxy_count);
-			curr_pos = offset = proxychains_proxy_offset;
+			offset = proxychains_proxy_offset;
 			if(alive_count < max_chain)
 				goto error_more;
-                        PDEBUG("1:rr_offset = %d, curr_pos = %d\n", offset, curr_pos);
+			PDEBUG("1:rr_offset = %d\n", offset);
 			/* Check from current RR offset til end */
 			for (;rc != SUCCESS;) {
 				if (!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
 					/* We've reached the end of the list, go to the start */
  					offset = 0;
 					looped++;
-					if (looped > rr_loop_max) {
+					if (looped > max_retry) {
 						proxychains_proxy_offset = 0;
 						goto error_more;
 					} else {
