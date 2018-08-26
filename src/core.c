@@ -567,9 +567,8 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	unsigned int offset = 0;
 	unsigned int alive_count = 0;
 	unsigned int curr_len = 0;
-	unsigned int curr_pos = 0;
 	unsigned int looped = 0; // went back to start of list in RR mode
-	int rr_loop_max = 14;
+	unsigned int rr_loop_max = 14;
 
 	p3 = &p4;
 
@@ -606,10 +605,10 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 		case ROUND_ROBIN_TYPE:
 			alive_count = calc_alive(pd, proxy_count);
-			curr_pos = offset = proxychains_proxy_offset;
+			offset = proxychains_proxy_offset;
 			if(alive_count < max_chain)
 				goto error_more;
-                        PDEBUG("1:rr_offset = %d, curr_pos = %d\n", offset, curr_pos);
+			PDEBUG("1:rr_offset = %d\n", offset);
 			/* Check from current RR offset til end */
 			for (;rc != SUCCESS;) {
 				if (!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
