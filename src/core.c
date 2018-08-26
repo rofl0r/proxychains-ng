@@ -608,7 +608,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			offset = proxychains_proxy_offset;
 			if(alive_count < max_chain)
 				goto error_more;
-				PDEBUG("1:rr_offset = %d\n", offset);
+			PDEBUG("1:rr_offset = %d\n", offset);
 			/* Check from current RR offset til end */
 			for (;rc != SUCCESS;) {
 				if (!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
