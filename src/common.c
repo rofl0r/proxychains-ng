@@ -1,4 +1,5 @@
 #include "common.h"
+#include "debug.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -94,5 +95,11 @@ char *get_config_path(char* default_path, char* pbuf, size_t bufsize) {
 
 	return NULL;
 	have:
+	if(path[0] != '/') {
+		path = realpath(path, NULL);
+		setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
+		free(path);
+		path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
+	}
 	return path;
 }
