@@ -4,7 +4,7 @@
 #ifdef DEBUG
 # include <stdio.h>
 # define PSTDERR(fmt, args...) do { dprintf(2,fmt, ## args); } while(0)
-# define PDEBUG(fmt, args...) PSTDERR("DEBUG:"fmt, ## args)
+# define PDEBUG(fmt, args...) PSTDERR("DEBUG:pid[%d]:"fmt, getpid(), ## args)
 # define DEBUGDECL(args...) args
 
 # include "core.h"
