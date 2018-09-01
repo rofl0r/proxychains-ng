@@ -131,6 +131,14 @@ int main(int argc, char *argv[]) {
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
 
+	snprintf(path=pbuf, sizeof(pbuf), "%s/%s", prefix, dll_name);
+	if (path[0] != '/'){
+		path = realpath(path, NULL);
+		snprintf(pbuf, sizeof(pbuf), "%s", path);
+		free(path);
+		path = pbuf;
+	}
+
 #ifdef IS_MAC
 	putenv("DYLD_FORCE_FLAT_NAMESPACE=1");
 #define LD_PRELOAD_ENV "DYLD_INSERT_LIBRARIES"
@@ -143,8 +151,8 @@ int main(int argc, char *argv[]) {
 #define LD_PRELOAD_SEP " "
 #endif
 	char *old_val = getenv(LD_PRELOAD_ENV);
-	snprintf(buf, sizeof(buf), LD_PRELOAD_ENV "=%s/%s%s%s",
-	         prefix, dll_name,
+	snprintf(buf, sizeof(buf), LD_PRELOAD_ENV "=%s%s%s",
+	         path,
 	         /* append previous LD_PRELOAD content, if existent */
 	         old_val ? LD_PRELOAD_SEP : "",
 	         old_val ? old_val : "");
