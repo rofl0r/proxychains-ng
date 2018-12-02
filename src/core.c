@@ -38,6 +38,7 @@
 #include "core.h"
 #include "common.h"
 #include "allocator_thread.h"
+#include "mutex.h"
 
 extern int tcp_read_time_out;
 extern int tcp_connect_time_out;
@@ -728,10 +729,13 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	return -1;
 }
 
+static pthread_mutex_t servbyname_lock;
 void core_initialize(void) {
+	MUTEX_INIT(&servbyname_lock);
 }
 
 void core_unload(void) {
+	MUTEX_DESTROY(&servbyname_lock);
 }
 
 static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* name) {
@@ -794,18 +798,17 @@ void proxy_freeaddrinfo(struct addrinfo *res) {
 	free(res);
 }
 
-#if defined(IS_MAC) || defined(IS_OPENBSD) || defined(IS_SOLARIS)
-#if defined(IS_OPENBSD) || defined(IS_SOLARIS) /* OpenBSD and Solaris has its own incompatible getservbyname_r */
-#define getservbyname_r mygetservbyname_r
-#endif
-/* getservbyname on mac is using thread local storage, so we dont need mutex 
-   TODO: check if the same applies to OpenBSD */
-static int getservbyname_r(const char* name, const char* proto, struct servent* result_buf, 
+static int mygetservbyname_r(const char* name, const char* proto, struct servent* result_buf,
 			   char* buf, size_t buflen, struct servent** result) {
 	PFUNC();
+#ifdef HAVE_GNU_GETSERVBYNAME_R
+	PDEBUG("using host getservbyname_r\n");
+	return getservbyname_r(name, proto, result_buf, buf, buflen, result);
+#endif
 	struct servent *res;
 	int ret;
 	(void) buf; (void) buflen;
+	MUTEX_LOCK(&servbyname_lock);
 	res = getservbyname(name, proto);
 	if(res) {
 		*result_buf = *res;
@@ -815,9 +818,9 @@ static int getservbyname_r(const char* name, const char* proto, struct servent* 
 		*result = NULL;
 		ret = ENOENT;
 	}
+	MUTEX_UNLOCK(&servbyname_lock);
 	return ret;
 }
-#endif
 
 int proxy_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	struct gethostbyname_data ghdata;
@@ -848,7 +851,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 		else
 			goto err2;
 	}
-	if(service) getservbyname_r(service, NULL, &se_buf, buf, sizeof(buf), &se);
+	if(service) mygetservbyname_r(service, NULL, &se_buf, buf, sizeof(buf), &se);
 
 	port = se ? se->s_port : htons(atoi(service ? service : "0"));
 	((struct sockaddr_in *) &space->sockaddr_space)->sin_port = port;

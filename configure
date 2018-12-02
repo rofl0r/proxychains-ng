@@ -149,6 +149,9 @@ issolaris() {
 	$solaris_detected
 }
 
+check_compile 'whether we have GNU-style getservbyname_r()' "-DHAVE_GNU_GETSERVBYNAME_R" \
+'#define _GNU_SOURCE\n#include <netdb.h>\nint main() {\nstruct servent *se = 0;struct servent se_buf;char buf[1024];\ngetservbyname_r("foo", (void*) 0, &se_buf, buf, sizeof(buf), &se);\nreturn 0;}'
+
 check_define __APPLE__ && {
 	mac_detected=true
 	check_define __x86_64__ && mac_64=true
