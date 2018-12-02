@@ -416,6 +416,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	}
 	*proxy_count = count;
 	proxychains_got_chain_data = 1;
+	PDEBUG("proxy_dns: %s\n", proxychains_resolver ? "ON" : "OFF");
 }
 
 /*******  HOOK FUNCTIONS  *******/
