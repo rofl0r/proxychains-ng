@@ -8,13 +8,13 @@
 #define   NI_MAXHOST 1025
 #endif
 
-int main(void) {
+static int doit(const char* host, const char* service) {
 	struct addrinfo *result;
 	struct addrinfo *res;
 	int error;
 
 	/* resolve the domain name into a list of addresses */
-	error = getaddrinfo("www.example.com", NULL, NULL, &result);
+	error = getaddrinfo(host, service, NULL, &result);
 	if (error != 0)
 	{
 		fprintf(stderr, "error in getaddrinfo: %s\n", gai_strerror(error));
@@ -38,4 +38,11 @@ int main(void) {
 
 	freeaddrinfo(result);
 	return EXIT_SUCCESS;
+}
+
+int main(void) {
+	int ret;
+	ret = doit("www.example.com", NULL);
+	ret = doit("www.example.com", "80");
+	return ret;
 }
