@@ -309,7 +309,18 @@ size_t at_get_host_for_ip(ip_type4 ip, char* readbuf) {
 
 
 static void initpipe(int* fds) {
-	if(pipe(fds) == -1) {
+	int retval;
+
+#ifdef HAVE_PIPE2
+	retval = pipe2(fds, O_CLOEXEC);
+#else
+	retval = pipe(fds);
+	if(retval == 0) {
+		fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+		fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+	}
+#endif
+	if(retval == -1) {
 		perror("pipe");
 		exit(1);
 	}
