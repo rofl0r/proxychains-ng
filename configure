@@ -18,7 +18,7 @@ check_compile() {
 	printf "checking %s ... " "$1"
 	printf "$3" > "$tmpc"
 	local res=0
-	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $CFLAGS -c "$tmpc" -o /dev/null >/dev/null 2>&1 \
+	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $CFLAGS "$tmpc" -o /dev/null >/dev/null 2>&1 \
 	|| res=1
 	test x$res = x0 && \
 	{ printf "yes\n" ; test x"$2" = x || OUR_CPPFLAGS="$OUR_CPPFLAGS $2" ; } \
