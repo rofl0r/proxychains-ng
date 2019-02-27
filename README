@@ -202,6 +202,12 @@ Usage Example:
 in this example it will resolve targethost.com through proxy(or chained proxies)
 specified by proxychains.conf
 
+Usage Example:
+    $ PROXYCHAINS_ONE_PROXY="socks4 127.0.0.1 9050" proxychains telnet targethost.com
+
+in this example it will using only proxy from envirmoment variable PROXYCHAINS_ONE_PROXY
+and ignore proxy list from config file
+
 Known Problems:
 ---------------
 - newer versions of nmap try to determine the network interface to use
