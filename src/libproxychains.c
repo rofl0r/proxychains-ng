@@ -472,6 +472,10 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 		v6 = dest_ip.is_v6 = 0;
 		p_addr_in = &v4inv6;
 	}
+	if(!v6 && !memcmp(p_addr_in, "\0\0\0\0", 4)) {
+		errno = ECONNREFUSED;
+		return -1;
+	}
 
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
