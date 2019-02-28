@@ -107,7 +107,7 @@ static void encode_base_64(char *src, char *dest, int max_len) {
 }
 
 void proxychains_write_log(char *str, ...) {
-	char buff[1024*20];
+	char buff[1024*4];
 	va_list arglist;
 	if(!proxychains_quiet_mode) {
 		va_start(arglist, str);
