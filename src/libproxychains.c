@@ -256,6 +256,10 @@ inv_string:
 	return 0;
 }
 
+static const char* bool_str(int bool_val) {
+	if(bool_val) return "true";
+	return "false";
+}
 
 /* get configuration from config file */
 static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
@@ -311,8 +315,20 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				pd[count].port = htons((unsigned short) port_n);
 				ip_type* host_ip = &pd[count].ip;
 				if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
-					fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
-					exit(1);
+					if(*ct == STRICT_TYPE && proxychains_resolver && count > 0) {
+						/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
+						ip_type4 internal_ip = at_get_ip_for_host(host, strlen(host));
+						pd[count].ip.is_v6 = 0;
+						host_ip->addr.v4 = internal_ip;
+						if(internal_ip.as_int == ip_type_invalid.addr.v4.as_int)
+							goto inv_host;
+					} else {
+inv_host:
+						fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
+						fprintf(stderr, "non-numeric ips are only allowed under the following circumstances:\n");
+						fprintf(stderr, "chaintype == strict (%s), proxy is not first in list (%s), proxy_dns active (%s)\n\n", bool_str(*ct == STRICT_TYPE), bool_str(count > 0), bool_str(proxychains_resolver));
+						exit(1);
+					}
 				}
 
 				if(!strcmp(type, "http")) {
