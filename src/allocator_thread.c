@@ -116,9 +116,9 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 
 	internal_ips->list[internal_ips->counter] = new_mem;
 	internal_ips->list[internal_ips->counter]->hash = hash;
-	
+
 	new_mem = dumpstring((char*) name, len + 1);
-	
+
 	if(!new_mem) {
 		internal_ips->list[internal_ips->counter] = 0;
 		goto oom;
@@ -131,7 +131,7 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 
 	return res;
 	err_plus_unlock:
-	
+
 	PDEBUG("return err\n");
 	return ip_type_invalid.addr.v4;
 }
@@ -244,7 +244,7 @@ static void* threadfunc(void* x) {
 	(void) x;
 	int ret;
 	struct at_msghdr msg;
-	union { 
+	union {
 		char host[MSG_LEN_MAX];
 		ip_type4 ip;
 	} readbuf;
