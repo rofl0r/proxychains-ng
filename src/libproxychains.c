@@ -78,7 +78,7 @@ pthread_once_t init_once = PTHREAD_ONCE_INIT;
 
 static int init_l = 0;
 
-static inline void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
+static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
 
 static void* load_sym(char* symname, void* proxyfunc) {
 
