@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.13 README
+ProxyChains-NG ver 4.14 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,14 @@ ProxyChains-NG ver 4.13 README
 
 Changelog:
 ----------
+Version 4.14
+- allow alternative proto://user:pass@ip:port syntax for proxylist
+- fix endless loop in round robin mode when all proxies are down (#147)
+- fix compilation on android (#265)
+- fix fd leak in forked processes (#273)
+- skip connection attempt to nullrouted ips
+- allow hostnames for proxylist under specific circumstances
+
 Version 4.13
 - fix robustness of DNS lookup thread and a segfault
 - fix socks5 user/pass auth on non-conforming servers
