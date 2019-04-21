@@ -208,7 +208,7 @@ static int proxy_from_string(const char *proxystring,
 	   proxystring[next_token++] != ':' ||
 	   proxystring[next_token++] != '/' ||
 	   proxystring[next_token++] != '/') goto inv_string;
-	const char *at = strchr(proxystring+next_token, '@');
+	const char *at = strrchr(proxystring+next_token, '@');
 	if(at) {
 		if(proxytype == RS_PT_SOCKS4)
 			return 0;
