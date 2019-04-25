@@ -789,7 +789,7 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 
 struct addrinfo_data {
 	struct addrinfo addrinfo_space;
-	struct sockaddr sockaddr_space;
+	struct sockaddr_storage sockaddr_space;
 	char addr_name[256];
 };
 
@@ -822,6 +822,33 @@ static int mygetservbyname_r(const char* name, const char* proto, struct servent
 	return ret;
 }
 
+static int looks_like_numeric_ipv6(const char *node)
+{
+	if(!strchr(node, ':')) return 0;
+	const char* p= node;
+	while(1) switch(*(p++)) {
+		case 0: return 1;
+		case ':': case '.':
+		case '0': case '1': case '2': case '3': case '4':
+		case '5': case '6': case '7': case '8': case '9':
+		case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
+		case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+			break;
+		default: return 0;
+	}
+}
+
+static int my_inet_aton(const char *node, struct addrinfo_data* space)
+{
+	int ret;
+	((struct sockaddr_in *) &space->sockaddr_space)->sin_family = AF_INET;
+	ret = inet_aton(node, &((struct sockaddr_in *) &space->sockaddr_space)->sin_addr);
+	if(ret || !looks_like_numeric_ipv6(node)) return ret;
+	ret = inet_pton(AF_INET6, node, &((struct sockaddr_in6 *) &space->sockaddr_space)->sin6_addr);
+	if(ret) ((struct sockaddr_in6 *) &space->sockaddr_space)->sin6_family = AF_INET6;
+	return ret;
+}
+
 int proxy_getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	struct gethostbyname_data ghdata;
 	struct addrinfo_data *space;
@@ -830,14 +857,14 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	struct servent se_buf;
 	struct addrinfo *p;
 	char buf[1024];
-	int port;
+	int port, af = AF_INET;
 	PFUNC();
 
 //      printf("proxy_getaddrinfo node %s service %s\n",node,service);
 	space = calloc(1, sizeof(struct addrinfo_data));
 	if(!space) goto err1;
 
-	if(node && !inet_aton(node, &((struct sockaddr_in *) &space->sockaddr_space)->sin_addr)) {
+	if(node && !my_inet_aton(node, space)) {
 		/* some folks (nmap) use getaddrinfo() with AI_NUMERICHOST to check whether a string
 		   containing a numeric ip was passed. we must return failure in that case. */
 		if(hints && (hints->ai_flags & AI_NUMERICHOST)) {
@@ -850,21 +877,26 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 			       *(hp->h_addr_list), sizeof(in_addr_t));
 		else
 			goto err2;
+	} else if(node) {
+		af = ((struct sockaddr_in *) &space->sockaddr_space)->sin_family;
 	}
 	if(service) mygetservbyname_r(service, NULL, &se_buf, buf, sizeof(buf), &se);
 
 	port = se ? se->s_port : htons(atoi(service ? service : "0"));
-	((struct sockaddr_in *) &space->sockaddr_space)->sin_port = port;
+	if(af == AF_INET)
+		((struct sockaddr_in *) &space->sockaddr_space)->sin_port = port;
+	else
+		((struct sockaddr_in6 *) &space->sockaddr_space)->sin6_port = port;
 
 	*res = p = &space->addrinfo_space;
 	assert((size_t)p == (size_t) space);
 
-	p->ai_addr = &space->sockaddr_space;
+	p->ai_addr = (void*) &space->sockaddr_space;
 	if(node)
 		snprintf(space->addr_name, sizeof(space->addr_name), "%s", node);
 	p->ai_canonname = space->addr_name;
 	p->ai_next = NULL;
-	p->ai_family = space->sockaddr_space.sa_family = AF_INET;
+	p->ai_family = space->sockaddr_space.ss_family = af;
 	p->ai_addrlen = sizeof(space->sockaddr_space);
 
 	if(hints) {
