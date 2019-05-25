@@ -897,7 +897,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	p->ai_canonname = space->addr_name;
 	p->ai_next = NULL;
 	p->ai_family = space->sockaddr_space.ss_family = af;
-	p->ai_addrlen = sizeof(space->sockaddr_space);
+	p->ai_addrlen = af == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 
 	if(hints) {
 		p->ai_socktype = hints->ai_socktype;
