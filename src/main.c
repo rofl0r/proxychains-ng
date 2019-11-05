@@ -49,7 +49,7 @@ static void set_own_dir(const char *argv0) {
 	size_t l = strlen(argv0);
 	while(l && argv0[l - 1] != '/')
 		l--;
-	if(l == 0)
+	if(l == 0 || l >= sizeof(own_dir))
 #ifdef SUPER_SECURE
 		memcpy(own_dir, "/dev/null/", 11);
 #else
