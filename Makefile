@@ -86,7 +86,7 @@ $(LDSO_PATHNAME): $(LOBJS)
 		-shared -o $@ $(LOBJS) $(SOCKET_LIBS)
 
 $(ALL_TOOLS): $(OBJS)
-	$(CC) src/main.o src/common.o $(USER_LDFLAGS) -o $(PXCHAINS)
+	$(CC) src/main.o src/common.o $(USER_LDFLAGS) $(LIBDL) -o $(PXCHAINS)
 
 
 .PHONY: all clean install install-config install-libs install-tools

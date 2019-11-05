@@ -19,6 +19,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#ifdef IS_MAC
+#define _DARWIN_C_SOURCE
+#endif
+#include <dlfcn.h>
+
 #include "common.h"
 
 static int usage(char **argv) {
@@ -111,7 +116,9 @@ int main(int argc, char *argv[]) {
 
 	// search DLL
 
-	set_own_dir(argv[0]);
+	Dl_info dli;
+	dladdr(own_dir, &dli);
+	set_own_dir(dli.dli_fname);
 
 	i = 0;
 
