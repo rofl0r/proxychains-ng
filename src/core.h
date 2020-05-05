@@ -25,6 +25,7 @@
 #define __CORE_HEADER
 #define BUFF_SIZE 8*1024  // used to read responses from proxies.
 #define     MAX_LOCALNET 64
+#define     MAX_DNAT 64
 
 #include "ip_type.h"
 
@@ -67,6 +68,11 @@ typedef struct {
 	struct in_addr in_addr, netmask;
 	unsigned short port;
 } localaddr_arg;
+
+typedef struct {
+	struct in_addr orig_dst, new_dst;
+	unsigned short orig_port, new_port;
+} dnat_arg;
 
 typedef struct {
 	ip_type ip;

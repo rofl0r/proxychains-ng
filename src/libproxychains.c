@@ -72,6 +72,8 @@ int proxychains_quiet_mode = 0;
 int proxychains_resolver = 0;
 localaddr_arg localnet_addr[MAX_LOCALNET];
 size_t num_localnet_addr = 0;
+dnat_arg dnats[MAX_DNAT];
+size_t num_dnats = 0;
 unsigned int remote_dns_subnet = 224;
 
 pthread_once_t init_once = PTHREAD_ONCE_INIT;
@@ -268,6 +270,8 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	char *env;
 	char local_in_addr_port[32];
 	char local_in_addr[32], local_in_port[32], local_netmask[32];
+	char dnat_orig_addr_port[32], dnat_new_addr_port[32];
+	char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
 	FILE *file = NULL;
 
 	if(proxychains_got_chain_data)
@@ -419,6 +423,55 @@ inv_host:
 					proxychains_quiet_mode = 1;
 				} else if(strstr(buff, "proxy_dns")) {
 					proxychains_resolver = 1;
+				} else if(strstr(buff, "dnat")) {
+					if(sscanf(buff, "%s %21[^ ] %21s\n", user, dnat_orig_addr_port, dnat_new_addr_port) < 3) {
+						fprintf(stderr, "dnat format error");
+						exit(1);
+					}
+					/* clean previously used buffer */
+					memset(dnat_orig_port, 0, sizeof(dnat_orig_port) / sizeof(dnat_orig_port[0]));
+					memset(dnat_new_port, 0, sizeof(dnat_new_port) / sizeof(dnat_new_port[0]));
+
+					(void)sscanf(dnat_orig_addr_port, "%15[^:]:%5s", dnat_orig_addr, dnat_orig_port);
+					(void)sscanf(dnat_new_addr_port, "%15[^:]:%5s", dnat_new_addr, dnat_new_port);
+
+					if(num_dnats < MAX_DNAT) {
+						int error;
+						error =
+						    inet_pton(AF_INET, dnat_orig_addr,
+							      &dnats[num_dnats].orig_dst);
+						if(error <= 0) {
+							fprintf(stderr, "dnat original destination address error\n");
+							exit(1);
+						}
+
+						error =
+						    inet_pton(AF_INET, dnat_new_addr,
+							      &dnats[num_dnats].new_dst);
+						if(error <= 0) {
+							fprintf(stderr, "dnat effective destination address error\n");
+							exit(1);
+						}
+
+						if(dnat_orig_port[0]) {
+							dnats[num_dnats].orig_port =
+							    (short) atoi(dnat_orig_port);
+						} else {
+							dnats[num_dnats].orig_port = 0;
+						}
+
+						if(dnat_new_port[0]) {
+							dnats[num_dnats].new_port =
+							    (short) atoi(dnat_new_port);
+						} else {
+							dnats[num_dnats].new_port = 0;
+						}
+
+						PDEBUG("added dnat: orig-dst=%s orig-port=%d new-dst=%s new-port=%d\n", dnat_orig_addr, dnats[num_dnats].orig_port, dnat_new_addr, dnats[num_dnats].new_port);
+						++num_dnats;
+					} else {
+						fprintf(stderr, "# of dnat exceed %d.\n", MAX_DNAT);
+					}
 				}
 			}
 		}
@@ -500,6 +553,24 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 
 	// check if connect called from proxydns
         remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
+
+	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect; i++) {
+		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr) {
+			if(!dnats[i].orig_port) {
+				p_addr_in = &dnats[i].new_dst;
+				if(dnats[i].new_port)
+					port = dnats[i].new_port;
+
+				break;
+			}
+			else if(dnats[i].orig_port == port) {
+				p_addr_in = &dnats[i].new_dst;
+				if (dnats[i].new_port)
+					port = dnats[i].new_port;
+				break;
+			}
+		}
+	}
 
 	if (!v6) for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
 		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
