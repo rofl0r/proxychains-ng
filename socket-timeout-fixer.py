@@ -14,7 +14,7 @@ def install(rep):
   
   
 def uninstall(rep):
-  system('sudo apt-get autoremove %s' % str(rep))
+  system('sudo apt autoremove %s' % str(rep))
   
  
 uninstall('tor')
