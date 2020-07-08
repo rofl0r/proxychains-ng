@@ -520,6 +520,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 
 	struct in_addr *p_addr_in;
 	struct in6_addr *p_addr_in6;
+	dnat_arg *dnat = NULL;
 	unsigned short port;
 	size_t i;
 	int remote_dns_connect = 0;
@@ -554,22 +555,21 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	// check if connect called from proxydns
         remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
 
-	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect; i++) {
-		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr) {
-			if(!dnats[i].orig_port) {
-				p_addr_in = &dnats[i].new_dst;
-				if(dnats[i].new_port)
-					port = dnats[i].new_port;
+	// more specific first
+	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+		if((dnats[i].orig_dst.s_addr == p_addr_in->s_addr))
+			if(dnats[i].orig_port && (dnats[i].orig_port == port))
+				dnat = &dnats[i];
 
-				break;
-			}
-			else if(dnats[i].orig_port == port) {
-				p_addr_in = &dnats[i].new_dst;
-				if (dnats[i].new_port)
-					port = dnats[i].new_port;
-				break;
-			}
-		}
+	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
+			if(!dnats[i].orig_port)
+				dnat = &dnats[i];
+
+	if (dnat) {
+		p_addr_in = &dnat->new_dst;
+		if (dnat->new_port)
+			port = dnat->new_port;
 	}
 
 	if (!v6) for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
