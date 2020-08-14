@@ -148,6 +148,10 @@ solaris_detected=false
 issolaris() {
 	$solaris_detected
 }
+haiku_detected=false
+ishaiku() {
+	$haiku_detected	
+}
 
 check_compile 'whether we have GNU-style getservbyname_r()' "-DHAVE_GNU_GETSERVBYNAME_R" \
 '#define _GNU_SOURCE\n#include <netdb.h>\nint main() {\nstruct servent *se = 0;struct servent se_buf;char buf[1024];\ngetservbyname_r("foo", (void*) 0, &se_buf, buf, sizeof(buf), &se);\nreturn 0;}'
@@ -168,6 +172,7 @@ check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
 OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 }
 check_define __sun && check_define __SVR4 && solaris_detected=true
+check_define __HAIKU__ && haiku_detected=true
 
 echo "CC=$CC">>config.mak
 [ -z "$CPPFLAGS" ] || echo "CPPFLAGS=$CPPFLAGS">>config.mak
@@ -213,6 +218,9 @@ elif isbsd ; then
 elif issolaris; then
 	echo "CFLAGS+=-DIS_SOLARIS -D__EXTENSIONS__" >> config.mak
 	echo "SOCKET_LIBS=-lsocket -lnsl" >> config.mak
+elif ishaiku ; then
+	echo LIBDL=>>config.mak
+	echo "CFLAGS+=-DIS_HAIKU" >> config.mak
 fi
 
 echo "Done, now run $make_cmd && $make_cmd install"
