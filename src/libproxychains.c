@@ -38,10 +38,7 @@
 #include "core.h"
 #include "common.h"
 
-#ifdef IS_HAIKU
-#undef satosin				// to prevent macro redefinition
-#endif
-
+#undef 		satosin
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
 #define     SOCKADDR(x)     (satosin(x)->sin_addr.s_addr)
 #define     SOCKADDR_2(x)     (satosin(x)->sin_addr)
@@ -686,13 +683,7 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	return 0;
 }
 
-#ifdef IS_HAIKU
-struct hostent *gethostbyaddr(const char *address, socklen_t length, int type) {
-	socklen_t len = length;
-	const char* addr = address;
-#else
 struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
-#endif
 	INIT();
 	PDEBUG("TODO: proper gethostbyaddr hook\n");
 
