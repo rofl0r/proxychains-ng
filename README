@@ -16,7 +16,7 @@ ProxyChains-NG ver 4.14 README
   If your program doesn't work with proxychains, consider using an
   iptables based solution instead; this is much more robust.
 
-  Supported Platforms: Linux, BSD, Mac.
+  Supported Platforms: Linux, BSD, Mac, Haiku.
 
 
 *********** ATTENTION ***********

@@ -78,6 +78,13 @@ char *get_config_path(char* default_path, char* pbuf, size_t bufsize) {
 	path = pbuf;
 	if(check_path(path))
 		goto have;
+    
+    // priority 3b: ~/config/settings/proxychains.conf (for haiku)
+	path = getenv("HOME");
+	snprintf(pbuf, bufsize, "%s/config/settings/%s", path, PROXYCHAINS_CONF_FILE);
+	path = pbuf;
+	if(check_path(path))
+		goto have;
 
 	// priority 4: $SYSCONFDIR/proxychains.conf
 	path = SYSCONFDIR "/" PROXYCHAINS_CONF_FILE;

@@ -38,6 +38,7 @@
 #include "core.h"
 #include "common.h"
 
+#undef 		satosin
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
 #define     SOCKADDR(x)     (satosin(x)->sin_addr.s_addr)
 #define     SOCKADDR_2(x)     (satosin(x)->sin_addr)
