@@ -7,10 +7,7 @@
  *                                                                         *
  ***************************************************************************/
 
-#undef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE 200112L
-#undef _XOPEN_SOURCE
-#define _XOPEN_SOURCE 600
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
