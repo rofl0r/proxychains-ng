@@ -43,6 +43,7 @@
 extern int tcp_read_time_out;
 extern int tcp_connect_time_out;
 extern int proxychains_quiet_mode;
+extern int proxychains_resolver;
 extern unsigned int proxychains_proxy_offset;
 extern unsigned int remote_dns_subnet;
 
@@ -199,7 +200,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
 	// the results returned from gethostbyname et al.)
 	// the hardcoded number 224 can now be changed using the config option remote_dns_subnet to i.e. 127
-	if(!ip.is_v6 && ip.addr.v4.octet[0] == remote_dns_subnet) {
+	if(!ip.is_v6 && proxychains_resolver && ip.addr.v4.octet[0] == remote_dns_subnet) {
 		dns_len = at_get_host_for_ip(ip.addr.v4, hostnamebuf);
 		if(!dns_len) goto err;
 		else dns_name = hostnamebuf;
@@ -524,7 +525,7 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 
 	PFUNC();
 
-	if(!v6 && pto->ip.addr.v4.octet[0] == remote_dns_subnet) {
+	if(!v6 && proxychains_resolver && pto->ip.addr.v4.octet[0] == remote_dns_subnet) {
 		if(!at_get_host_for_ip(pto->ip.addr.v4, hostname_buf)) goto usenumericip;
 		else hostname = hostname_buf;
 	} else {
