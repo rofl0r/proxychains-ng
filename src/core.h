@@ -121,6 +121,7 @@ struct gethostbyname_data {
 };
 
 struct hostent* proxy_gethostbyname(const char *name, struct gethostbyname_data *data);
+struct hostent* proxy_gethostbyname_old(const char *name);
 
 int proxy_getaddrinfo(const char *node, const char *service, 
 		      const struct addrinfo *hints, struct addrinfo **res);

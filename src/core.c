@@ -745,6 +745,86 @@ static void gethostbyname_data_setstring(struct gethostbyname_data* data, char* 
 }
 
 extern ip_type4 hostsreader_get_numeric_ip_for_name(const char* name);
+struct hostent* proxy_gethostbyname_old(const char *name)
+{
+	static struct hostent hostent_space;
+	static in_addr_t resolved_addr;
+	static char* resolved_addr_p;
+	static char addr_name[1024*8];
+
+	int pipe_fd[2];
+	char buff[256];
+	in_addr_t addr;
+	pid_t pid;
+	int status;
+	size_t l;
+	struct hostent* hp;
+
+	hostent_space.h_addr_list = &resolved_addr_p;
+	*hostent_space.h_addr_list = (char*)&resolved_addr;
+	resolved_addr = 0;
+
+	gethostname(buff,sizeof(buff));
+	if(!strcmp(buff,name))
+		goto got_buff;
+
+	memset(buff, 0, sizeof(buff));
+
+	// TODO: this works only once, so cache it  ...
+	// 	 later
+	while ((hp=gethostent()))
+		if (!strcmp(hp->h_name,name))
+			return hp;
+
+	if(pipe(pipe_fd))
+		goto err;
+	pid = fork();
+	switch(pid) {
+
+		case 0: // child
+			proxychains_write_log("|DNS-request| %s \n", name);
+			close(pipe_fd[0]);
+			dup2(pipe_fd[1],1);
+			close(pipe_fd[1]);
+
+		//	putenv("LD_PRELOAD=");
+			execlp("proxyresolv","proxyresolv",name,NULL);
+			perror("can't exec proxyresolv");
+			exit(2);
+
+		case -1: //error
+			close(pipe_fd[0]);
+			close(pipe_fd[1]);
+			perror("can't fork");
+			goto err;
+
+		default:
+			close(pipe_fd[1]);
+			waitpid(pid, &status, 0);
+			buff[0] = 0;
+			read(pipe_fd[0],&buff,sizeof(buff));
+			close(pipe_fd[0]);
+got_buff:
+			l = strlen(buff);
+			if(l && buff[l-1] == '\n') buff[l-1] = 0;
+			addr = inet_addr(buff);
+			if (addr == (in_addr_t) (-1))
+				goto err_dns;
+			memcpy(*(hostent_space.h_addr_list),
+						&addr ,sizeof(struct in_addr));
+			hostent_space.h_name = addr_name;
+			hostent_space.h_length = sizeof (in_addr_t);
+	}
+	proxychains_write_log("|DNS-response| %s is %s\n",
+			name, inet_ntoa(*(struct in_addr*)&addr));
+	return &hostent_space;
+err_dns:
+	proxychains_write_log("|DNS-response|: %s does not exist\n", name);
+	perror("err_dns");
+err:
+	return NULL;
+}
+
 struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data* data) {
 	PFUNC();
 	char buff[256];
@@ -872,7 +952,11 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 			free(space);
 			return EAI_NONAME;
 		}
-		hp = proxy_gethostbyname(node, &ghdata);
+		if(proxychains_resolver == 2)
+			hp = proxy_gethostbyname_old(node);
+		else
+			hp = proxy_gethostbyname(node, &ghdata);
+
 		if(hp)
 			memcpy(&((struct sockaddr_in *) &space->sockaddr_space)->sin_addr,
 			       *(hp->h_addr_list), sizeof(in_addr_t));

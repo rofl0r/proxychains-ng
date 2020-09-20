@@ -146,7 +146,7 @@ static void do_init(void) {
 	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
 	init_l = 1;
 
-	if(proxychains_resolver) rdns_init();
+	if(proxychains_resolver == 1) rdns_init();
 }
 
 static void init_lib_wrapper(const char* caller) {
@@ -328,7 +328,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				pd[count].port = htons((unsigned short) port_n);
 				ip_type* host_ip = &pd[count].ip;
 				if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
-					if(*ct == STRICT_TYPE && proxychains_resolver && count > 0) {
+					if(*ct == STRICT_TYPE && proxychains_resolver == 1 && count > 0) {
 						/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
 						rdns_init();
 						ip_type4 internal_ip = at_get_ip_for_host(host, strlen(host));
@@ -431,6 +431,8 @@ inv_host:
 					proxychains_max_chain = (len ? len : 1);
 				} else if(strstr(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
+				} else if(strstr(buff, "proxy_dns_old")) {
+					proxychains_resolver = 2;
 				} else if(strstr(buff, "proxy_dns")) {
 					proxychains_resolver = 1;
 				} else if(strstr(buff, "dnat")) {
@@ -495,7 +497,7 @@ inv_host:
 	}
 	*proxy_count = count;
 	proxychains_got_chain_data = 1;
-	PDEBUG("proxy_dns: %s\n", proxychains_resolver ? "ON" : "OFF");
+	PDEBUG("proxy_dns: %s\n", proxychains_resolver ? (proxychains_resolver == 2 ? "OLD" : "ON") : "OFF");
 }
 
 /*******  HOOK FUNCTIONS  *******/
@@ -507,7 +509,7 @@ int close(int fd) {
 		errno = 0;
 		return 0;
 	}
-	if(!proxychains_resolver) return true_close(fd);
+	if(proxychains_resolver != 1) return true_close(fd);
 
 	/* prevent rude programs (like ssh) from closing our pipes */
 	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
@@ -622,8 +624,10 @@ struct hostent *gethostbyname(const char *name) {
 	INIT();
 	PDEBUG("gethostbyname: %s\n", name);
 
-	if(proxychains_resolver)
+	if(proxychains_resolver == 1)
 		return proxy_gethostbyname(name, &ghbndata);
+	else if(proxychains_resolver == 2)
+		return proxy_gethostbyname_old(name);
 	else
 		return true_gethostbyname(name);
 
