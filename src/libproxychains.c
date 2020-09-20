@@ -116,19 +116,22 @@ static void setup_hooks(void) {
 	SETUP_SYM(freeaddrinfo);
 	SETUP_SYM(gethostbyaddr);
 	SETUP_SYM(getnameinfo);
-	SETUP_SYM(close);
 #ifdef IS_SOLARIS
 	SETUP_SYM(__xnet_connect);
 #endif
+	SETUP_SYM(close);
 }
 
 static int close_fds[16];
 static int close_fds_cnt = 0;
 
+static void rdns_init(void) {
+	at_init();
+}
+
 static void do_init(void) {
 	srand(time(NULL));
 	core_initialize();
-	at_init();
 
 	/* read the config file */
 	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
@@ -139,8 +142,9 @@ static void do_init(void) {
 	setup_hooks();
 
 	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
-
 	init_l = 1;
+
+	if(proxychains_resolver) rdns_init();
 }
 
 static void init_lib_wrapper(const char* caller) {
@@ -500,6 +504,8 @@ int close(int fd) {
 		errno = 0;
 		return 0;
 	}
+	if(!proxychains_resolver) return true_close(fd);
+
 	/* prevent rude programs (like ssh) from closing our pipes */
 	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
 	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
