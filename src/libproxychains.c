@@ -126,7 +126,9 @@ static int close_fds[16];
 static int close_fds_cnt = 0;
 
 static void rdns_init(void) {
-	at_init();
+	static int init_done = 0;
+	if(!init_done) at_init();
+	init_done = 1;
 }
 
 static void do_init(void) {
@@ -328,6 +330,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
 					if(*ct == STRICT_TYPE && proxychains_resolver && count > 0) {
 						/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
+						rdns_init();
 						ip_type4 internal_ip = at_get_ip_for_host(host, strlen(host));
 						pd[count].ip.is_v6 = 0;
 						host_ip->addr.v4 = internal_ip;
