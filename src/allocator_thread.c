@@ -20,6 +20,7 @@
 #include "ip_type.h"
 #include "mutex.h"
 #include "hash.h"
+#include "remotedns.h"
 
 /* stuff for our internal translation table */
 
@@ -117,7 +118,7 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 	internal_ips->list[internal_ips->counter] = new_mem;
 	internal_ips->list[internal_ips->counter]->hash = hash;
 
-	new_mem = dumpstring((char*) name, len + 1);
+	new_mem = dumpstring((char*) name, len);
 
 	if(!new_mem) {
 		internal_ips->list[internal_ips->counter] = 0;
@@ -138,21 +139,10 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 
 /* stuff for communication with the allocator thread */
 
-enum at_msgtype {
-	ATM_GETIP,
-	ATM_GETNAME,
-	ATM_EXIT,
-};
-
 enum at_direction {
 	ATD_SERVER = 0,
 	ATD_CLIENT,
 	ATD_MAX,
-};
-
-struct at_msghdr {
-	enum at_msgtype msgtype;
-	size_t datalen;
 };
 
 static pthread_t allocator_thread;
@@ -198,13 +188,11 @@ again:
 	}
 }
 
-static int sendmessage(enum at_direction dir, struct at_msghdr *hdr, void* data) {
+static int sendmessage(enum at_direction dir, struct at_msg *msg) {
 	static int* destfd[ATD_MAX] = { [ATD_SERVER] = &req_pipefd[1], [ATD_CLIENT] = &resp_pipefd[1] };
-	int ret = trywrite(*destfd[dir], hdr, sizeof *hdr);
-	if(ret && hdr->datalen) {
-		assert(hdr->datalen <= MSG_LEN_MAX);
-		ret = trywrite(*destfd[dir], data, hdr->datalen);
-	}
+	assert(msg->h.datalen <= MSG_LEN_MAX);
+	int ret = trywrite(*destfd[dir], msg, sizeof (msg->h)+msg->h.datalen);
+	assert(msg->h.datalen <= MSG_LEN_MAX);
 	return ret;
 }
 
@@ -225,17 +213,19 @@ again:
 			goto again;
 	}
 }
+static int readmsg(int fd, struct at_msg *msg) {
+	int ret = tryread(fd, msg, sizeof(msg->h));
+	if(ret != 1) return ret;
+	return tryread(fd, &msg->m, msg->h.datalen);
+}
 
-static int getmessage(enum at_direction dir, struct at_msghdr *hdr, void* data) {
+static int getmessage(enum at_direction dir, struct at_msg *msg) {
 	static int* readfd[ATD_MAX] = { [ATD_SERVER] = &req_pipefd[0], [ATD_CLIENT] = &resp_pipefd[0] };
 	ssize_t ret;
 	if((ret = wait_data(*readfd[dir]))) {
-		if(!tryread(*readfd[dir], hdr, sizeof *hdr))
+		if(!readmsg(*readfd[dir], msg))
 			return 0;
-		assert(hdr->datalen <= MSG_LEN_MAX);
-		if(hdr->datalen) {
-			ret = tryread(*readfd[dir], data, hdr->datalen);
-		}
+		assert(msg->h.datalen <= MSG_LEN_MAX);
 	}
 	return ret;
 }
@@ -243,26 +233,24 @@ static int getmessage(enum at_direction dir, struct at_msghdr *hdr, void* data) 
 static void* threadfunc(void* x) {
 	(void) x;
 	int ret;
-	struct at_msghdr msg;
-	union {
-		char host[MSG_LEN_MAX];
-		ip_type4 ip;
-	} readbuf;
-	while((ret = getmessage(ATD_SERVER, &msg, &readbuf))) {
-		switch(msg.msgtype) {
+	struct at_msg msg;
+	while((ret = getmessage(ATD_SERVER, &msg))) {
+		switch(msg.h.msgtype) {
 			case ATM_GETIP:
 				/* client wants an ip for a DNS name. iterate our list and check if we have an existing entry.
 					* if not, create a new one. */
-				readbuf.ip = ip_from_internal_list(readbuf.host, msg.datalen - 1);
-				msg.datalen = sizeof(ip_type4);
+				msg.m.ip = ip_from_internal_list(msg.m.host, msg.h.datalen);
+				msg.h.datalen = sizeof(ip_type4);
 				break;
 			case ATM_GETNAME: {
-				char *host = string_from_internal_ip(readbuf.ip);
+				char *host = string_from_internal_ip(msg.m.ip);
 				if(host) {
 					size_t l = strlen(host);
-					assert(l < MSG_LEN_MAX);
-					memcpy(readbuf.host, host, l + 1);
-					msg.datalen = l + 1;
+					assert(l+1 < MSG_LEN_MAX);
+					memcpy(msg.m.host, host, l + 1);
+					msg.h.datalen = l + 1;
+				} else {
+					msg.h.datalen = 0;
 				}
 				break;
 			}
@@ -271,7 +259,7 @@ static void* threadfunc(void* x) {
 			default:
 				abort();
 		}
-		ret = sendmessage(ATD_CLIENT, &msg, &readbuf);
+		ret = sendmessage(ATD_CLIENT, &msg);
 	}
 	return 0;
 }
@@ -282,27 +270,31 @@ ip_type4 at_get_ip_for_host(char* host, size_t len) {
 	ip_type4 readbuf;
 	MUTEX_LOCK(internal_ips_lock);
 	if(len > MSG_LEN_MAX) goto inv;
-	struct at_msghdr msg = {.msgtype = ATM_GETIP, .datalen = len + 1 };
-	if(sendmessage(ATD_SERVER, &msg, host) &&
-	   getmessage(ATD_CLIENT, &msg, &readbuf));
+	struct at_msg msg = {.h.msgtype = ATM_GETIP, .h.datalen = len + 1 };
+	memcpy(msg.m.host, host, len+1);
+	if(sendmessage(ATD_SERVER, &msg) &&
+	   getmessage(ATD_CLIENT, &msg)) readbuf = msg.m.ip;
 	else {
 		inv:
 		readbuf = ip_type_invalid.addr.v4;
 	}
-	assert(msg.msgtype == ATM_GETIP);
+	assert(msg.h.msgtype == ATM_GETIP);
 	MUTEX_UNLOCK(internal_ips_lock);
 	return readbuf;
 }
 
 size_t at_get_host_for_ip(ip_type4 ip, char* readbuf) {
-	struct at_msghdr msg = {.msgtype = ATM_GETNAME, .datalen = sizeof(ip_type4) };
+	struct at_msg msg = {.h.msgtype = ATM_GETNAME, .h.datalen = sizeof(ip_type4), .m.ip = ip };
 	size_t res = 0;
 	MUTEX_LOCK(internal_ips_lock);
-	if(sendmessage(ATD_SERVER, &msg, &ip) && getmessage(ATD_CLIENT, &msg, readbuf)) {
-		if((ptrdiff_t) msg.datalen <= 0) res = 0;
-		else res = msg.datalen - 1;
+	if(sendmessage(ATD_SERVER, &msg) && getmessage(ATD_CLIENT, &msg)) {
+		if((int16_t) msg.h.datalen <= 0) res = 0;
+		else {
+			memcpy(readbuf, msg.m.host, msg.h.datalen);
+			res = msg.h.datalen - 1;
+		}
 	}
-	assert(msg.msgtype == ATM_GETNAME);
+	assert(msg.h.msgtype == ATM_GETNAME);
 	MUTEX_UNLOCK(internal_ips_lock);
 	return res;
 }
