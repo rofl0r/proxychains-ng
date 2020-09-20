@@ -278,6 +278,8 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	if(proxychains_got_chain_data)
 		return;
 
+	PFUNC();
+
 	//Some defaults
 	tcp_read_time_out = 4 * 1000;
 	tcp_connect_time_out = 10 * 1000;
