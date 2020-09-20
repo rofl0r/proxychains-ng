@@ -1,15 +1,13 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
-#ifdef DEBUG
 # include <stdio.h>
+
+#ifdef DEBUG
 # define PSTDERR(fmt, args...) do { dprintf(2,fmt, ## args); } while(0)
 # define PDEBUG(fmt, args...) PSTDERR("DEBUG:"fmt, ## args)
 # define DEBUGDECL(args...) args
-
-# include "core.h"
-void DUMP_PROXY_CHAIN(proxy_data *pchain, unsigned int count);
-
+# define DUMP_PROXY_CHAIN(A, B) dump_proxy_chain(A, B)
 #else
 # define PDEBUG(fmt, args...) do {} while (0)
 # define DEBUGDECL(args...)
@@ -17,6 +15,10 @@ void DUMP_PROXY_CHAIN(proxy_data *pchain, unsigned int count);
 #endif
 
 # define PFUNC() do { PDEBUG("pid[%d]:%s\n", getpid(), __FUNCTION__); } while(0)
+
+#include "core.h"
+void dump_proxy_chain(proxy_data *pchain, unsigned int count);
+
 
 #endif
 

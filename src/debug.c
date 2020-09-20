@@ -5,7 +5,7 @@
 # include "debug.h"
 #include <arpa/inet.h>
 
-void DUMP_PROXY_CHAIN(proxy_data *pchain, unsigned int count) {
+void dump_proxy_chain(proxy_data *pchain, unsigned int count) {
 	char ip_buf[INET6_ADDRSTRLEN];
 	for (; count; pchain++, count--) {
 		if(!inet_ntop(pchain->ip.is_v6?AF_INET6:AF_INET,pchain->ip.addr.v6,ip_buf,sizeof ip_buf)) {
