@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <assert.h>
 #include <netdb.h>
@@ -270,11 +271,12 @@ static const char* bool_str(int bool_val) {
 	return "false";
 }
 
+#define STR_STARTSWITH(P, LIT) (!strncmp(P, LIT, sizeof(LIT)-1))
 /* get configuration from config file */
 static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
 	int count = 0, port_n = 0, list = 0;
-	char buff[1024], type[1024], host[1024], user[1024];
-	char *env;
+	char buf[1024], type[1024], host[1024], user[1024];
+	char *buff, *env, *p;
 	char local_in_addr_port[32];
 	char local_in_addr[32], local_in_port[32], local_netmask[32];
 	char dnat_orig_addr_port[32], dnat_new_addr_port[32];
@@ -291,7 +293,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
 
-	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buff, sizeof(buff));
+	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
 	if( ( file = fopen(env, "r") ) == NULL )
 	{
 	        perror("couldnt read configuration file");
@@ -302,8 +304,17 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	if(env && *env == '1')
 		proxychains_quiet_mode = 1;
 
-	while(fgets(buff, sizeof(buff), file)) {
-		if(buff[0] != '\n' && buff[strspn(buff, " ")] != '#') {
+	while(fgets(buf, sizeof(buf), file)) {
+		buff = buf;
+		/* remove leading whitespace */
+		while(isspace(*buff)) buff++;
+		/* remove trailing '\n' */
+		if((p = strrchr(buff, '\n'))) *p = 0;
+		p = buff + strlen(buff)-1;
+		/* remove trailing whitespace */
+		while(p >= buff && isspace(*p)) *(p--) = 0;
+		if(!*buff || *buff == '#') continue; /* skip empty lines and comments */
+		if(1) {
 			/* proxylist has to come last */
 			if(list) {
 				if(count >= MAX_CHAIN)
@@ -357,28 +368,28 @@ inv_host:
 				if(port_n)
 					count++;
 			} else {
-				if(strstr(buff, "[ProxyList]")) {
+				if(!strcmp(buff, "[ProxyList]")) {
 					list = 1;
-				} else if(strstr(buff, "random_chain")) {
+				} else if(!strcmp(buff, "random_chain")) {
 					*ct = RANDOM_TYPE;
-				} else if(strstr(buff, "strict_chain")) {
+				} else if(!strcmp(buff, "strict_chain")) {
 					*ct = STRICT_TYPE;
-				} else if(strstr(buff, "dynamic_chain")) {
+				} else if(!strcmp(buff, "dynamic_chain")) {
 					*ct = DYNAMIC_TYPE;
-				} else if(strstr(buff, "round_robin_chain")) {
+				} else if(!strcmp(buff, "round_robin_chain")) {
 					*ct = ROUND_ROBIN_TYPE;
-				} else if(strstr(buff, "tcp_read_time_out")) {
+				} else if(STR_STARTSWITH(buff, "tcp_read_time_out")) {
 					sscanf(buff, "%s %d", user, &tcp_read_time_out);
-				} else if(strstr(buff, "tcp_connect_time_out")) {
+				} else if(STR_STARTSWITH(buff, "tcp_connect_time_out")) {
 					sscanf(buff, "%s %d", user, &tcp_connect_time_out);
-				} else if(strstr(buff, "remote_dns_subnet")) {
+				} else if(STR_STARTSWITH(buff, "remote_dns_subnet")) {
 					sscanf(buff, "%s %u", user, &remote_dns_subnet);
 					if(remote_dns_subnet >= 256) {
 						fprintf(stderr,
 							"remote_dns_subnet: invalid value. requires a number between 0 and 255.\n");
 						exit(1);
 					}
-				} else if(strstr(buff, "localnet")) {
+				} else if(STR_STARTSWITH(buff, "localnet")) {
 					if(sscanf(buff, "%s %21[^/]/%15s", user, local_in_addr_port, local_netmask) < 3) {
 						fprintf(stderr, "localnet format error");
 						exit(1);
@@ -419,7 +430,7 @@ inv_host:
 					} else {
 						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
 					}
-				} else if(strstr(buff, "chain_len")) {
+				} else if(STR_STARTSWITH(buff, "chain_len")) {
 					char *pc;
 					int len;
 					pc = strchr(buff, '=');
@@ -429,13 +440,13 @@ inv_host:
 					}
 					len = atoi(++pc);
 					proxychains_max_chain = (len ? len : 1);
-				} else if(strstr(buff, "quiet_mode")) {
+				} else if(!strcmp(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
-				} else if(strstr(buff, "proxy_dns_old")) {
+				} else if(!strcmp(buff, "proxy_dns_old")) {
 					proxychains_resolver = 2;
-				} else if(strstr(buff, "proxy_dns")) {
+				} else if(!strcmp(buff, "proxy_dns")) {
 					proxychains_resolver = 1;
-				} else if(strstr(buff, "dnat")) {
+				} else if(STR_STARTSWITH(buff, "dnat")) {
 					if(sscanf(buff, "%s %21[^ ] %21s\n", user, dnat_orig_addr_port, dnat_new_addr_port) < 3) {
 						fprintf(stderr, "dnat format error");
 						exit(1);
