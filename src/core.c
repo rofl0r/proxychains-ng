@@ -756,7 +756,7 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 	char buff[256];
 	in_addr_t addr;
 	pid_t pid;
-	int status;
+	int status, ret;
 	size_t l;
 	struct hostent* hp;
 
@@ -775,8 +775,17 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 	while ((hp=gethostent()))
 		if (!strcmp(hp->h_name,name))
 			return hp;
+#ifdef HAVE_PIPE2
+	ret = pipe2(pipe_fd, O_CLOEXEC);
+#else
+	ret = pipe(pipe_fd);
+	if(ret == 0) {
+		fcntl(pipe_fd[0], F_SETFD, FD_CLOEXEC);
+		fcntl(pipe_fd[1], F_SETFD, FD_CLOEXEC);
+	}
+#endif
 
-	if(pipe(pipe_fd))
+	if(ret)
 		goto err;
 	pid = fork();
 	switch(pid) {
