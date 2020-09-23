@@ -345,7 +345,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 						ip_type4 internal_ip = at_get_ip_for_host(host, strlen(host));
 						pd[count].ip.is_v6 = 0;
 						host_ip->addr.v4 = internal_ip;
-						if(internal_ip.as_int == ip_type_invalid.addr.v4.as_int)
+						if(internal_ip.as_int == IPT4_INVALID.as_int)
 							goto inv_host;
 					} else {
 inv_host:

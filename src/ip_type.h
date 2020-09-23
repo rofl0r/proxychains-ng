@@ -16,8 +16,10 @@ typedef struct {
 	char is_v6;
 } ip_type;
 
-extern const ip_type ip_type_invalid;
-extern const ip_type ip_type_localhost;
+#define IPT4_INT(X) (ip_type4){.as_int = (X)}
+#define IPT4_INVALID IPT4_INT(-1)
 
-//RcB: DEP "ip_type.c"
+#define IPT4_BYTES(A,B,C,D) (ip_type4){.octet = {(A), (B), (C), (D)} }
+#define IPT4_LOCALHOST IPT4_BYTES(127,0,0,1)
+
 #endif

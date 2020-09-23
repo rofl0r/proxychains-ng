@@ -67,7 +67,7 @@ ip_type4 make_internal_ip(uint32_t index) {
 	ip_type4 ret;
 	index++; // so we can start at .0.0.1
 	if(index > 0xFFFFFF)
-		return ip_type_invalid.addr.v4;
+		return IPT4_INVALID;
 	ret.octet[0] = remote_dns_subnet & 0xFF;
 	ret.octet[1] = (index & 0xFF0000) >> 16;
 	ret.octet[2] = (index & 0xFF00) >> 8;
@@ -105,7 +105,7 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 	}
 
 	res = make_internal_ip(internal_ips->counter);
-	if(res.as_int == ip_type_invalid.addr.v4.as_int)
+	if(res.as_int == IPT4_INVALID.as_int)
 		goto err_plus_unlock;
 
 	string_hash_tuple tmp = { 0 };
@@ -134,7 +134,7 @@ static ip_type4 ip_from_internal_list(char* name, size_t len) {
 	err_plus_unlock:
 
 	PDEBUG("return err\n");
-	return ip_type_invalid.addr.v4;
+	return IPT4_INVALID;
 }
 
 /* stuff for communication with the allocator thread */
@@ -276,7 +276,7 @@ ip_type4 at_get_ip_for_host(char* host, size_t len) {
 	   getmessage(ATD_CLIENT, &msg)) readbuf = msg.m.ip;
 	else {
 		inv:
-		readbuf = ip_type_invalid.addr.v4;
+		readbuf = IPT4_INVALID;
 	}
 	assert(msg.h.msgtype == ATM_GETIP);
 	MUTEX_UNLOCK(internal_ips_lock);

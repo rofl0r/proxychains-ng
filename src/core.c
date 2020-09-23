@@ -854,19 +854,19 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	if(!strcmp(buff, name)) {
 		data->resolved_addr = inet_addr(buff);
 		if(data->resolved_addr == (in_addr_t) (-1))
-			data->resolved_addr = (in_addr_t) (ip_type_localhost.addr.v4.as_int);
+			data->resolved_addr = (in_addr_t) (IPT4_LOCALHOST.as_int);
 		goto retname;
 	}
 
 	// this iterates over the "known hosts" db, usually /etc/hosts
 	ip_type4 hdb_res = hostsreader_get_numeric_ip_for_name(name);
-	if(hdb_res.as_int != ip_type_invalid.addr.v4.as_int) {
+	if(hdb_res.as_int != IPT4_INVALID.as_int) {
 		data->resolved_addr = hdb_res.as_int;
 		goto retname;
 	}
 	
 	data->resolved_addr = at_get_ip_for_host((char*) name, strlen(name)).as_int;
-	if(data->resolved_addr == (in_addr_t) ip_type_invalid.addr.v4.as_int) return NULL;
+	if(data->resolved_addr == (in_addr_t) IPT4_INVALID.as_int) return NULL;
 
 	retname:
 

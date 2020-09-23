@@ -82,7 +82,7 @@ ip_type4 hostsreader_get_numeric_ip_for_name(const char* name) {
 		ip_type4 res;
 		memcpy(res.octet, &c.s_addr, 4);
 		return res;
-	} else return ip_type_invalid.addr.v4;
+	} else return IPT4_INVALID;
 }
 
 #ifdef HOSTSREADER_TEST
