@@ -4,8 +4,6 @@
 #include <unistd.h>
 #include "ip_type.h"
 
-#define MSG_LEN_MAX 256
-
 extern int req_pipefd[2];
 extern int resp_pipefd[2];
 

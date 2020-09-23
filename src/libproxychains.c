@@ -38,6 +38,7 @@
 
 #include "core.h"
 #include "common.h"
+#include "rdns.h"
 
 #undef 		satosin
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
@@ -71,7 +72,7 @@ unsigned int proxychains_proxy_offset = 0;
 int proxychains_got_chain_data = 0;
 unsigned int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
-int proxychains_resolver = 0;
+enum dns_lookup_flavor proxychains_resolver = DNSLF_LIBC;
 localaddr_arg localnet_addr[MAX_LOCALNET];
 size_t num_localnet_addr = 0;
 dnat_arg dnats[MAX_DNAT];
@@ -126,12 +127,6 @@ static void setup_hooks(void) {
 static int close_fds[16];
 static int close_fds_cnt = 0;
 
-static void rdns_init(void) {
-	static int init_done = 0;
-	if(!init_done) at_init();
-	init_done = 1;
-}
-
 static void do_init(void) {
 	srand(time(NULL));
 	core_initialize();
@@ -147,7 +142,7 @@ static void do_init(void) {
 	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
 	init_l = 1;
 
-	if(proxychains_resolver == 1) rdns_init();
+	rdns_init(proxychains_resolver);
 }
 
 static void init_lib_wrapper(const char* caller) {
@@ -281,6 +276,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	char local_in_addr[32], local_in_port[32], local_netmask[32];
 	char dnat_orig_addr_port[32], dnat_new_addr_port[32];
 	char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
+	char rdnsd_addr[32], rdnsd_port[8];
 	FILE *file = NULL;
 
 	if(proxychains_got_chain_data)
@@ -339,9 +335,9 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				pd[count].port = htons((unsigned short) port_n);
 				ip_type* host_ip = &pd[count].ip;
 				if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
-					if(*ct == STRICT_TYPE && proxychains_resolver == 1 && count > 0) {
+					if(*ct == STRICT_TYPE && proxychains_resolver >= DNSLF_RDNS_START && count > 0) {
 						/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
-						rdns_init();
+						rdns_init(proxychains_resolver);
 						ip_type4 internal_ip = at_get_ip_for_host(host, strlen(host));
 						pd[count].ip.is_v6 = 0;
 						host_ip->addr.v4 = internal_ip;
@@ -351,7 +347,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 inv_host:
 						fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
 						fprintf(stderr, "non-numeric ips are only allowed under the following circumstances:\n");
-						fprintf(stderr, "chaintype == strict (%s), proxy is not first in list (%s), proxy_dns active (%s)\n\n", bool_str(*ct == STRICT_TYPE), bool_str(count > 0), bool_str(proxychains_resolver));
+						fprintf(stderr, "chaintype == strict (%s), proxy is not first in list (%s), proxy_dns active (%s)\n\n", bool_str(*ct == STRICT_TYPE), bool_str(count > 0), rdns_resolver_string(proxychains_resolver));
 						exit(1);
 					}
 				}
@@ -443,9 +439,25 @@ inv_host:
 				} else if(!strcmp(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
 				} else if(!strcmp(buff, "proxy_dns_old")) {
-					proxychains_resolver = 2;
+					proxychains_resolver = DNSLF_FORKEXEC;
 				} else if(!strcmp(buff, "proxy_dns")) {
-					proxychains_resolver = 1;
+					proxychains_resolver = DNSLF_RDNS_THREAD;
+				} else if(STR_STARTSWITH(buff, "proxy_dns_daemon")) {
+					struct sockaddr_in rdns_server_buffer;
+
+					if(sscanf(buff, "%s %15[^:]:%5s", user, rdnsd_addr, rdnsd_port) < 3) {
+						fprintf(stderr, "proxy_dns_daemon format error\n");
+						exit(1);
+					}
+					rdns_server_buffer.sin_family = AF_INET;
+					int error = inet_pton(AF_INET, rdnsd_addr, &rdns_server_buffer.sin_addr);
+					if(error <= 0) {
+						fprintf(stderr, "bogus proxy_dns_daemon address\n");
+						exit(1);
+					}
+					rdns_server_buffer.sin_port = htons(atoi(rdnsd_port));
+					proxychains_resolver = DNSLF_RDNS_DAEMON;
+					rdns_set_daemon(&rdns_server_buffer);
 				} else if(STR_STARTSWITH(buff, "dnat")) {
 					if(sscanf(buff, "%s %21[^ ] %21s\n", user, dnat_orig_addr_port, dnat_new_addr_port) < 3) {
 						fprintf(stderr, "dnat format error");
@@ -508,7 +520,7 @@ inv_host:
 	}
 	*proxy_count = count;
 	proxychains_got_chain_data = 1;
-	PDEBUG("proxy_dns: %s\n", proxychains_resolver ? (proxychains_resolver == 2 ? "OLD" : "ON") : "OFF");
+	PDEBUG("proxy_dns: %s\n", rdns_resolver_string(proxychains_resolver));
 }
 
 /*******  HOOK FUNCTIONS  *******/
@@ -520,7 +532,7 @@ int close(int fd) {
 		errno = 0;
 		return 0;
 	}
-	if(proxychains_resolver != 1) return true_close(fd);
+	if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close(fd);
 
 	/* prevent rude programs (like ssh) from closing our pipes */
 	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
@@ -635,12 +647,12 @@ struct hostent *gethostbyname(const char *name) {
 	INIT();
 	PDEBUG("gethostbyname: %s\n", name);
 
-	if(proxychains_resolver == 1)
-		return proxy_gethostbyname(name, &ghbndata);
-	else if(proxychains_resolver == 2)
+	if(proxychains_resolver == DNSLF_FORKEXEC)
 		return proxy_gethostbyname_old(name);
-	else
+	else if(proxychains_resolver == DNSLF_LIBC)
 		return true_gethostbyname(name);
+	else
+		return proxy_gethostbyname(name, &ghbndata);
 
 	return NULL;
 }
@@ -649,7 +661,7 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 	INIT();
 	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
-	if(proxychains_resolver)
+	if(proxychains_resolver != DNSLF_LIBC)
 		return proxy_getaddrinfo(node, service, hints, res);
 	else
 		return true_getaddrinfo(node, service, hints, res);
@@ -659,7 +671,7 @@ void freeaddrinfo(struct addrinfo *res) {
 	INIT();
 	PDEBUG("freeaddrinfo %p \n", (void *) res);
 
-	if(!proxychains_resolver)
+	if(proxychains_resolver == DNSLF_LIBC)
 		true_freeaddrinfo(res);
 	else
 		proxy_freeaddrinfo(res);
@@ -672,7 +684,7 @@ int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	INIT();
 	PFUNC();
 
-	if(!proxychains_resolver) {
+	if(proxychains_resolver == DNSLF_LIBC) {
 		return true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
 	} else {
 		if(!salen || !(SOCKFAMILY(*sa) == AF_INET || SOCKFAMILY(*sa) == AF_INET6))
@@ -719,7 +731,7 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 	static char *aliases[1];
 	static struct hostent he;
 
-	if(!proxychains_resolver)
+	if(proxychains_resolver == DNSLF_LIBC)
 		return true_gethostbyaddr(addr, len, type);
 	else {
 

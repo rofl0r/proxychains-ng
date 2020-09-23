@@ -37,13 +37,12 @@
 
 #include "core.h"
 #include "common.h"
-#include "allocator_thread.h"
+#include "rdns.h"
 #include "mutex.h"
 
 extern int tcp_read_time_out;
 extern int tcp_connect_time_out;
 extern int proxychains_quiet_mode;
-extern int proxychains_resolver;
 extern unsigned int proxychains_proxy_offset;
 extern unsigned int remote_dns_subnet;
 
@@ -200,8 +199,8 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
 	// the results returned from gethostbyname et al.)
 	// the hardcoded number 224 can now be changed using the config option remote_dns_subnet to i.e. 127
-	if(!ip.is_v6 && proxychains_resolver && ip.addr.v4.octet[0] == remote_dns_subnet) {
-		dns_len = at_get_host_for_ip(ip.addr.v4, hostnamebuf);
+	if(!ip.is_v6 && proxychains_resolver >= DNSLF_RDNS_START && ip.addr.v4.octet[0] == remote_dns_subnet) {
+		dns_len = rdns_get_host_for_ip(ip.addr.v4, hostnamebuf);
 		if(!dns_len) goto err;
 		else dns_name = hostnamebuf;
 	}
@@ -525,8 +524,8 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 
 	PFUNC();
 
-	if(!v6 && proxychains_resolver && pto->ip.addr.v4.octet[0] == remote_dns_subnet) {
-		if(!at_get_host_for_ip(pto->ip.addr.v4, hostname_buf)) goto usenumericip;
+	if(!v6 && proxychains_resolver >= DNSLF_RDNS_START && pto->ip.addr.v4.octet[0] == remote_dns_subnet) {
+		if(!rdns_get_host_for_ip(pto->ip.addr.v4, hostname_buf)) goto usenumericip;
 		else hostname = hostname_buf;
 	} else {
 	usenumericip:
@@ -865,7 +864,7 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 		goto retname;
 	}
 	
-	data->resolved_addr = at_get_ip_for_host((char*) name, strlen(name)).as_int;
+	data->resolved_addr = rdns_get_ip_for_host((char*) name, strlen(name)).as_int;
 	if(data->resolved_addr == (in_addr_t) IPT4_INVALID.as_int) return NULL;
 
 	retname:
@@ -961,7 +960,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 			free(space);
 			return EAI_NONAME;
 		}
-		if(proxychains_resolver == 2)
+		if(proxychains_resolver == DNSLF_FORKEXEC)
 			hp = proxy_gethostbyname_old(node);
 		else
 			hp = proxy_gethostbyname(node, &ghdata);

@@ -159,6 +159,9 @@ check_compile 'whether we have GNU-style getservbyname_r()' "-DHAVE_GNU_GETSERVB
 check_compile 'whether we have pipe2() and O_CLOEXEC' "-DHAVE_PIPE2" \
 '#define _GNU_SOURCE\n#include <fcntl.h>\n#include <unistd.h>\nint main() {\nint pipefd[2];\npipe2(pipefd, O_CLOEXEC);\nreturn 0;}'
 
+check_compile 'whether we have SOCK_CLOEXEC' "-DHAVE_SOCK_CLOEXEC" \
+'#define _GNU_SOURCE\n#include <sys/socket.h>\nint main() {\nreturn socket(AF_INET, SOCK_DGRAM|SOCK_CLOEXEC, 0);}'
+
 check_define __APPLE__ && {
 	mac_detected=true
 	check_define __x86_64__ && mac_64=true
