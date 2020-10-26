@@ -23,7 +23,6 @@
 
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
-#define BUFF_SIZE 8*1024  // used to read responses from proxies.
 #define     MAX_LOCALNET 64
 #define     MAX_DNAT 64
 

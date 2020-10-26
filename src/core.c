@@ -188,6 +188,7 @@ static int timed_connect(int sock, const struct sockaddr *addr, socklen_t len) {
 
 
 #define INVALID_INDEX 0xFFFFFFFFU
+#define BUFF_SIZE 1024  // used to read responses from proxies.
 static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, char *user, char *pass) {
 	char *dns_name = NULL;
 	char hostnamebuf[MSG_LEN_MAX];
