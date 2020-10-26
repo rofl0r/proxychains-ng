@@ -117,7 +117,7 @@ struct gethostbyname_data {
 	struct hostent hostent_space;
 	in_addr_t resolved_addr;
 	char *resolved_addr_p[2];
-	char addr_name[1024 * 8];
+	char addr_name[256];
 };
 
 struct hostent* proxy_gethostbyname(const char *name, struct gethostbyname_data *data);

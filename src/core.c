@@ -749,7 +749,7 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 	static struct hostent hostent_space;
 	static in_addr_t resolved_addr;
 	static char* resolved_addr_p;
-	static char addr_name[1024*8];
+	static char addr_name[256];
 
 	int pipe_fd[2];
 	char buff[256];
