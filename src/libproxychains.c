@@ -354,6 +354,8 @@ inv_host:
 
 				if(!strcmp(type, "http")) {
 					pd[count].pt = HTTP_TYPE;
+				} else if(!strcmp(type, "raw")) {
+					pd[count].pt = RAW_TYPE;
 				} else if(!strcmp(type, "socks4")) {
 					pd[count].pt = SOCKS4_TYPE;
 				} else if(!strcmp(type, "socks5")) {

@@ -222,6 +222,10 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	int v6 = ip.is_v6;
 	
 	switch (pt) {
+		case RAW_TYPE: {
+			return SUCCESS;
+		}
+		break;
 		case HTTP_TYPE:{
 			if(!dns_len) {
 				if(!inet_ntop(v6?AF_INET6:AF_INET,ip.addr.v6,ip_buf,sizeof ip_buf)) {
