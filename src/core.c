@@ -849,6 +849,11 @@ struct hostent *proxy_gethostbyname(const char *name, struct gethostbyname_data*
 	data->hostent_space.h_addrtype = AF_INET;
 	data->hostent_space.h_length = sizeof(in_addr_t);
 
+	if(pc_isnumericipv4(name)) {
+		data->resolved_addr = inet_addr(name);
+		goto retname;
+	}
+
 	gethostname(buff, sizeof(buff));
 
 	if(!strcmp(buff, name)) {
