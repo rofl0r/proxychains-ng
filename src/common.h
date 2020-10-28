@@ -17,6 +17,7 @@ extern const char *proxy_state_strmap[];
 
 char *get_config_path(char* default_path, char* pbuf, size_t bufsize);
 void pc_stringfromipv4(unsigned char *ip_buf_4_bytes, char *outbuf_16_bytes);
+int pc_isnumericipv4(const char* ipstring);
 
 //RcB: DEP "common.c"
 #endif

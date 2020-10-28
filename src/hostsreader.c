@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include "common.h"
 
 /*
    simple reader for /etc/hosts
@@ -24,7 +25,6 @@ void hostsreader_close(struct hostsreader *ctx) {
 	fclose(ctx->f);
 }
 
-static int isnumericipv4(const char* ipstring);
 int hostsreader_get(struct hostsreader *ctx, char* buf, size_t bufsize) {
 	while(1) {
 		if(!fgets(buf, bufsize, ctx->f)) return 0;
@@ -51,7 +51,7 @@ int hostsreader_get(struct hostsreader *ctx, char* buf, size_t bufsize) {
 		}
 		if(!l || !*p) continue;
 		*p = 0;
-		if(isnumericipv4(ctx->ip)) return 1;
+		if(pc_isnumericipv4(ctx->ip)) return 1;
 	}
 }
 
@@ -94,30 +94,3 @@ int main(int a, char**b) {
 	printf("%s\n", ret ? ret : "null");
 }
 #endif
-
-/* isnumericipv4() taken from libulz */
-static int isnumericipv4(const char* ipstring) {
-	size_t x = 0, n = 0, d = 0;
-	int wasdot = 0;
-	while(1) {
-		switch(ipstring[x]) {
-			case 0: goto done;
-			case '.':
-				if(!n || wasdot) return 0;
-				d++;
-				wasdot = 1;
-				break;
-			case '0': case '1': case '2': case '3': case '4':
-			case '5': case '6': case '7': case '8': case '9':
-				n++;
-				wasdot = 0;
-				break;
-			default:
-				return 0;
-		}
-		x++;
-	}
-	done:
-	if(d == 3 && n >= 4 && n <= 12) return 1;
-	return 0;
-}
