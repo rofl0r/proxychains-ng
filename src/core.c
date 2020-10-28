@@ -827,6 +827,7 @@ got_buff:
 			memcpy(*(hostent_space.h_addr_list),
 						&addr ,sizeof(struct in_addr));
 			hostent_space.h_name = addr_name;
+			snprintf(addr_name, sizeof addr_name, "%s", buff);
 			hostent_space.h_length = sizeof (in_addr_t);
 			hostent_space.h_addrtype = AF_INET;
 	}
