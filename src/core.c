@@ -828,6 +828,7 @@ got_buff:
 						&addr ,sizeof(struct in_addr));
 			hostent_space.h_name = addr_name;
 			hostent_space.h_length = sizeof (in_addr_t);
+			hostent_space.h_addrtype = AF_INET;
 	}
 	proxychains_write_log("|DNS-response| %s is %s\n",
 			name, inet_ntoa(*(struct in_addr*)&addr));
