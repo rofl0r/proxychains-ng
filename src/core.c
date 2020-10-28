@@ -764,6 +764,11 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 	*hostent_space.h_addr_list = (char*)&resolved_addr;
 	resolved_addr = 0;
 
+	if(pc_isnumericipv4(name)) {
+		strcpy(buff, name);
+		goto got_buff;
+	}
+
 	gethostname(buff,sizeof(buff));
 	if(!strcmp(buff,name))
 		goto got_buff;
