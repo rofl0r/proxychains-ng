@@ -596,7 +596,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 
 	// more specific first
 	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
-		if((dnats[i].orig_dst.s_addr == p_addr_in->s_addr))
+		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
 			if(dnats[i].orig_port && (dnats[i].orig_port == port))
 				dnat = &dnats[i];
 
