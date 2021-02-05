@@ -32,8 +32,11 @@ static int doit(const char* host, const char* service) {
 		fprintf(stderr, "error in getnameinfo: %s\n", gai_strerror(error));
 		continue;
 		}
-		if (*hostname != '\0')
-		printf("hostname: %s\n", hostname);
+		int port = 0;
+		if(res->ai_family == AF_INET) port = ((struct sockaddr_in*)res->ai_addr)->sin_port;
+		else if(res->ai_family == AF_INET6) port = ((struct sockaddr_in6*)res->ai_addr)->sin6_port;
+		port = ntohs(port);
+		printf("hostname: %s, port: %d\n", hostname, port);
 	}
 
 	freeaddrinfo(result);
