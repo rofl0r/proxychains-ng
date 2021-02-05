@@ -964,9 +964,10 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 	struct addrinfo *p;
 	char buf[1024];
 	int port, af = AF_INET;
-	PFUNC();
 
-//      printf("proxy_getaddrinfo node %s service %s\n",node,service);
+	PDEBUG("proxy_getaddrinfo node:%s service: %s, flags: %d\n",
+		node?node:"",service?service:"",hints?(int)hints->ai_flags:0);
+
 	space = calloc(1, sizeof(struct addrinfo_data));
 	if(!space) goto err1;
 
