@@ -475,7 +475,8 @@ static proxy_data *select_proxy(select_type how, proxy_data * pd, unsigned int p
 		case RANDOMLY:
 			do {
 				k++;
-				i = rand() % proxy_count;
+				i = rand() % (proxy_count-proxychains_fixed_chain);
+				i += proxychains_fixed_chain;
 			} while(pd[i].ps != PLAY_STATE && k < proxy_count * 100);
 			break;
 		case FIFOLY:
@@ -563,9 +564,38 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	return retcode;
 }
 
+static int strict_connect(
+	unsigned *alive_count,
+	unsigned *offset,
+	int *ns,
+	proxy_data **p1, proxy_data **p2,
+	unsigned proxy_count, proxy_data * pd)
+{
+	*alive_count = calc_alive(pd, proxy_count);
+	*offset = 0;
+	if(!(*p1 = select_proxy(FIFOLY, pd, proxy_count, offset))) {
+		PDEBUG("select_proxy failed\n");
+		return 0;
+	}
+	if(SUCCESS != start_chain(ns, *p1, ST)) {
+		PDEBUG("start_chain failed\n");
+		return 0;
+	}
+	while(*offset < proxy_count) {
+		if(!(*p2 = select_proxy(FIFOLY, pd, proxy_count, offset)))
+			break;
+		if(SUCCESS != chain_step(*ns, *p1, *p2)) {
+			PDEBUG("chain_step failed\n");
+			return 0;
+		}
+		*p1 = *p2;
+	}
+	return 1;
+}
+
 int connect_proxy_chain(int sock, ip_type target_ip,
 			unsigned short target_port, proxy_data * pd,
-			unsigned int proxy_count, chain_type ct, unsigned int max_chain) {
+			unsigned int proxy_count, chain_type ct) {
 	proxy_data p4;
 	proxy_data *p1, *p2, *p3;
 	int ns = -1;
@@ -575,6 +605,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	unsigned int curr_len = 0;
 	unsigned int looped = 0; // went back to start of list in RR mode
 	unsigned int rr_loop_max = 14;
+	unsigned int max_chain = proxychains_max_chain;
 
 	p3 = &p4;
 
@@ -583,9 +614,14 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	again:
 	rc = -1;
 	DUMP_PROXY_CHAIN(pd, proxy_count);
+	if(proxychains_fixed_chain) {
+		if(!strict_connect(&alive_count, &offset, &ns, &p1, &p2, proxychains_fixed_chain, pd))
+			goto error_strict;
+	}
 
 	switch (ct) {
 		case DYNAMIC_TYPE:
+			if(proxychains_fixed_chain) goto dyn_fixed_resume;
 			alive_count = calc_alive(pd, proxy_count);
 			offset = 0;
 			do {
@@ -601,6 +637,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 					goto again;
 				}
 				p1 = p2;
+		dyn_fixed_resume:;
 			}
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
@@ -610,6 +647,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			break;
 
 		case ROUND_ROBIN_TYPE:
+			// FIXME: add support for fixed_len
 			alive_count = calc_alive(pd, proxy_count);
 			offset = proxychains_proxy_offset;
 			if(alive_count < max_chain)
@@ -660,25 +698,8 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			break;
 
 		case STRICT_TYPE:
-			alive_count = calc_alive(pd, proxy_count);
-			offset = 0;
-			if(!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
-				PDEBUG("select_proxy failed\n");
+			if(!strict_connect(&alive_count, &offset, &ns, &p1, &p2, proxy_count, pd))
 				goto error_strict;
-			}
-			if(SUCCESS != start_chain(&ns, p1, ST)) {
-				PDEBUG("start_chain failed\n");
-				goto error_strict;
-			}
-			while(offset < proxy_count) {
-				if(!(p2 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
-					break;
-				if(SUCCESS != chain_step(ns, p1, p2)) {
-					PDEBUG("chain_step failed\n");
-					goto error_strict;
-				}
-				p1 = p2;
-			}
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
@@ -687,6 +708,12 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			break;
 
 		case RANDOM_TYPE:
+			if(proxychains_fixed_chain) {
+				if(alive_count < max_chain)
+					goto error_more;
+				curr_len = proxychains_fixed_chain - 1;
+				goto random_fixed_resume;
+			}
 			alive_count = calc_alive(pd, proxy_count);
 			if(alive_count < max_chain)
 				goto error_more;
@@ -695,6 +722,9 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				if(!(p1 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
 					goto error_more;
 			} while(SUCCESS != start_chain(&ns, p1, RT) && offset < max_chain);
+
+		random_fixed_resume:;
+
 			while(++curr_len < max_chain) {
 				if(!(p2 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
 					goto error_more;

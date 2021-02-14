@@ -84,8 +84,7 @@ typedef struct {
 } proxy_data;
 
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
-			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
-			 unsigned int max_chain );
+			 proxy_data * pd, unsigned int proxy_count, chain_type ct );
 
 void proxychains_write_log(char *str, ...);
 
@@ -129,6 +128,9 @@ void proxy_freeaddrinfo(struct addrinfo *res);
 
 void core_initialize(void);
 void core_unload(void);
+
+extern unsigned int proxychains_max_chain;
+extern unsigned int proxychains_fixed_chain;
 
 #include "debug.h"
 

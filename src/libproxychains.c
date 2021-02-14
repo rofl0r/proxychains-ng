@@ -71,6 +71,7 @@ unsigned int proxychains_proxy_count = 0;
 unsigned int proxychains_proxy_offset = 0;
 int proxychains_got_chain_data = 0;
 unsigned int proxychains_max_chain = 1;
+unsigned int proxychains_fixed_chain = 0;
 int proxychains_quiet_mode = 0;
 enum dns_lookup_flavor proxychains_resolver = DNSLF_LIBC;
 localaddr_arg localnet_addr[MAX_LOCALNET];
@@ -438,6 +439,16 @@ inv_host:
 					}
 					len = atoi(++pc);
 					proxychains_max_chain = (len ? len : 1);
+				} else if(STR_STARTSWITH(buff, "fixed_len")) {
+					char *pc;
+					int len;
+					pc = strchr(buff, '=');
+					if(!pc) {
+						fprintf(stderr, "error: missing equals sign '=' in fixed_len directive.\n");
+						exit(1);
+					}
+					len = atoi(++pc);
+					proxychains_fixed_chain = (len ? len : 1);
 				} else if(!strcmp(buff, "quiet_mode")) {
 					proxychains_quiet_mode = 1;
 				} else if(!strcmp(buff, "proxy_dns_old")) {
@@ -518,6 +529,14 @@ inv_host:
 #endif
 	if(!count) {
 		fprintf(stderr, "error: no valid proxy found in config\n");
+		exit(1);
+	}
+	if(proxychains_max_chain <= proxychains_fixed_chain) {
+		fprintf(stderr, "error: fixed_len needs to be smaller than chain_len\n");
+		exit(1);
+	}
+	if(proxychains_fixed_chain > count) {
+		fprintf(stderr, "error: fixed_len > proxycount\n");
 		exit(1);
 	}
 	*proxy_count = count;
@@ -630,7 +649,7 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 	ret = connect_proxy_chain(sock,
 				  dest_ip,
 				  htons(port),
-				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
+				  proxychains_pd, proxychains_proxy_count, proxychains_ct);
 
 	fcntl(sock, F_SETFL, flags);
 	if(ret != SUCCESS)
