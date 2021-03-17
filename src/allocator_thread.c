@@ -196,21 +196,18 @@ static int sendmessage(enum at_direction dir, struct at_msg *msg) {
 	return ret;
 }
 
-static int tryread(int fd, void* buf, size_t bytes) {
+static int tryread(int fd, void *vbuf, size_t bytes) {
 	ssize_t ret;
-	unsigned char *out = buf;
-again:
-	ret = read(fd, out, bytes);
-	switch(ret) {
-		case -1:
-			if(errno == EINTR) goto again;
-		case  0:
+	unsigned char *buf = vbuf;
+
+	for(;;) {
+		ret = read(fd, buf, bytes);
+		if (ret == -1 && errno != EINTR)
 			return 0;
-		default:
-			if(ret == bytes || !bytes) return 1;
-			out += ret;
-			bytes -= ret;
-			goto again;
+		else if (ret == bytes)
+			return 1;
+		buf += ret;
+		bytes -= ret;
 	}
 }
 
