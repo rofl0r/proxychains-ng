@@ -213,6 +213,7 @@ again:
 			goto again;
 	}
 }
+
 static int readmsg(int fd, struct at_msg *msg) {
 	int ret = tryread(fd, msg, sizeof(msg->h));
 	if(ret != 1) return ret;
