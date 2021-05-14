@@ -467,6 +467,20 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	return SOCKET_ERROR;
 }
 
+unsigned int get_rand_int(unsigned int range){
+    static FILE *fp;
+    unsigned int randval;
+    if (!fp) {
+        fp = fopen("/dev/urandom", "r");
+    }
+    if(fread(&randval, sizeof(randval), 1, fp)) {
+	return (randval % range);
+    } else {
+	srand((unsigned int)time(NULL));
+	return (rand() % range);
+    }
+}
+
 static proxy_data *select_proxy(select_type how, proxy_data * pd, unsigned int proxy_count, unsigned int *offset) {
 	unsigned int i = 0, k = 0;
 	if(*offset >= proxy_count)
@@ -475,7 +489,7 @@ static proxy_data *select_proxy(select_type how, proxy_data * pd, unsigned int p
 		case RANDOMLY:
 			do {
 				k++;
-				i = rand() % proxy_count;
+				i = get_rand_int(proxy_count);
 			} while(pd[i].ps != PLAY_STATE && k < proxy_count * 100);
 			break;
 		case FIFOLY:
