@@ -71,7 +71,7 @@ usage() {
 	echo "--ignore-cve              default: no"
 	echo "	if set to yes ignores CVE-2015-3887 and makes it possible"
 	echo "	to preload from current dir (insecure)"
-	echo "--fat-binary : build for both i386 and x86_64 architectures on 64-bit Macs"
+	echo "--fat-binary : build for both arm64e and x86_64 architectures on 64-bit Macs"
 	echo "--help : show this text"
 	exit 1
 }
@@ -225,9 +225,9 @@ if ismac ; then
 	echo LDSO_SUFFIX=dylib>>config.mak
 	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
 	if ismac64 && [ "$fat_binary" = 1 ] ; then
-		echo "Configuring a fat binary for i386 and x86_64"
-		echo MAC_CFLAGS+=-arch i386 -arch x86_64>>config.mak
-		echo LDFLAGS+=-arch i386 -arch x86_64>>config.mak
+		echo "Configuring a fat binary for arm64e and x86_64"
+		echo MAC_CFLAGS+=-arch arm64e -arch x86_64>>config.mak
+		echo LDFLAGS+=-arch arm64e -arch x86_64>>config.mak
 	fi
 elif isbsd ; then
 	echo LIBDL=>>config.mak

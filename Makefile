@@ -92,10 +92,10 @@ $(LDSO_PATHNAME): $(LOBJS)
 		-shared -o $@ $^ $(SOCKET_LIBS)
 
 $(PXCHAINS): $(OBJS)
-	$(CC) $^ $(USER_LDFLAGS) $(LIBDL) -o $@
+	$(CC) $^ $(LDFLAGS) $(USER_LDFLAGS) $(LIBDL) -o $@
 
 $(PXCHAINS_D): $(DOBJS)
-	$(CC) $^ $(USER_LDFLAGS) -o $@
+	$(CC) $^ $(LDFLAGS) $(USER_LDFLAGS) -o $@
 
 
 .PHONY: all clean install install-config install-libs install-tools
