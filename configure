@@ -19,11 +19,12 @@ check_compile() {
 	printf "checking %s ... " "$1"
 	printf "$3" > "$tmpc"
 	local res=0
-	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $CFLAGS "$tmpc" -o /dev/null >/dev/null 2>&1 \
+	$CC $OUR_CPPFLAGS $CPPFLAGS $2 $CFLAGS "$tmpc" -o "$tmpc".out >/dev/null 2>&1 \
 	|| res=1
 	test x$res = x0 && \
 	{ printf "yes\n" ; test x"$2" = x || OUR_CPPFLAGS="$OUR_CPPFLAGS $2" ; } \
 	|| printf "no\n"
+	rm -f "$tmpc".out
 	return $res
 }
 
@@ -49,7 +50,8 @@ check_compile_run() {
 
 check_link_silent() {
 	printf "$2" > "$tmpc"
-	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $CFLAGS "$tmpc" -o /dev/null >/dev/null 2>&1
+	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $CFLAGS "$tmpc" -o "$tmpc".out  >/dev/null 2>&1
+	rm -f "$tmpc".out
 }
 
 check_link() {
