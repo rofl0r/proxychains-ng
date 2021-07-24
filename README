@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.14 README
+ProxyChains-NG ver 4.15 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,18 @@ ProxyChains-NG ver 4.14 README
 
 Changelog:
 ----------
+Version 4.15
+- fix configure script for buggy binutils version
+- initialize rand_seed with nano-second granularity
+- add support for numeric ipv6 in getaddrinfo
+- fix bug in getaddrinfo when node is null and !passive
+- add dnat feature
+- add raw proxy type
+- add haiku support
+- add proxy_dns_old to emulate proxychains 3.1 behaviour
+- add new proxy_dns_daemon feature (experimental)
+- various other fixes
+
 Version 4.14
 - allow alternative proto://user:pass@ip:port syntax for proxylist
 - fix endless loop in round robin mode when all proxies are down (#147)
