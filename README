@@ -52,6 +52,9 @@ ProxyChains-NG ver 4.15 README
 
 Changelog:
 ----------
+Version 4.16
+- add -p argument to pick first proxy without using config file
+
 Version 4.15
 - fix configure script for buggy binutils version
 - initialize rand_seed with nano-second granularity
