@@ -83,7 +83,8 @@ pthread_once_t init_once = PTHREAD_ONCE_INIT;
 
 static int init_l = 0;
 
-static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
+static int socks5_from_env(proxy_data *pd, unsigned int *proxy_count, chain_type *ct);
+static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct, int count);
 
 static void* load_sym(char* symname, void* proxyfunc) {
 
@@ -137,12 +138,52 @@ static unsigned get_rand_seed(void) {
 #endif
 }
 
+static int socks5_from_env(proxy_data *pd, unsigned int *proxy_count, chain_type *ct) {
+	char *port_string;
+    char *host_string;
+
+	port_string = getenv(PROXYCHAINS_SOCKS5_PORT_ENV_VAR);
+
+	if(!port_string)
+		return 1;
+        
+	host_string = getenv(PROXYCHAINS_SOCKS5_HOST_ENV_VAR);
+
+	if(!host_string)
+		return 1;
+
+	memset(pd, 0, sizeof(proxy_data));
+
+	pd[0].ps = PLAY_STATE;
+
+	memset(&pd[0].ip, 0, sizeof(pd[0].ip));
+
+	pd[0].ip.is_v6 = !!strchr(host_string, ':');
+	ip_type* host_ip = &pd[0].ip;
+
+	if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host_string, host_ip->addr.v6)) {
+		fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host_string);
+		exit(1);
+	}
+
+	pd[0].port = htons((unsigned short) strtol(port_string, NULL, 0));
+	pd[0].pt = SOCKS5_TYPE;
+
+	return 0;
+}
+
 static void do_init(void) {
 	srand(get_rand_seed());
 	core_initialize();
 
+	int count = 0;
+
+	// if 0, a proxy was set via ENV var (with -p option)
+	if (0 == socks5_from_env(proxychains_pd, &proxychains_proxy_count, &proxychains_ct))
+		count++;
+
 	/* read the config file */
-	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
+	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct, count);
 	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
 
 	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
@@ -278,8 +319,9 @@ static const char* bool_str(int bool_val) {
 
 #define STR_STARTSWITH(P, LIT) (!strncmp(P, LIT, sizeof(LIT)-1))
 /* get configuration from config file */
-static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
-	int count = 0, port_n = 0, list = 0;
+static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct, int count) {
+	// int count = 0
+	int port_n = 0, list = 0;
 	char buf[1024], type[1024], host[1024], user[1024];
 	char *buff, *env, *p;
 	char local_in_addr_port[32];

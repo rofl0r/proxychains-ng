@@ -63,16 +63,19 @@ static void set_own_dir(const char *argv0) {
 	}
 }
 
-#define MAX_COMMANDLINE_FLAGS 2
+#define MAX_COMMANDLINE_FLAGS 3
 
 int main(int argc, char *argv[]) {
 	char *path = NULL;
+	char *ipport = NULL;
 	char buf[256];
 	char pbuf[256];
 	int start_argv = 1;
 	int quiet = 0;
 	size_t i;
 	const char *prefix = NULL;
+
+	char *token;
 
 	if(argc == 2 && !strcmp(argv[1], "--help"))
 		return usage(argv);
@@ -90,6 +93,14 @@ int main(int argc, char *argv[]) {
 					return usage(argv);
 
 				start_argv += 2;
+			} else if(argv[start_argv][1] == 'p') {
+				
+				if(start_argv + 1 < argc)
+					ipport = argv[start_argv + 1];
+				else
+					return usage(argv);
+
+				start_argv += 2;
 			}
 		} else
 			break;
@@ -103,6 +114,18 @@ int main(int argc, char *argv[]) {
 
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
+
+	if(ipport) {
+		if(!quiet)
+			fprintf(stderr, LOG_PREFIX "proxy to %s\n", ipport);
+		
+		if ((token = strsep(&ipport, ":"))) {
+			setenv(PROXYCHAINS_SOCKS5_HOST_ENV_VAR, token, 1);
+		}
+		if ((token = strsep(&ipport, ":"))) {
+			setenv(PROXYCHAINS_SOCKS5_PORT_ENV_VAR, token, 1);
+		} 
+	}
 
 	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
