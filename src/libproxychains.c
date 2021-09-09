@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <ctype.h>
 #include <errno.h>
 #include <assert.h>
@@ -269,8 +270,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	int count = 0, port_n = 0, list = 0;
 	char buf[1024], type[1024], host[1024], user[1024];
 	char *buff, *env, *p;
-	char local_in_addr_port[32];
-	char local_in_addr[32], local_in_port[32], local_netmask[32];
+	char local_addr_port[64], local_addr[64], local_netmask[32];
 	char dnat_orig_addr_port[32], dnat_new_addr_port[32];
 	char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
 	char rdnsd_addr[32], rdnsd_port[8];
@@ -385,41 +385,75 @@ inv_host:
 						exit(1);
 					}
 				} else if(STR_STARTSWITH(buff, "localnet")) {
-					if(sscanf(buff, "%s %21[^/]/%15s", user, local_in_addr_port, local_netmask) < 3) {
+					char colon, extra, right_bracket[2];
+					unsigned short local_port = 0, local_prefix;
+					int local_family, n, valid;
+					if(sscanf(buff, "%s %53[^/]/%15s%c", user, local_addr_port, local_netmask, &extra) != 3) {
 						fprintf(stderr, "localnet format error");
 						exit(1);
 					}
-					/* clean previously used buffer */
-					memset(local_in_port, 0, sizeof(local_in_port) / sizeof(local_in_port[0]));
-
-					if(sscanf(local_in_addr_port, "%15[^:]:%5s", local_in_addr, local_in_port) < 2) {
-						PDEBUG("added localnet: netaddr=%s, netmask=%s\n",
-						       local_in_addr, local_netmask);
+					p = strchr(local_addr_port, ':');
+					if(!p || p == strrchr(local_addr_port, ':')) {
+						local_family = AF_INET;
+						n = sscanf(local_addr_port, "%15[^:]%c%5hu%c", local_addr, &colon, &local_port, &extra);
+						valid = n == 1 || (n == 3 && colon == ':');
+					} else if(local_addr_port[0] == '[') {
+						local_family = AF_INET6;
+						n = sscanf(local_addr_port, "[%45[^][]%1[]]%c%5hu%c", local_addr, right_bracket, &colon, &local_port, &extra);
+						valid = n == 2 || (n == 4 && colon == ':');
 					} else {
-						PDEBUG("added localnet: netaddr=%s, port=%s, netmask=%s\n",
-						       local_in_addr, local_in_port, local_netmask);
+						local_family = AF_INET6;
+						valid = sscanf(local_addr_port, "%45[^][]%c", local_addr, &extra) == 1;
+					}
+					if(!valid) {
+						fprintf(stderr, "localnet address or port error\n");
+						exit(1);
+					}
+					if(local_port) {
+						PDEBUG("added localnet: netaddr=%s, port=%u, netmask=%s\n",
+						       local_addr, local_port, local_netmask);
+					} else {
+						PDEBUG("added localnet: netaddr=%s, netmask=%s\n",
+						       local_addr, local_netmask);
 					}
 					if(num_localnet_addr < MAX_LOCALNET) {
-						int error;
-						error =
-						    inet_pton(AF_INET, local_in_addr,
-							      &localnet_addr[num_localnet_addr].in_addr);
-						if(error <= 0) {
+						localnet_addr[num_localnet_addr].family = local_family;
+						localnet_addr[num_localnet_addr].port = local_port;
+						valid = 0;
+						if (local_family == AF_INET) {
+							valid =
+							    inet_pton(local_family, local_addr,
+							              &localnet_addr[num_localnet_addr].in_addr) > 0;
+						} else if(local_family == AF_INET6) {
+							valid =
+							    inet_pton(local_family, local_addr,
+							              &localnet_addr[num_localnet_addr].in6_addr) > 0;
+						}
+						if(!valid) {
 							fprintf(stderr, "localnet address error\n");
 							exit(1);
 						}
-						error =
-						    inet_pton(AF_INET, local_netmask,
-							      &localnet_addr[num_localnet_addr].netmask);
-						if(error <= 0) {
+						if(local_family == AF_INET && strchr(local_netmask, '.')) {
+							valid =
+							    inet_pton(local_family, local_netmask,
+							              &localnet_addr[num_localnet_addr].in_mask) > 0;
+						} else {
+							valid = sscanf(local_netmask, "%hu%c", &local_prefix, &extra) == 1;
+							if (valid) {
+								if(local_family == AF_INET && local_prefix <= 32) {
+									localnet_addr[num_localnet_addr].in_mask.s_addr =
+										htonl(0xFFFFFFFFu << (32u - local_prefix));
+								} else if(local_family == AF_INET6 && local_prefix <= 128) {
+									localnet_addr[num_localnet_addr].in6_prefix =
+										local_prefix;
+								} else {
+									valid = 0;
+								}
+							}
+						}
+						if(!valid) {
 							fprintf(stderr, "localnet netmask error\n");
 							exit(1);
-						}
-						if(local_in_port[0]) {
-							localnet_addr[num_localnet_addr].port =
-							    (short) atoi(local_in_port);
-						} else {
-							localnet_addr[num_localnet_addr].port = 0;
 						}
 						++num_localnet_addr;
 					} else {
@@ -616,14 +650,24 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 			port = dnat->new_port;
 	}
 
-	if (!v6) for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
-		if((localnet_addr[i].in_addr.s_addr & localnet_addr[i].netmask.s_addr)
-		   == (p_addr_in->s_addr & localnet_addr[i].netmask.s_addr)) {
-			if(!localnet_addr[i].port || localnet_addr[i].port == port) {
-				PDEBUG("accessing localnet using true_connect\n");
-				return true_connect(sock, addr, len);
-			}
+	for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
+		if (localnet_addr[i].port && localnet_addr[i].port != port)
+			continue;
+		if (localnet_addr[i].family != (v6 ? AF_INET6 : AF_INET))
+			continue;
+		if (v6) {
+			size_t prefix_bytes = localnet_addr[i].in6_prefix / CHAR_BIT;
+			size_t prefix_bits = localnet_addr[i].in6_prefix % CHAR_BIT;
+			if (prefix_bytes && memcmp(p_addr_in6->s6_addr, localnet_addr[i].in6_addr.s6_addr, prefix_bytes) != 0)
+				continue;
+			if (prefix_bits && (p_addr_in6->s6_addr[prefix_bytes] ^ localnet_addr[i].in6_addr.s6_addr[prefix_bytes]) >> (CHAR_BIT - prefix_bits))
+				continue;
+		} else {
+			if((p_addr_in->s_addr ^ localnet_addr[i].in_addr.s_addr) & localnet_addr[i].in_mask.s_addr)
+				continue;
 		}
+		PDEBUG("accessing localnet using true_connect\n");
+		return true_connect(sock, addr, len);
 	}
 
 	flags = fcntl(sock, F_GETFL, 0);

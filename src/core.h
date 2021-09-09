@@ -65,8 +65,18 @@ typedef enum {
 } select_type;
 
 typedef struct {
-	struct in_addr in_addr, netmask;
+	sa_family_t family;
 	unsigned short port;
+	union {
+		struct {
+			struct in_addr in_addr;
+			struct in_addr in_mask;
+		};
+		struct {
+			struct in6_addr in6_addr;
+			unsigned char in6_prefix;
+		};
+	};
 } localaddr_arg;
 
 typedef struct {
