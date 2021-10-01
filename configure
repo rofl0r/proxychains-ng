@@ -50,8 +50,10 @@ check_compile_run() {
 
 check_link_silent() {
 	printf "$2" > "$tmpc"
-	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $CFLAGS "$tmpc" -o "$tmpc".out  >/dev/null 2>&1
+	local res=0
+	$CC $OUR_CPPFLAGS $CPPFLAGS $1 $CFLAGS "$tmpc" -o "$tmpc".out  >/dev/null 2>&1 || res=1
 	rm -f "$tmpc".out
+	return $res
 }
 
 check_link() {
