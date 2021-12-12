@@ -104,25 +104,12 @@ static void* load_sym(char* symname, void* proxyfunc) {
 
 #define INIT() init_lib_wrapper(__FUNCTION__)
 
-#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
 
 #include "allocator_thread.h"
 
 const char *proxychains_get_version(void);
 
-static void setup_hooks(void) {
-	SETUP_SYM(connect);
-	SETUP_SYM(sendto);
-	SETUP_SYM(gethostbyname);
-	SETUP_SYM(getaddrinfo);
-	SETUP_SYM(freeaddrinfo);
-	SETUP_SYM(gethostbyaddr);
-	SETUP_SYM(getnameinfo);
-#ifdef IS_SOLARIS
-	SETUP_SYM(__xnet_connect);
-#endif
-	SETUP_SYM(close);
-}
+static void setup_hooks(void);
 
 static int close_fds[16];
 static int close_fds_cnt = 0;
@@ -538,7 +525,11 @@ inv_host:
 /*******  HOOK FUNCTIONS  *******/
 
 #define EXPAND( args...) args
+#ifdef MONTEREY_HOOKING
+#define HOOKFUNC(R, N, args...) R pxcng_ ## N ( EXPAND(args) )
+#else
 #define HOOKFUNC(R, N, args...) R N ( EXPAND(args) )
+#endif
 
 HOOKFUNC(int, close, int fd) {
 	if(!init_l) {
@@ -787,3 +778,41 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	}
 	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
+
+#ifdef MONTEREY_HOOKING
+#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = &X; } while(0)
+#else
+#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
+#endif
+
+static void setup_hooks(void) {
+	SETUP_SYM(connect);
+	SETUP_SYM(sendto);
+	SETUP_SYM(gethostbyname);
+	SETUP_SYM(getaddrinfo);
+	SETUP_SYM(freeaddrinfo);
+	SETUP_SYM(gethostbyaddr);
+	SETUP_SYM(getnameinfo);
+#ifdef IS_SOLARIS
+	SETUP_SYM(__xnet_connect);
+#endif
+	SETUP_SYM(close);
+}
+
+#ifdef MONTEREY_HOOKING
+
+#define DYLD_INTERPOSE(_replacement,_replacee) \
+   __attribute__((used)) static struct{ const void* replacement; const void* replacee; } _interpose_##_replacee \
+   __attribute__((section ("__DATA,__interpose"))) = { (const void*)(unsigned long)&_replacement, (const void*)(unsigned long)&_replacee };
+#define DYLD_HOOK(F) DYLD_INTERPOSE(pxcng_ ## F, F)
+
+DYLD_HOOK(connect);
+DYLD_HOOK(sendto);
+DYLD_HOOK(gethostbyname);
+DYLD_HOOK(getaddrinfo);
+DYLD_HOOK(freeaddrinfo);
+DYLD_HOOK(gethostbyaddr);
+DYLD_HOOK(getnameinfo);
+DYLD_HOOK(close);
+
+#endif
