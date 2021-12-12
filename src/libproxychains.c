@@ -537,7 +537,10 @@ inv_host:
 
 /*******  HOOK FUNCTIONS  *******/
 
-int close(int fd) {
+#define EXPAND( args...) args
+#define HOOKFUNC(R, N, args...) R N ( EXPAND(args) )
+
+HOOKFUNC(int, close, int fd) {
 	if(!init_l) {
 		if(close_fds_cnt>=(sizeof close_fds/sizeof close_fds[0])) goto err;
 		close_fds[close_fds_cnt++] = fd;
@@ -558,7 +561,8 @@ int close(int fd) {
 static int is_v4inv6(const struct in6_addr *a) {
 	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
-int connect(int sock, const struct sockaddr *addr, unsigned int len) {
+
+HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) {
 	INIT();
 	PFUNC();
 
@@ -649,13 +653,13 @@ int connect(int sock, const struct sockaddr *addr, unsigned int len) {
 }
 
 #ifdef IS_SOLARIS
-int __xnet_connect(int sock, const struct sockaddr *addr, unsigned int len) {
+HOOKFUNC(int, __xnet_connect, int sock, const struct sockaddr *addr, unsigned int len)
 	return connect(sock, addr, len);
 }
 #endif
 
 static struct gethostbyname_data ghbndata;
-struct hostent *gethostbyname(const char *name) {
+HOOKFUNC(struct hostent*, gethostbyname, const char *name) {
 	INIT();
 	PDEBUG("gethostbyname: %s\n", name);
 
@@ -669,7 +673,7 @@ struct hostent *gethostbyname(const char *name) {
 	return NULL;
 }
 
-int getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
+HOOKFUNC(int, getaddrinfo, const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
 	INIT();
 	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
@@ -679,7 +683,7 @@ int getaddrinfo(const char *node, const char *service, const struct addrinfo *hi
 		return true_getaddrinfo(node, service, hints, res);
 }
 
-void freeaddrinfo(struct addrinfo *res) {
+HOOKFUNC(void, freeaddrinfo, struct addrinfo *res) {
 	INIT();
 	PDEBUG("freeaddrinfo %p \n", (void *) res);
 
@@ -689,7 +693,7 @@ void freeaddrinfo(struct addrinfo *res) {
 		proxy_freeaddrinfo(res);
 }
 
-int getnameinfo(const struct sockaddr *sa, socklen_t salen,
+HOOKFUNC(int, getnameinfo, const struct sockaddr *sa, socklen_t salen,
 	           char *host, socklen_t hostlen, char *serv,
 	           socklen_t servlen, int flags)
 {
@@ -733,7 +737,7 @@ int getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	return 0;
 }
 
-struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
+HOOKFUNC(struct hostent*, gethostbyaddr, const void *addr, socklen_t len, int type) {
 	INIT();
 	PDEBUG("TODO: proper gethostbyaddr hook\n");
 
@@ -769,7 +773,7 @@ struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type) {
 #   define MSG_FASTOPEN 0x20000000
 #endif
 
-ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	       const struct sockaddr *dest_addr, socklen_t addrlen) {
 	INIT();
 	PFUNC();
