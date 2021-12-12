@@ -689,7 +689,7 @@ void freeaddrinfo(struct addrinfo *res) {
 		proxy_freeaddrinfo(res);
 }
 
-int pc_getnameinfo(const struct sockaddr *sa, socklen_t salen,
+int getnameinfo(const struct sockaddr *sa, socklen_t salen,
 	           char *host, socklen_t hostlen, char *serv,
 	           socklen_t servlen, int flags)
 {
