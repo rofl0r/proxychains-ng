@@ -3,6 +3,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <assert.h>
+#include <string.h>
 
 #ifndef   NI_MAXHOST
 #define   NI_MAXHOST 1025
@@ -43,9 +45,42 @@ static int doit(const char* host, const char* service) {
 	return EXIT_SUCCESS;
 }
 
+/* reproduce use of getaddrinfo as used by nmap 7.91's canonicalize_address */
+int canonicalize_address(struct sockaddr_storage *ss, struct sockaddr_storage *output) {
+	char canonical_ip_string[NI_MAXHOST];
+	struct addrinfo *ai;
+	int rc;
+	/* Convert address to string. */
+	rc = getnameinfo((struct sockaddr *) ss, sizeof(*ss),
+		canonical_ip_string, sizeof(canonical_ip_string), NULL, 0, NI_NUMERICHOST);
+	assert(rc == 0);
+	struct addrinfo hints = {
+		.ai_family = ss->ss_family,
+		.ai_socktype = SOCK_DGRAM,
+		.ai_flags = AI_NUMERICHOST,
+	};
+	rc = getaddrinfo(canonical_ip_string, NULL, &hints, &ai);
+	if (rc != 0 || ai == NULL)
+		return -1;
+	assert(ai->ai_addrlen > 0 && ai->ai_addrlen <= (int) sizeof(*output));
+	memcpy(output, ai->ai_addr, ai->ai_addrlen);
+	freeaddrinfo(ai);
+	return 0;
+}
+
 int main(void) {
 	int ret;
 	ret = doit("www.example.com", NULL);
 	ret = doit("www.example.com", "80");
+	struct sockaddr_storage o, ss = {.ss_family = PF_INET};
+	struct sockaddr_in *v4 = &ss;
+	struct sockaddr_in6 *v6 = &ss;
+	memcpy(&v4->sin_addr, "\x7f\0\0\1", 4);
+	ret = canonicalize_address(&ss, &o);
+	assert (ret == 0);
+	ss.ss_family = PF_INET6;
+	memcpy(&v6->sin6_addr, "\0\0\0\0" "\0\0\0\0" "\0\0\0\0""\0\0\0\1", 16);
+	ret = canonicalize_address(&ss, &o);
+	assert (ret == 0);
 	return ret;
 }

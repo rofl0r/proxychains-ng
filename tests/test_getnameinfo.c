@@ -123,5 +123,17 @@ int main() {
 
 	ASSERT(ret == 0);
 
+	b.sin6_port = 0;
+	b.sin6_scope_id = 0;
+	memcpy(&b.sin6_addr,"\0\0\0\0" "\0\0\0\0" "\0\0\0\0" "\0\0\0\1", 16);
+
+	if ((ret = getnameinfo((void*)sb, sizeof b, hbuf, sizeof(hbuf), NULL,
+	    0, NI_NUMERICHOST)) == 0)
+		printf("host=%s\n", hbuf);
+	else
+		printf("%s\n", gai_strerror(ret));
+
+	ASSERT(ret == 0);
+
 	return 0;
 }
