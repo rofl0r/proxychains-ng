@@ -28,10 +28,20 @@ check_compile() {
 	return $res
 }
 
+get_define() {
+	$CC $OUR_CPPFLAGS $CPPFLAGS $CFLAGS -dM -E - </dev/null | grep "$1"
+}
+
+get_define_stripped() {
+	local output=$(get_define "$1")
+	test "$?" = 0 || return 1
+	printf "%s\n" "$output" | sed 's/^.* .* //'
+}
+
 check_define() {
 	printf "checking whether \$CC defines %s ... " "$1"
 	local res=1
-	$CC $OUR_CPPFLAGS $CPPFLAGS $CFLAGS -dM -E - </dev/null | grep "$1" >/dev/null && res=0
+	get_define "$1" >/dev/null && res=0
 	test x$res = x0 && printf "yes\n" || printf "no\n"
 	return $res
 }
@@ -74,8 +84,10 @@ usage() {
 	echo "--sysconfdir=/path        default: $prefix/etc"
 	echo "--ignore-cve              default: no"
 	echo "	if set to yes ignores CVE-2015-3887 and makes it possible"
-	echo "	to preload from current dir (insecure)"
+	echo "	to preload from current dir (possibly insecure, but handy)"
 	echo "--fat-binary : build for both i386 and x86_64 architectures on 64-bit Macs"
+	echo "--hookmethod=dlsym|dyld   hook method for osx. default: auto"
+	echo "  if OSX >= 12 is detected, dyld method will be used if auto."
 	echo "--help : show this text"
 	exit 1
 }
@@ -89,6 +101,8 @@ spliteq() {
 
 fat_binary=
 ignore_cve=no
+hookmethod=auto
+
 parsearg() {
 	case "$1" in
 	--prefix=*) prefix=`spliteq $1`;;
@@ -99,6 +113,7 @@ parsearg() {
 	--sysconfdir=*) sysconfdir=`spliteq $1`;;
 	--ignore-cve) ignore_cve=1;;
 	--ignore-cve=*) ignore_cve=`spliteq $1`;;
+	--hookmethod=*) hookmethod=`spliteq $1`;;
 	--fat-binary) fat_binary=1;;
 	--help) usage;;
 	esac
@@ -155,7 +170,7 @@ issolaris() {
 }
 haiku_detected=false
 ishaiku() {
-	$haiku_detected	
+	$haiku_detected
 }
 
 check_compile 'whether C compiler works' '' 'int main() {return 0;}' || fail 'error: install a C compiler and library'
@@ -175,6 +190,10 @@ check_compile 'whether we have clock_gettime' "-DHAVE_CLOCK_GETTIME" \
 check_define __APPLE__ && {
 	mac_detected=true
 	check_define __x86_64__ && mac_64=true
+	if test "$hookmethod" = auto ; then
+		osver=$(get_define_stripped __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ 2>/dev/null)
+		test "$osver" -gt $((120000 - 1)) && hookmethod=dyld
+	fi
 }
 check_define __FreeBSD__ && bsd_detected=true
 check_define __OpenBSD__ && {
@@ -228,10 +247,14 @@ make_cmd=make
 if ismac ; then
 	echo LDSO_SUFFIX=dylib>>config.mak
 	echo MAC_CFLAGS+=-DIS_MAC=1>>config.mak
+	if test "$hookmethod" = dyld ; then
+		echo "using Monterey style DYLD hooking"
+		echo "CFLAGS+=-DMONTEREY_HOOKING">>config.mak
+	fi
 	if ismac64 && [ "$fat_binary" = 1 ] ; then
 		echo "Configuring a fat binary for i386 and x86_64"
-		echo MAC_CFLAGS+=-arch i386 -arch x86_64>>config.mak
-		echo LDFLAGS+=-arch i386 -arch x86_64>>config.mak
+		echo "MAC_CFLAGS+=-arch i386 -arch x86_64">>config.mak
+		echo "LDFLAGS+=-arch i386 -arch x86_64">>config.mak
 	fi
 elif isbsd ; then
 	echo LIBDL=>>config.mak
