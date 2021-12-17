@@ -234,6 +234,11 @@ fi
 echo "$LD_SONAME_FLAG"
 echo "LD_SET_SONAME = -Wl,$LD_SONAME_FLAG," >> config.mak
 
+if check_link "checking whether we can use -ldl" "-ldl" \
+"int main(){return 0;}" ; then
+echo "LIBDL = -ldl" >> config.mak
+fi
+
 if check_link "checking whether we can use -lpthread" "-lpthread" \
 "int main(){return 0;}" ; then
 echo "PTHREAD = -lpthread" >> config.mak
