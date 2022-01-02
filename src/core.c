@@ -266,7 +266,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 					break;
 			}
 
-			// if not ok (200) or response greather than BUFF_SIZE return BLOCKED;
+			// if not ok (200) or response greater than BUFF_SIZE return BLOCKED;
 			if(len == BUFF_SIZE || !(buff[9] == '2' && buff[10] == '0' && buff[11] == '0')) {
 				PDEBUG("HTTP proxy blocked: buff=\"%s\"\n", buff);
 				return BLOCKED;
