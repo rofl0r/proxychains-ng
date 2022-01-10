@@ -154,7 +154,8 @@ int main(int argc, char *argv[]) {
 	         old_val ? old_val : "");
 	putenv(buf);
 	execvp(argv[start_argv], &argv[start_argv]);
-	perror("proxychains can't load process....");
+	fprintf(stderr, "proxychains: can't load process '%s'.", argv[start_argv]);
+	perror(" (hint: it's probably a typo)");
 
 	return EXIT_FAILURE;
 }
