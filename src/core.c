@@ -1018,6 +1018,8 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 		p->ai_socktype = hints->ai_socktype;
 		p->ai_flags = hints->ai_flags;
 		p->ai_protocol = hints->ai_protocol;
+		if(!p->ai_socktype && p->ai_protocol == IPPROTO_TCP)
+			p->ai_socktype = SOCK_STREAM;
 	} else {
 #ifndef AI_V4MAPPED
 #define AI_V4MAPPED 0
