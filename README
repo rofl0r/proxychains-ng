@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.15 README
+ProxyChains-NG ver 4.16 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,15 @@ ProxyChains-NG ver 4.15 README
 
 Changelog:
 ----------
+Version 4.16
+- fix regression in configure script linker flag detection
+- remove 10 year old workaround for wrong glibc getnameinfo signature
+- support for new DYLD hooking method for OSX Monterey
+- netbsd compilation fix
+- support IPv6 localnets
+- more user-friendly error message when execvp fails
+- proxy_getaddrinfo(): fill in ai_socktype if requested
+
 Version 4.15
 - fix configure script for buggy binutils version
 - initialize rand_seed with nano-second granularity
