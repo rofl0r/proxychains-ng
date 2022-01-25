@@ -729,8 +729,8 @@ HOOKFUNC(void, freeaddrinfo, struct addrinfo *res) {
 }
 
 HOOKFUNC(int, getnameinfo, const struct sockaddr *sa, socklen_t salen,
-	           char *host, socklen_t hostlen, char *serv,
-	           socklen_t servlen, int flags)
+	           char *host, GN_NODELEN_T hostlen, char *serv,
+	           GN_SERVLEN_T servlen, GN_FLAGS_T flags)
 {
 	INIT();
 	PFUNC();
