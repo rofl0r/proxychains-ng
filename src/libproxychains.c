@@ -559,7 +559,7 @@ inv_host:
 /*******  HOOK FUNCTIONS  *******/
 
 #define EXPAND( args...) args
-#ifdef MONTEREY_HOOKING
+#if defined(MONTEREY_HOOKING) || defined(__FreeBSD__)
 #define HOOKFUNC(R, N, args...) R pxcng_ ## N ( EXPAND(args) )
 #else
 #define HOOKFUNC(R, N, args...) R N ( EXPAND(args) )
