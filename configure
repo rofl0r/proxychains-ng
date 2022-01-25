@@ -175,6 +175,20 @@ ishaiku() {
 
 check_compile 'whether C compiler works' '' 'int main() {return 0;}' || fail 'error: install a C compiler and library'
 
+if ! check_compile 'whether getnameinfo() servlen argument is POSIX compliant (socklen_t)' "-DGN_SERVLEN_T=socklen_t -DGN_FLAGS_T=int" \
+'#define _GNU_SOURCE\n#include <netdb.h>\nint getnameinfo(const struct sockaddr *, socklen_t, char *, socklen_t, char *, socklen_t, int);int main() {\nreturn 0;}' ; then
+
+# GLIBC < 2.14
+ if ! check_compile 'whether getnameinfo() flags argument is unsigned' "-DGN_SERVLEN_T=socklen_t -DGN_FLAGS_T=unsigned" \
+  '#define _GNU_SOURCE\n#include <netdb.h>\nint getnameinfo(const struct sockaddr *, socklen_t, char *, socklen_t, char *, socklen_t, unsigned);int main() {\nreturn 0;}' ; then
+# OpenBSD
+  if ! check_compile 'whether getnameinfo() servlen argument is size_t' "-DGN_SERVLEN_T=size_t -DGN_FLAGS_T=int" \
+   '#define _GNU_SOURCE\n#include <netdb.h>\nint getnameinfo(const struct sockaddr *, socklen_t, char *, socklen_t, char *, size_t, int);int main() {\nreturn 0;}' ; then
+    fail "failed to detect getnameinfo signature"
+  fi
+ fi
+fi
+
 check_compile 'whether we have GNU-style getservbyname_r()' "-DHAVE_GNU_GETSERVBYNAME_R" \
 '#define _GNU_SOURCE\n#include <netdb.h>\nint main() {\nstruct servent *se = 0;struct servent se_buf;char buf[1024];\ngetservbyname_r("foo", (void*) 0, &se_buf, buf, sizeof(buf), &se);\nreturn 0;}'
 

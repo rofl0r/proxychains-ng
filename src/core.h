@@ -109,7 +109,7 @@ typedef int (*getaddrinfo_t)(const char *, const char *, const struct addrinfo *
 			     struct addrinfo **);
 
 typedef int (*getnameinfo_t) (const struct sockaddr *, socklen_t, char *, 
-			      socklen_t, char *, socklen_t, int);
+			      socklen_t, char *, GN_SERVLEN_T, GN_FLAGS_T);
 
 typedef ssize_t (*sendto_t) (int sockfd, const void *buf, size_t len, int flags,
 			     const struct sockaddr *dest_addr, socklen_t addrlen);
