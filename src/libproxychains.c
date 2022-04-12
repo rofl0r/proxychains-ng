@@ -601,11 +601,17 @@ static int is_v4inv6(const struct in6_addr *a) {
 	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
 
-static int compare_func_int(const void *l, const void *r) {
-	int arg1 = *(const int*)l;
-	int arg2 = *(const int*)r;
-	return (arg1 > arg2) - (arg1 < arg2);
+static void intsort(int *a, int n) {
+	int i, j, s;
+	for(i=0; i<n; ++i)
+		for(j=i+1; j<n; ++j)
+			if(a[j] < a[i]) {
+				s = a[i];
+				a[i] = a[j];
+				a[j] = s;
+			}
 }
+
 /* Warning: Linux manual says the third arg is `unsigned int`, but unistd.h says `int`. */
 HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
 	if(true_close_range == NULL) {
@@ -629,15 +635,14 @@ HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
 	/* prevent rude programs (like ssh) from closing our pipes */
 	int res = 0, uerrno = 0, i;
 	int protected_fds[] = {req_pipefd[0], req_pipefd[1], resp_pipefd[0], resp_pipefd[1]};
-	int protected_fds_size = sizeof protected_fds / sizeof protected_fds[0];
-	qsort(protected_fds, protected_fds_size, sizeof protected_fds[0], compare_func_int);
+	intsort(protected_fds, 4);
 	/* We are skipping protected_fds while calling true_close_range()
 	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop. 
 	 * [first, cut1-1] , [cut1+1, cut2-1] , [cut2+1, cut3-1]
 	 * Finally, we delete the remaining sub-range, outside the loop. [cut3+1, tail]
 	 */
 	int next_fd_to_close = first;
-	for(i = 0; i < protected_fds_size; ++i) {
+	for(i = 0; i < 4; ++i) {
 		if(protected_fds[i] < first || protected_fds[i] > last)
 			continue;
 		int prev = (i == 0 || protected_fds[i-1] < first) ? first : protected_fds[i-1]+1;
