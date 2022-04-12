@@ -100,6 +100,7 @@ int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port
 void proxychains_write_log(char *str, ...);
 
 typedef int (*close_t)(int);
+typedef int (*close_range_t)(unsigned, unsigned, int);
 typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
 typedef struct hostent* (*gethostbyname_t)(const char *);
 typedef int (*freeaddrinfo_t)(struct addrinfo *);

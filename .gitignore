@@ -1,4 +1,5 @@
 proxychains4
+proxychains4-daemon
 *.bz2
 *.xz
 *.o

@@ -56,6 +56,7 @@ connect_t true___xnet_connect;
 #endif
 
 close_t true_close;
+close_range_t true_close_range;
 connect_t true_connect;
 gethostbyname_t true_gethostbyname;
 getaddrinfo_t true_getaddrinfo;
@@ -86,13 +87,14 @@ static int init_l = 0;
 
 static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
 
-static void* load_sym(char* symname, void* proxyfunc) {
-
+static void* load_sym(char* symname, void* proxyfunc, int is_mandatory) {
 	void *funcptr = dlsym(RTLD_NEXT, symname);
 
-	if(!funcptr) {
+	if(is_mandatory && !funcptr) {
 		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
 		exit(1);
+	} else if (!funcptr) {
+		return funcptr;
 	} else {
 		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, funcptr, proxyfunc);
 	}
@@ -112,8 +114,16 @@ const char *proxychains_get_version(void);
 
 static void setup_hooks(void);
 
+typedef struct {
+	unsigned int first, last, flags;
+} close_range_args_t;
+
+/* If there is some `close` or `close_range` system call before do_init, 
+   we buffer it, and actually execute them in do_init. */
 static int close_fds[16];
 static int close_fds_cnt = 0;
+static close_range_args_t close_range_buffer[16];
+static int close_range_buffer_cnt = 0;
 
 static unsigned get_rand_seed(void) {
 #ifdef HAVE_CLOCK_GETTIME
@@ -138,6 +148,10 @@ static void do_init(void) {
 	setup_hooks();
 
 	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
+	while(close_range_buffer_cnt) {
+		int i = --close_range_buffer_cnt;
+		true_close_range(close_range_buffer[i].first, close_range_buffer[i].last, close_range_buffer[i].flags);
+	}
 	init_l = 1;
 
 	rdns_init(proxychains_resolver);
@@ -587,6 +601,64 @@ static int is_v4inv6(const struct in6_addr *a) {
 	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
 
+static int compare_func_int(const void *l, const void *r) {
+	int arg1 = *(const int*)l;
+	int arg2 = *(const int*)r;
+	return (arg1 > arg2) - (arg1 < arg2);
+}
+/* Warning: Linux manual says the third arg is `unsigned int`, but unistd.h says `int`. */
+HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
+	if(true_close_range == NULL) {
+		fprintf(stderr, "Calling close_range, but this platform does not provide this system call. ");
+		return -1;
+	}
+	if(!init_l) {
+		/* push back to cache, and delay the execution. */
+		if(close_range_buffer_cnt >= (sizeof close_range_buffer / sizeof close_range_buffer[0])) {
+			errno = ENOMEM;
+			return -1;
+		}
+		int i = close_range_buffer_cnt++;
+		close_range_buffer[i].first = first;
+		close_range_buffer[i].last = last;
+		close_range_buffer[i].flags = flags;
+		return errno = 0;
+	}
+	if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close_range(first, last, flags);
+
+	/* prevent rude programs (like ssh) from closing our pipes */
+	int res = 0, uerrno = 0, i;
+	int protected_fds[] = {req_pipefd[0], req_pipefd[1], resp_pipefd[0], resp_pipefd[1]};
+	int protected_fds_size = sizeof protected_fds / sizeof protected_fds[0];
+	qsort(protected_fds, protected_fds_size, sizeof protected_fds[0], compare_func_int);
+	/* We are skipping protected_fds while calling true_close_range()
+	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop. 
+	 * [first, cut1-1] , [cut1+1, cut2-1] , [cut2+1, cut3-1]
+	 * Finally, we delete the remaining sub-range, outside the loop. [cut3+1, tail]
+	 */
+	int next_fd_to_close = first;
+	for(i = 0; i < protected_fds_size; ++i) {
+		if(protected_fds[i] < first || protected_fds[i] > last)
+			continue;
+		int prev = (i == 0 || protected_fds[i-1] < first) ? first : protected_fds[i-1]+1;
+		if(prev != protected_fds[i]) {
+			if(-1 == true_close_range(prev, protected_fds[i]-1, flags)) {
+				res = -1;
+				uerrno = errno;
+			}
+		}
+		next_fd_to_close = protected_fds[i]+1;
+	}
+	if(next_fd_to_close <= last) {
+		if(-1 == true_close_range(next_fd_to_close, last, flags)) {
+			res = -1;
+			uerrno = errno;
+		}
+	}
+	errno = uerrno;
+	return res;
+}
+
 HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) {
 	INIT();
 	PFUNC();
@@ -825,8 +897,11 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 
 #ifdef MONTEREY_HOOKING
 #define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = &X; } while(0)
+#define SETUP_SYM_OPTIONAL(X)
 #else
-#define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X ); } while(0)
+#define SETUP_SYM_IMPL(X, IS_MANDATORY) do { if (! true_ ## X ) true_ ## X = load_sym( # X, X, IS_MANDATORY ); } while(0)
+#define SETUP_SYM(X) SETUP_SYM_IMPL(X, 1)
+#define SETUP_SYM_OPTIONAL(X) SETUP_SYM_IMPL(X, 0)
 #endif
 
 static void setup_hooks(void) {
@@ -841,6 +916,7 @@ static void setup_hooks(void) {
 	SETUP_SYM(__xnet_connect);
 #endif
 	SETUP_SYM(close);
+	SETUP_SYM_OPTIONAL(close_range);
 }
 
 #ifdef MONTEREY_HOOKING
