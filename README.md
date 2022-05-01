@@ -1,6 +1,5 @@
 ProxyChains-NG ver 4.16 README
-=============================
-
+----------------------------- 
   ProxyChains is a UNIX program, that hooks network-related libc functions
   in DYNAMICALLY LINKED programs via a preloaded DLL (dlsym(), LD_PRELOAD)
   and redirects the connections through SOCKS4a/5 or HTTP proxies.
@@ -19,7 +18,7 @@ ProxyChains-NG ver 4.16 README
   Supported Platforms: Linux, BSD, Mac, Haiku.
 
 
-*********** ATTENTION ***********
+### ATTENTION
 
   this program can be used to circumvent censorship.
   doing so can be VERY DANGEROUS in certain countries.
@@ -39,20 +38,21 @@ ProxyChains-NG ver 4.16 README
   RESPONSIBILITY FOR ANY ABUSE OR MISUSE OF THIS SOFTWARE AND
   THE RESULTING CONSEQUENCES.
 
-*** Installation ***
+### Installation
 
-  # needs a working C compiler, preferably gcc
+  #### needs a working C compiler, preferably gcc
+  ```bash
   ./configure --prefix=/usr --sysconfdir=/etc
   make
   [optional] sudo make install
   [optional] sudo make install-config (installs proxychains.conf)
-
+  ```
   if you dont install, you can use proxychains from the build directory
-  like this: ./proxychains4 -f src/proxychains.conf telnet google.com 80
+  like this: `./proxychains4 -f src/proxychains.conf telnet google.com 80`
 
-Changelog:
+### Changelog:
 ----------
-Version 4.16
+#### Version 4.16
 - fix regression in configure script linker flag detection
 - remove 10 year old workaround for wrong glibc getnameinfo signature
 - support for new DYLD hooking method for OSX Monterey
@@ -61,7 +61,7 @@ Version 4.16
 - more user-friendly error message when execvp fails
 - proxy_getaddrinfo(): fill in ai_socktype if requested
 
-Version 4.15
+#### Version 4.15
 - fix configure script for buggy binutils version
 - initialize rand_seed with nano-second granularity
 - add support for numeric ipv6 in getaddrinfo
@@ -73,7 +73,7 @@ Version 4.15
 - add new proxy_dns_daemon feature (experimental)
 - various other fixes
 
-Version 4.14
+#### Version 4.14
 - allow alternative proto://user:pass@ip:port syntax for proxylist
 - fix endless loop in round robin mode when all proxies are down (#147)
 - fix compilation on android (#265)
@@ -81,13 +81,13 @@ Version 4.14
 - skip connection attempt to nullrouted ips
 - allow hostnames for proxylist under specific circumstances
 
-Version 4.13
+#### Version 4.13
 - fix robustness of DNS lookup thread and a segfault
 - fix socks5 user/pass auth on non-conforming servers
 - fix memory leak
 - add support for Solaris
 
-Version 4.12
+#### Version 4.12
 - fix several build issues
   - for MAC
   - with -pie
@@ -97,32 +97,32 @@ Version 4.12
 - fix several warnings for cleaner build on debian
 - fix random_chain on OSX (0f6b226)
 
-Version 4.11
+#### Version 4.11
 - preliminary IPv6 support
 - fixed bug in hostsreader
 - preliminary support for usage on OpenBSD (caveat emptor)
 
-Version 4.10
+#### Version 4.10
 - fix regression in linking order with custom LDFLAGS
 - fix segfault in DNS mapping code in programs with > ~400 different lookups
 
-Version 4.9
+#### Version 4.9
 - fix a security issue CVE-2015-3887
 - add sendto hook to handle MSG_FASTOPEN flag
 - replace problematic hostentdb with hostsreader
 - fix compilation on OpenBSD (although doesn't work there)
 
-Version 4.8.1:
+#### Version 4.8.1:
 - fix regression in 4.8 install-config Makefile target
 
-Version 4.8:
+#### Version 4.8:
 - fix for odd cornercase where getaddrinfo was used with AI_NUMERICHOST
   to test for a numeric ip instead of resolving it (fixes nmap).
 - allow usage with programs that rely on LD_PRELOAD themselves
 - reject wrong entries in config file
 - print version number on startup
 
-Version 4.7:
+#### Version 4.7:
 - new round_robin chaintype by crass.
 - fix bug with lazy allocation when GCC constructor was not used.
 - new configure flag --fat-binary to create a "fat" binary/library on OS X
@@ -130,35 +130,35 @@ Version 4.7:
   it's legal for a program to retry close() calls when they receive
   EINTR, which could cause an infinite loop, as seen in chromium.
 
-Version 4.6:
+#### Version 4.6:
 - some cosmetic fixes to Makefile, fix a bug when non-numeric ip was
   used as proxy server address.
 
-Version 4.5:
+#### Version 4.5:
 - hook close() to prevent OpenSSH from messing with internal infrastructure.
   this caused ssh client to segfault when proxified.
 
-Version 4.4:
+#### Version 4.4:
 - FreeBSD port
 - fixes some installation issues on Debian and Mac.
 
-Version 4.3:
+#### Version 4.3:
 - fixes programs that do dns-lookups in child processes (fork()ed),
   like irssi. to achieve this, support for compilation without pthreads
   was sacrified.
 - fixes thread safety for gethostent() calls.
 - improved DNS handling speed, since hostent db is cached.
 
-Version 4.2:
+#### Version 4.2:
 - fixes compilation issues with ubuntu 12.04 toolchain
 - fixes segfault in rare codepath
 
-Version 4.1
+#### Version 4.1
 - support for mac os x (all archs)
 - all internal functions are threadsafe when compiled with -DTHREAD_SAFE
   (default).
 
-Version 4.0
+#### Version 4.0
 - replaced dnsresolver script (which required a dynamically linked "dig"
   binary to be present) with remote DNS lookup.
   this speeds up any operation involving DNS, as the old script had to use TCP.
@@ -168,12 +168,12 @@ Version 4.0
   it also adds support for a config file passed via command line switches/
   environment variables.
 
-Version 3.0
+#### Version 3.0
 - support for DNS resolving through proxy
   supports SOCKS4, SOCKS5 and HTTP CONNECT proxy servers.
   Auth-types: socks - "user/pass" , http - "basic".
 
-When to use it ?
+#### When to use it ?
 1) When the only way to get "outside" from your LAN is through proxy server.
 2) To get out from behind restrictive firewall which filters outgoing ports.
 3) To use two (or more) proxies in chain:
@@ -198,7 +198,7 @@ Some cool features:
 * DNS resolving through proxy.
 
 
-Configuration:
+### Configuration:
 --------------
 
 proxychains looks for config file in following order:
@@ -210,28 +210,31 @@ proxychains looks for config file in following order:
 
 ** usually /etc/proxychains.conf
 
-Usage Example:
-
-	$ proxychains telnet targethost.com
+#### Usage Example:
+```bash
+$ proxychains telnet targethost.com
+```
 
 in this example it will run telnet through proxy(or chained proxies)
-specified by proxychains.conf
+specified by `proxychains.conf`
 
-Usage Example:
-
-	$ proxychains -f /etc/proxychains-other.conf telnet targethost2.com
+#### Usage Example:
+```bash
+$ proxychains -f /etc/proxychains-other.conf telnet targethost2.com
+```
 
 in this example it will use different configuration file then proxychains.conf
 to connect to targethost2.com host.
 
-Usage Example:
-
-	$ proxyresolv targethost.com
+#### Usage Example:
+```bash
+$ proxyresolv targethost.com
+```
 
 in this example it will resolve targethost.com through proxy(or chained proxies)
 specified by proxychains.conf
 
-Known Problems:
+#### Known Problems:
 ---------------
 - newer versions of nmap try to determine the network interface to use
   even if it's not needed (like when doing simple syn scans which use the
@@ -243,7 +246,7 @@ Known Problems:
 - Mac OS X 10.11 (El Capitan) ships with a new security feature called SIP
   that prevents hooking of system apps.
   workarounds are to partially disable SIP by issuing
-  csrutil enable --without debug in recovery mode,
+  `csrutil enable --without debug` in recovery mode,
   or to copy the system binary into the home directory and run it from there.
   see github issue #78 for details.
 
@@ -255,12 +258,11 @@ Known Problems:
   musl libc is unaffected from the bug.
 
 
-Community:
+#### Community:
 ----------
-#proxychains on irc.libera.chat
+`#proxychains` on [irc.libera.chat](irc.libera.chat)
 
-Donations:
+#### Donations:
 ----------
 bitcoins donations are welcome - please send to this address:
 1C9LBpuy56veBqw5N33sZMoZW8mwCw3tPh
-
