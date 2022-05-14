@@ -49,7 +49,7 @@ PXCHAINS = proxychains4
 PXCHAINS_D = proxychains4-daemon
 ALL_TOOLS = $(PXCHAINS) $(PXCHAINS_D)
 ALL_CONFIGS = src/proxychains.conf
-ZSH_COMPLETION = completions/_proxychains
+ZSH_COMPLETION = completions/_proxychains4
 
 -include config.mak
 

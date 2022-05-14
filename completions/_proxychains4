@@ -1,4 +1,4 @@
-#compdef proxychains
+#compdef proxychains4
 
 setopt localoptions extended_glob
 
