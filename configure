@@ -86,6 +86,7 @@ usage() {
 	echo "	if set to yes ignores CVE-2015-3887 and makes it possible"
 	echo "	to preload from current dir (possibly insecure, but handy)"
 	echo "--fat-binary : build for both i386 and x86_64 architectures on 64-bit Macs"
+	echo "--fat-binary-m1 : build for both arm64e and x86_64 architectures on M1 Macs"
 	echo "--hookmethod=dlsym|dyld   hook method for osx. default: auto"
 	echo "  if OSX >= 12 is detected, dyld method will be used if auto."
 	echo "--help : show this text"
@@ -100,6 +101,7 @@ spliteq() {
 }
 
 fat_binary=
+fat_binary_m1=
 ignore_cve=no
 hookmethod=auto
 
@@ -115,6 +117,7 @@ parsearg() {
 	--ignore-cve=*) ignore_cve=`spliteq $1`;;
 	--hookmethod=*) hookmethod=`spliteq $1`;;
 	--fat-binary) fat_binary=1;;
+	--fat-binary-m1) fat_binary_m1=1;;
 	--help) usage;;
 	esac
 }
@@ -276,6 +279,11 @@ if ismac ; then
 		echo "Configuring a fat binary for i386 and x86_64"
 		echo "MAC_CFLAGS+=-arch i386 -arch x86_64">>config.mak
 		echo "LDFLAGS+=-arch i386 -arch x86_64">>config.mak
+	fi
+	if [ "$fat_binary_m1" = 1 ] ; then
+		echo "Configuring a fat binary for arm64e and x86_64"
+		echo "MAC_CFLAGS+=-arch arm64e -arch x86_64">>config.mak
+		echo "LDFLAGS+=-arch arm64e -arch x86_64">>config.mak
 	fi
 elif isbsd ; then
 	echo LIBDL=>>config.mak
