@@ -93,14 +93,14 @@ src/version.o: src/version.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CFLAGS_MAIN) $(INC) $(PIC) -c -o $@ $<
 
 $(LDSO_PATHNAME): $(LOBJS)
-	$(CC) $(LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) $(USER_LDFLAGS) \
-		-shared -o $@ $^ $(SOCKET_LIBS)
+	$(CC) $(LDFLAGS) $(FAT_LDFLAGS) $(LD_SET_SONAME)$(LDSO_PATHNAME) \
+		$(USER_LDFLAGS) -shared -o $@ $^ $(SOCKET_LIBS)
 
 $(PXCHAINS): $(OBJS)
-	$(CC) $^ $(USER_LDFLAGS) $(LIBDL) -o $@
+	$(CC) $^ $(FAT_LDFLAGS) $(USER_LDFLAGS) $(LIBDL) -o $@
 
 $(PXCHAINS_D): $(DOBJS)
-	$(CC) $^ $(USER_LDFLAGS) -o $@
+	$(CC) $^ $(FAT_LDFLAGS) $(USER_LDFLAGS) -o $@
 
 
 .PHONY: all clean install install-config install-libs install-tools install-zsh-completion
