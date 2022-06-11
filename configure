@@ -177,6 +177,7 @@ ishaiku() {
 }
 
 check_compile 'whether C compiler works' '' 'int main() {return 0;}' || fail 'error: install a C compiler and library'
+check_compile 'whether C compiler understands -Wno-unknown-pragmas' '-Wno-unknown-pragmas' 'int main() {return 0;}'
 
 if ! check_compile 'whether getnameinfo() servlen argument is POSIX compliant (socklen_t)' "-DGN_NODELEN_T=socklen_t -DGN_SERVLEN_T=socklen_t -DGN_FLAGS_T=int" \
 '#define _GNU_SOURCE\n#include <netdb.h>\nint getnameinfo(const struct sockaddr *, socklen_t, char *, socklen_t, char *, socklen_t, int);int main() {\nreturn 0;}' ; then
