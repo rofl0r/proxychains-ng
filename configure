@@ -280,11 +280,13 @@ if ismac ; then
 		echo "Configuring a fat binary for i386 and x86_64"
 		echo "MAC_CFLAGS+=-arch i386 -arch x86_64">>config.mak
 		echo "FAT_LDFLAGS=-arch i386 -arch x86_64">>config.mak
+		echo "FAT_BIN_LDFLAGS=-arch i386 -arch x86_64">>config.mak
 	fi
 	if [ "$fat_binary_m1" = 1 ] ; then
-		echo "Configuring a fat binary for arm64e and x86_64"
-		echo "MAC_CFLAGS+=-arch arm64e -arch x86_64">>config.mak
-		echo "FAT_LDFLAGS=-arch arm64e -arch x86_64">>config.mak
+		echo "Configuring a fat binary for arm64[e] and x86_64"
+		echo "MAC_CFLAGS+=-arch arm64 -arch arm64e -arch x86_64">>config.mak
+		echo "FAT_LDFLAGS=-arch arm64 -arch arm64e -arch x86_64">>config.mak
+		echo "FAT_BIN_LDFLAGS=-arch arm64 -arch x86_64">>config.mak
 	fi
 elif isbsd ; then
 	echo LIBDL=>>config.mak
