@@ -215,8 +215,7 @@ check_define __APPLE__ && {
 		test "$osver" -gt $((120000 - 1)) && hookmethod=dyld
 	fi
 	# The above check is not sufficient, check out issue #464 for more detail.
-	has_sw_vers=`which sw_vers 2>/dev/null`
-	if [ "$hookmethod" = auto ] && [ "$has_sw_vers" ] ; then
+	if [ "$hookmethod" = auto ] && [ -f "/usr/bin/sw_vers" ] ; then
 		osver=`sw_vers | grep -i productver | awk '{print $2}' | awk -F. '{print $1}'`
 		test "$osver" -ge 12 && hookmethod=dyld
 	fi
