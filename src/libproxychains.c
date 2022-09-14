@@ -743,6 +743,10 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 			if((p_addr_in->s_addr ^ localnet_addr[i].in_addr.s_addr) & localnet_addr[i].in_mask.s_addr)
 				continue;
 		}
+		if (!v6 && dnat) {
+			memcpy(&((struct sockaddr_in *) addr)->sin_addr, p_addr_in, sizeof(*p_addr_in));
+			((struct sockaddr_in *) addr)->sin_port = htons(port);
+		}
 		PDEBUG("accessing localnet using true_connect\n");
 		return true_connect(sock, addr, len);
 	}
