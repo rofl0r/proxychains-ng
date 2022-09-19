@@ -49,7 +49,7 @@ PXCHAINS = proxychains4
 PXCHAINS_D = proxychains4-daemon
 ALL_TOOLS = $(PXCHAINS) $(PXCHAINS_D)
 ALL_CONFIGS = src/proxychains.conf
-ZSH_COMPLETION = completions/_proxychains4
+ZSH_COMPLETION = completions/zsh/_proxychains4
 
 -include config.mak
 
@@ -70,13 +70,13 @@ $(DESTDIR)$(libdir)/%: %
 $(DESTDIR)$(sysconfdir)/%: src/%
 	$(INSTALL) -D -m 644 $< $@
 
-$(DESTDIR)$(zshcompletiondir)/%: completions/%
+$(DESTDIR)$(zshcompletiondir)/%: completions/zsh/%
 	$(INSTALL) -D -m 644 $< $@
 
 install-libs: $(ALL_LIBS:%=$(DESTDIR)$(libdir)/%)
 install-tools: $(ALL_TOOLS:%=$(DESTDIR)$(bindir)/%)
 install-config: $(ALL_CONFIGS:src/%=$(DESTDIR)$(sysconfdir)/%)
-install-zsh-completion: $(ZSH_COMPLETION:completions/%=$(DESTDIR)$(zshcompletiondir)/%)
+install-zsh-completion: $(ZSH_COMPLETION:completions/zsh/%=$(DESTDIR)$(zshcompletiondir)/%)
 
 clean:
 	rm -f $(ALL_LIBS)
