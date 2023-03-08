@@ -824,7 +824,8 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 			close(pipe_fd[0]);
 got_buff:
 			l = strlen(buff);
-			if(l && buff[l-1] == '\n') buff[l-1] = 0;
+			if (!l) goto err_dns;
+			if (buff[l-1] == '\n') buff[l-1] = 0;
 			addr = inet_addr(buff);
 			if (addr == (in_addr_t) (-1))
 				goto err_dns;
@@ -839,8 +840,7 @@ got_buff:
 			name, inet_ntoa(*(struct in_addr*)&addr));
 	return &hostent_space;
 err_dns:
-	proxychains_write_log("|DNS-response|: %s does not exist\n", name);
-	perror("err_dns");
+	proxychains_write_log("|DNS-response|: %s lookup error\n", name);
 err:
 	return NULL;
 }
@@ -969,12 +969,13 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 		node?node:"",service?service:"",hints?(int)hints->ai_flags:0);
 
 	space = calloc(1, sizeof(struct addrinfo_data));
-	if(!space) goto err1;
+	if(!space) return EAI_MEMORY;
 
 	if(node && !my_inet_aton(node, space)) {
 		/* some folks (nmap) use getaddrinfo() with AI_NUMERICHOST to check whether a string
 		   containing a numeric ip was passed. we must return failure in that case. */
 		if(hints && (hints->ai_flags & AI_NUMERICHOST)) {
+err_nn:
 			free(space);
 			return EAI_NONAME;
 		}
@@ -987,7 +988,7 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 			memcpy(&((struct sockaddr_in *) &space->sockaddr_space)->sin_addr,
 			       *(hp->h_addr_list), sizeof(in_addr_t));
 		else
-			goto err2;
+			goto err_nn;
 	} else if(node) {
 		af = ((struct sockaddr_in *) &space->sockaddr_space)->sin_family;
 	} else if(!node && !(hints->ai_flags & AI_PASSIVE)) {
@@ -1026,12 +1027,5 @@ int proxy_getaddrinfo(const char *node, const char *service, const struct addrin
 #endif
 		p->ai_flags = (AI_V4MAPPED | AI_ADDRCONFIG);
 	}
-
-	goto out;
-	err2:
-	free(space);
-	err1:
-	return 1;
-	out:
 	return 0;
 }
