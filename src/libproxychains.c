@@ -136,13 +136,13 @@ static void do_init(void) {
 	srand(get_rand_seed());
 	core_initialize();
 
-	/* read the config file */
-	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
-	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
-
 	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
 	setup_hooks();
+
+	/* read the config file */
+	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
+	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
 
 	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
 	while(close_range_buffer_cnt) {
@@ -349,7 +349,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 					if(*ct == STRICT_TYPE && proxychains_resolver >= DNSLF_RDNS_START && count > 0) {
 						/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
 						rdns_init(proxychains_resolver);
-						ip_type4 internal_ip = at_get_ip_for_host(host, strlen(host));
+						ip_type4 internal_ip = rdns_get_ip_for_host(host, strlen(host));
 						pd[count].ip.is_v6 = 0;
 						host_ip->addr.v4 = internal_ip;
 						if(internal_ip.as_int == IPT4_INVALID.as_int)
