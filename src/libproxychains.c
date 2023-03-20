@@ -105,9 +105,6 @@ static void* load_sym(char* symname, void* proxyfunc, int is_mandatory) {
 	return funcptr;
 }
 
-#define INIT() init_lib_wrapper(__FUNCTION__)
-
-
 #include "allocator_thread.h"
 
 const char *proxychains_get_version(void);
@@ -165,16 +162,19 @@ static void init_lib_wrapper(const char* caller) {
 	pthread_once(&init_once, do_init);
 }
 
-/* if we use gcc >= 3, we can instruct the dynamic loader 
+/* if we use gcc >= 3, we can instruct the dynamic loader
  * to call init_lib at link time. otherwise it gets loaded
  * lazily, which has the disadvantage that there's a potential
- * race condition if 2 threads call it before init_l is set 
+ * race condition if 2 threads call it before init_l is set
  * and PTHREAD support was disabled */
-#if __GNUC__ > 2
+#if __GNUC__+0 > 2
 __attribute__((constructor))
 static void gcc_init(void) {
-	INIT();
+	init_lib_wrapper(__FUNCTION__);
 }
+#define INIT() do {} while(0)
+#else
+#define INIT() init_lib_wrapper(__FUNCTION__)
 #endif
 
 
