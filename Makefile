@@ -78,6 +78,18 @@ install-tools: $(ALL_TOOLS:%=$(DESTDIR)$(bindir)/%)
 install-config: $(ALL_CONFIGS:src/%=$(DESTDIR)$(sysconfdir)/%)
 install-zsh-completion: $(ZSH_COMPLETION:completions/%=$(DESTDIR)$(zshcompletiondir)/%)
 
+
+uninstall: uninstall-libs uninstall-tools uninstall-config uninstall-zsh-completion
+
+uninstall-libs: 
+	rm -f $(ALL_LIBS:%=$(DESTDIR)$(libdir)/%)
+uninstall-tools: 
+	rm -f $(ALL_TOOLS:%=$(DESTDIR)$(bindir)/%)
+uninstall-config: 
+	rm -f $(ALL_CONFIGS:src/%=$(DESTDIR)$(sysconfdir)/%)
+uninstall-zsh-completion: 
+	rm -f $(ZSH_COMPLETION:completions/%=$(DESTDIR)$(zshcompletiondir)/%)
+
 clean:
 	rm -f $(ALL_LIBS)
 	rm -f $(ALL_TOOLS)
