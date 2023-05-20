@@ -133,8 +133,14 @@ static unsigned get_rand_seed(void) {
 }
 
 static void do_init(void) {
+	char *env;
+
 	srand(get_rand_seed());
 	core_initialize();
+
+	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
+	if(env && *env == '1')
+		proxychains_quiet_mode = 1;
 
 	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
@@ -306,10 +312,6 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	        perror("couldnt read configuration file");
         	exit(1);
 	}
-
-	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
-	if(env && *env == '1')
-		proxychains_quiet_mode = 1;
 
 	while(fgets(buf, sizeof(buf), file)) {
 		buff = buf;
