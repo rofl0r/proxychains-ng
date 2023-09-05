@@ -64,6 +64,9 @@ freeaddrinfo_t true_freeaddrinfo;
 getnameinfo_t true_getnameinfo;
 gethostbyaddr_t true_gethostbyaddr;
 sendto_t true_sendto;
+send_t true_send;
+recv_t true_recv;
+recvfrom_t true_recvfrom;
 
 int tcp_read_time_out;
 int tcp_connect_time_out;
@@ -685,7 +688,7 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 	sa_family_t fam = SOCKFAMILY(*addr);
 	getsockopt(sock, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
 	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_STREAM))
-		return true_connect(sock, addr, len);
+				return true_connect(sock, addr, len);
 
 	int v6 = dest_ip.is_v6 = fam == AF_INET6;
 
@@ -902,6 +905,25 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
+HOOKFUNC(ssize_t, recv, int sockfd, void *buf, size_t len, int flags){
+	INIT();
+	PFUNC();
+	return true_recv(sockfd, buf, len, flags);
+}
+
+HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags, 
+			struct sockaddr *src_addr, socklen_t *addrlen){
+	INIT();
+	PFUNC();
+	return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+}
+
+HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
+	INIT();
+	PFUNC();
+	return true_send(sockfd, buf, len, flags);
+}
+
 #ifdef MONTEREY_HOOKING
 #define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = &X; } while(0)
 #define SETUP_SYM_OPTIONAL(X)
@@ -913,7 +935,10 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 
 static void setup_hooks(void) {
 	SETUP_SYM(connect);
+	SETUP_SYM(send);
 	SETUP_SYM(sendto);
+	SETUP_SYM(recvfrom);
+	SETUP_SYM(recv);
 	SETUP_SYM(gethostbyname);
 	SETUP_SYM(getaddrinfo);
 	SETUP_SYM(freeaddrinfo);
