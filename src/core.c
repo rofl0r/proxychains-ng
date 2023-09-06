@@ -423,6 +423,52 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	return SOCKET_ERROR;
 }
 
+
+/* Given a socket connected to a SOCKS5 proxy server, performs a UDP_ASSOCIATE handshake and returns BND_ADDR and BND_PORT if successfull*/
+static int udp_associate(int sock, ip_type dst_addr, unsigned short dst_port, ip_type *bnd_addr, unsigned short *bnd_port, char *user, char *pass){
+	//TODO hugoc
+	return SUCCESS;
+}
+
+/* Fills buf with the SOCKS5 udp request header for the target dst_addr:dst_port*/
+static int udp_header(socks5_addr dst_addr, unsigned short dst_port , char frag, char * buf, size_t buflen) {
+
+	if (buflen <= 262) { //TODO: make something cleaner
+		return -1;
+	}
+
+	int buf_iter = 0;
+	buf[buf_iter++] = 0;	// reserved
+	buf[buf_iter++] = 0;	// reserved
+	buf[buf_iter++] = frag;	// frag
+	buf[buf_iter++] = dst_addr.atyp;	// atyp
+
+	int v6 = dst_addr.atyp == ATYP_V6;
+	switch (dst_addr.atyp){
+		case ATYP_V6:
+		case ATYP_V4:
+			memcpy(buf + buf_iter, dst_addr.addr.v6, v6?16:4);
+			buf_iter += v6?16:4;
+			break;
+	
+		case ATYP_DOM:
+			buf[buf_iter++] = dst_addr.addr.dom.len;
+			memcpy(buf + buf_iter, dst_addr.addr.dom.name, dst_addr.addr.dom.len);
+			buf_iter += dst_addr.addr.dom.len;
+			break;
+	}
+
+	memcpy(buf + buf_iter, &dst_port, 2);	// dest port
+	buf_iter += 2;
+	
+	return buf_iter;
+}
+
+static int encapsulate_udp_packet(udp_relay_chain rcd, ip_type target_addr, unsigned short target_port, char frag) {
+
+}
+
+
 #define TP " ... "
 #define DT "Dynamic chain"
 #define ST "Strict chain"

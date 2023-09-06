@@ -902,12 +902,15 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		addrlen = 0;
 		flags &= ~MSG_FASTOPEN;
 	}
+	//TODO hugoc: case of SOCK_DGRAM with AF_INET or AF_INET6
+
 	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
 HOOKFUNC(ssize_t, recv, int sockfd, void *buf, size_t len, int flags){
 	INIT();
 	PFUNC();
+	//TODO hugoc
 	return true_recv(sockfd, buf, len, flags);
 }
 
@@ -915,12 +918,14 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 			struct sockaddr *src_addr, socklen_t *addrlen){
 	INIT();
 	PFUNC();
+	//TODO hugoc
 	return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 }
 
 HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	INIT();
 	PFUNC();
+	//TODO hugoc
 	return true_send(sockfd, buf, len, flags);
 }
 

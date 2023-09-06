@@ -64,6 +64,7 @@ typedef enum {
 	FIFOLY
 } select_type;
 
+
 typedef struct {
 	sa_family_t family;
 	unsigned short port;
@@ -92,6 +93,43 @@ typedef struct {
 	char user[256];
 	char pass[256];
 } proxy_data;
+
+
+
+typedef enum {
+	ATYP_V4 = 0x01,
+	ATYP_V6 = 0x04,
+	ATYP_DOM = 0x03
+} ATYP;
+
+typedef struct{
+	ATYP atyp;
+	union {
+		ip_type4 v4;
+		unsigned char v6[16];
+		struct {
+			char len;
+			char name[255];
+		} dom;
+	} addr ;
+} socks5_addr;
+
+/* A structure to hold necessary information about an UDP relay server that has been set up 
+with a UDP_ASSOCIATE command issued on the tcp_sockfd */
+typedef struct {
+	int tcp_sockfd;	// the tcp socket on which the UDP_ASSOCIATE command has been issued. Closing this fd closes the udp relay.
+	socks5_addr bnd_addr; // the BND_ADDR returned by the udp relay server in the response to the UDP_ASSOCIATE command. 
+	unsigned short bnd_port; // the BND_PORT returned by the udp relay server in the response to the UDP_ASSOCIATE command.
+	socks5_addr dst_addr; // ?? the DST_ADDR sent in the UDP_ASSOCIATE command.
+	unsigned short dst_port; // ?? the DST_PORT sent in the UDP_ASSOCIATE command.
+} udp_relay_data;
+
+/* A structure to hold the chain of udp relay servers assiociated with a client socket */
+typedef struct {
+	int sockfd; // the client socket for which the chain of relays has been set up
+	udp_relay_data * ud; // an array of relay, ud[0] being the closest to the client and u[len(ud)-1] the closest to the targets  
+	unsigned int relay_count; 
+} udp_relay_chain;
 
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
 			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
@@ -146,6 +184,8 @@ void proxy_freeaddrinfo(struct addrinfo *res);
 
 void core_initialize(void);
 void core_unload(void);
+
+static int udp_associate(int sock, ip_type dst_addr, unsigned short dst_port, ip_type *bnd_addr, unsigned short *bnd_port, char *user, char *pass);
 
 #include "debug.h"
 
