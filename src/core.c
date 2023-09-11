@@ -544,7 +544,7 @@ either of them. */
 	if(len != read_n_bytes(sock, (char *) buff, len))
 		goto err;
 
-	memcpy(bnd_addr->addr.v6, buff+4,(len==16)?16:4);
+	memcpy(bnd_addr->addr.v6, buff,(len==16)?16:4);
 
 	if(2 != read_n_bytes(sock, (char *) buff, 2))
 		goto err;
@@ -653,13 +653,13 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 			len = 6;
 			break;
 		case ATYP_DOM:
-			len = (tmp->next)->bnd_addr.addr.dom.len;
+			len = (tmp->next)->bnd_addr.addr.dom.len + 1;
 			break;
 		default:
 			break;
 		}
 
-		headers_size += len;
+		headers_size += len + 6;
 		tmp = tmp->next;
 	}
 
@@ -672,13 +672,13 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 		len = 6;
 		break;
 	case ATYP_DOM:
-		len = target_addr.addr.dom.len;
+		len = target_addr.addr.dom.len + 1;
 		break;
 	default:
 		break;
 	}
 
-	headers_size += len;
+	headers_size += len + 6;
 
 	char * buff = NULL;
 	if (NULL == (buff = (char*)malloc(headers_size+data_len))){
@@ -735,7 +735,15 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 	};
 	if(v6) memcpy(&addr6.sin6_addr.s6_addr, chain.head->bnd_addr.addr.v6, 16);
 
-	sendto(sockfd, buff, offset+data_len, 0, (struct sockaddr *) (v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr) );
+	int sent = 0;
+
+	sent = true_sendto(sockfd, buff, offset+data_len, 0, (struct sockaddr *) (v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr) );
+	if (sent != offset+data_len){
+		PDEBUG("true_sendto error\n");
+		goto err;
+	}
+	
+	return SUCCESS;
 
 	err:
 	free(buff);
@@ -1221,10 +1229,10 @@ udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, cha
 		while((p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
 			if(SUCCESS != add_node_to_chain(p1, new_chain)) {
 				PDEBUG("add_node_to_chain failed\n");
-				p1->pt = BLOCKED_STATE;
+				p1->ps = BLOCKED_STATE;
 				goto error;
 			}
-			p1->pt = BUSY_STATE;	
+			p1->ps = BUSY_STATE;	
 		}
 		return new_chain;
 

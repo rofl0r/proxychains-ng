@@ -177,6 +177,7 @@ extern getaddrinfo_t true_getaddrinfo;
 extern freeaddrinfo_t true_freeaddrinfo;
 extern getnameinfo_t true_getnameinfo;
 extern gethostbyaddr_t true_gethostbyaddr;
+extern sendto_t true_sendto;
 
 struct gethostbyname_data {
 	struct hostent hostent_space;
