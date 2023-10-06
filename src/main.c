@@ -19,6 +19,9 @@
 #ifdef IS_MAC
 #define _DARWIN_C_SOURCE
 #endif
+#ifdef __UCLIBC__
+#define __USE_GNU
+#endif
 #include <dlfcn.h>
 
 #include "common.h"
