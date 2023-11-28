@@ -12,7 +12,7 @@ prefix = /usr/local/
 includedir = $(prefix)/include
 libdir = $(prefix)/lib
 sysconfdir = $(prefix)/etc
-zshcompletiondir = $(prefix)/share/zsh/site_functions
+zshcompletiondir = $(prefix)/share/zsh/site-functions
 
 OBJS = src/common.o src/main.o
 
