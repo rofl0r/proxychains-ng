@@ -944,6 +944,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 
 	PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
 	PDEBUG("port: %d\n", port);
+	PDEBUG("client socket: %d\n", sockfd);
 
 	// check if connect called from proxydns
         remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
@@ -1005,7 +1006,8 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		errno = ECONNREFUSED;
 		return -1;
 	}
-				
+
+	PDEBUG("Successfully sent UDP packet, leaving hook\n");			
 	return SUCCESS;
 }
 
@@ -1028,7 +1030,35 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	INIT();
 	PFUNC();
 	//TODO hugoc
-	return true_send(sockfd, buf, len, flags);
+
+	//Checker si c'est une SOCK_DGRAM + AFINET ou AFINET6
+	// Récupérer l'adresse liée avec getpeername
+	// Exécuter le hook sendto
+	int socktype = 0;
+	socklen_t optlen = 0;
+	optlen = sizeof(socktype);
+	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	if( socktype != SOCK_DGRAM){
+		PDEBUG("sockfd %d is not a SOCK_DGRAM socket, returning to true_send\n", sockfd);
+		return true_send(sockfd, buf, len, flags);
+	}
+
+	struct sockaddr addr;
+	socklen_t addr_len = sizeof(addr);
+
+	if(SUCCESS != getpeername(sockfd, &addr, &addr_len )){
+		PDEBUG("error getpeername, errno=%d. Returning to true_send()\n", errno);
+		return true_send(sockfd, buf, len, flags);
+	}
+	//DEBUGDECL(char str[256]);
+
+	sa_family_t fam = SOCKFAMILY(addr);
+	if(!(fam  == AF_INET || fam == AF_INET6)){
+		PDEBUG("sockfd %d address familiy is not a AF_INET or AF_INET6, returning to true_send\n", sockfd);
+		return true_send(sockfd, buf, len, flags);
+	}
+
+	return sendto(sockfd, buf, len, flags, &addr, addr_len);
 }
 
 #ifdef MONTEREY_HOOKING
