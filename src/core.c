@@ -600,6 +600,51 @@ static int write_udp_header(socks5_addr dst_addr, unsigned short dst_port , char
 	return buf_iter;
 }
 
+
+int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned short* src_port, char* frag) {
+
+	if (buflen < 5){
+		PDEBUG("buffer too short to contain a UDP header\n");
+		return -1;
+	}
+
+	int buf_iter = 0;
+	buf_iter += 2; // first 2 bytes are reserved;
+	*frag = buf[buf_iter++];
+	src_addr->atyp = buf[buf_iter++];
+
+	switch (src_addr->atyp)
+	{
+	case ATYP_DOM:
+		src_addr->addr.dom.len = buf[buf_iter++];
+		if(buflen < 5 + 2 + src_addr->addr.dom.len ) {
+			PDEBUG("buffer too short to read the UDP header\n");
+			return -1;
+		}
+		memcpy(src_addr->addr.dom.name, buf + buf_iter, src_addr->addr.dom.len);
+		buf_iter +=  src_addr->addr.dom.len;
+		break;
+
+	case ATYP_V4:
+	case ATYP_V6:
+		int v6 = src_addr->atyp == ATYP_V6;
+		if(buflen < 4 + 2 + v6?16:4 ){
+			PDEBUG("buffer too short to read the UDP header\n");
+			return -1;			
+		}
+		memcpy(src_addr->addr.v6, buf + buf_iter, v6?16:4);
+		buf_iter += v6?16:4;
+		break;
+	default:
+		break;
+	}
+
+	memcpy(src_port, buf+buf_iter, 2);
+	buf_iter += 2;
+
+	return buf_iter;
+}
+
 int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len) {
 	
 	if (chain.head == NULL ){ 
