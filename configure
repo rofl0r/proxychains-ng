@@ -220,9 +220,6 @@ check_define __FreeBSD__ && bsd_detected=true
 check_define __OpenBSD__ && {
 bsd_detected=true
 echo "CFLAGS+=-DIS_OPENBSD">>config.mak
-check_compile_run 'whether OpenBSDs fclose() (illegally) calls close()' \
-'#include <stdio.h>\n#include<stdlib.h>\nint close(int x){exit(0);}int main(){fclose(stdin);return 1;}' && \
-OUR_CPPFLAGS="$OUR_CPPFLAGS -DBROKEN_FCLOSE"
 }
 check_define __sun && check_define __SVR4 && solaris_detected=true
 check_define __HAIKU__ && haiku_detected=true
