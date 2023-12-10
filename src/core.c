@@ -426,7 +426,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 /* Given a socket connected to a SOCKS5 proxy server, performs a UDP_ASSOCIATE handshake and returns BND_ADDR and BND_PORT if successfull.
 Pass NULL dst_addr and dst_port to fill those fields with 0 if expected local addr and port for udp sending are unknown (see RFC1928) */
-static int udp_associate(int sock, ip_type* dst_addr, unsigned short dst_port, socks5_addr* bnd_addr, unsigned short* bnd_port, char* user, char* pass){
+static int udp_associate(int sock, ip_type* dst_addr, unsigned short dst_port, ip_type* bnd_addr, unsigned short* bnd_port, char* user, char* pass){
 	//TODO hugoc
 
 	PFUNC();
@@ -524,27 +524,27 @@ either of them. */
 	if(buff[0] != 5 || buff[1] != 0)
 		goto err;
 
-	bnd_addr->atyp = buff[3];
 
 	switch (buff[3]) {
-		case 1:
-			len = 4;
+		case ATYP_V4:
+			bnd_addr->is_v6 = 0;
 			break;
-		case 4:
-			len = 16;
+		case ATYP_V6:
+			bnd_addr->is_v6 = 1;
 			break;
-		case 3:
+		case ATYP_DOM:
 			PDEBUG("BND_ADDR in UDP_ASSOCIATE response should not be a domain name!\n");
 			goto err;
 			break;
 		default:
 			goto err;
 	}
+	len = bnd_addr->is_v6?16:4;
 
 	if(len != read_n_bytes(sock, (char *) buff, len))
 		goto err;
 
-	memcpy(bnd_addr->addr.v6, buff,(len==16)?16:4);
+	memcpy(bnd_addr->addr.v6, buff,len);
 
 	if(2 != read_n_bytes(sock, (char *) buff, 2))
 		goto err;
@@ -603,6 +603,8 @@ static int write_udp_header(socks5_addr dst_addr, unsigned short dst_port , char
 
 int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned short* src_port, char* frag) {
 
+	PFUNC();
+	PDEBUG("buflen : %d\n", buflen);
 	if (buflen < 5){
 		PDEBUG("buffer too short to contain a UDP header\n");
 		return -1;
@@ -612,12 +614,14 @@ int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned s
 	buf_iter += 2; // first 2 bytes are reserved;
 	*frag = buf[buf_iter++];
 	src_addr->atyp = buf[buf_iter++];
-
+	int v6;
+	
 	switch (src_addr->atyp)
 	{
 	case ATYP_DOM:
+		PDEBUG("UDP header with ATYP_DOM addr type\n");
 		src_addr->addr.dom.len = buf[buf_iter++];
-		if(buflen < 5 + 2 + src_addr->addr.dom.len ) {
+		if(buflen < (5 + 2 + src_addr->addr.dom.len) ) {
 			PDEBUG("buffer too short to read the UDP header\n");
 			return -1;
 		}
@@ -627,8 +631,10 @@ int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned s
 
 	case ATYP_V4:
 	case ATYP_V6:
-		int v6 = src_addr->atyp == ATYP_V6;
-		if(buflen < 4 + 2 + v6?16:4 ){
+		PDEBUG("UDP header with ATYP_V4/6 addr type\n");
+		v6 = src_addr->atyp == ATYP_V6;
+		PDEBUG("buflen : %d\n", buflen);
+		if(buflen < (4 + 2 + v6?16:4) ){
 			PDEBUG("buffer too short to read the UDP header\n");
 			return -1;			
 		}
@@ -643,6 +649,151 @@ int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned s
 	buf_iter += 2;
 
 	return buf_iter;
+}
+
+int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, unsigned short* src_port, char* data, unsigned int data_len ){
+	//receives data on sockfd, decapsulates the header for each relay in chain and check they match, returns UDP data and source address/port
+	
+	PFUNC();
+
+	char buffer[65535]; //buffer to receive and decapsulate a UDP relay packet. UDP maxsize is 65535
+	int bytes_received;
+	struct sockaddr from;
+	socklen_t addrlen = sizeof(from);
+	PDEBUG("test\n");
+
+	bytes_received = true_recvfrom(sockfd, buffer,sizeof(buffer), 0, &from, &addrlen);
+	if(-1 == bytes_received){
+		PDEBUG("true_receive returned -1\n");
+		return -1;
+	}
+
+	PDEBUG("successful recvfrom(), %d bytes received\n", bytes_received);
+	//Check that the packet was received from the first relay of the chain
+	// i.e. does from == chain.head.bnd_addr ?
+	int from_isv6 = ((struct sockaddr_in *) &(from))->sin_family == AF_INET6;
+	int same_address = 0;
+	int same_port = 0;
+
+	if(chain.head->bnd_addr.is_v6){
+		if(from_isv6){
+			same_address = memcmp(((struct sockaddr_in6 *)&from)->sin6_addr.s6_addr, chain.head->bnd_addr.addr.v6, 16);
+		}
+	}
+	else{
+		uint32_t from_v4_asint;
+		if(from_isv6){
+			// Maybe from is a ipv4-mapped ipv6 ? // TODO: use the existing is_v4inv6 as in connect and sendto
+			memcpy(from_v4_asint, ((struct sockaddr_in6 *)&from)->sin6_addr.s6_addr + 11, 4);
+		}
+		else{
+			from_v4_asint = (uint32_t)(((struct sockaddr_in *)&from)->sin_addr.s_addr);
+		}
+
+		same_address = from_v4_asint == chain.head->bnd_addr.addr.v4.as_int;
+	}
+
+	same_port = chain.head->bnd_port == from_isv6?((struct sockaddr_in6 *)&from)->sin6_port:((struct sockaddr_in *)&from)->sin_port;
+
+	if(!(same_address && same_port)){
+		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
+		int min = (bytes_received <= data_len)?bytes_received:data_len;
+		memcpy(data, buffer, min);
+		return min;
+	}
+
+	PDEBUG("packet received from the proxy chain's head\n");
+	// Go through the whole proxy chain, decapsulate each header and check that the addresses match
+
+	udp_relay_node * tmp = chain.head;
+	int read = 0;
+	int rc = 0;
+	socks5_addr header_addr;
+	unsigned short header_port;
+	char header_frag;
+	while (tmp->next != NULL)
+	{
+		same_address = 0;
+		
+
+
+		rc = read_udp_header(buffer+read, bytes_received-read, &header_addr, &header_port, &header_frag );
+		if(-1 == rc){
+			PDEBUG("error reading UDP header\n");
+			return -1;
+		}
+		read += rc;
+
+		int header_v6 = header_addr.atyp == ATYP_V6;
+
+		if(tmp->next->bnd_port != header_port){
+			PDEBUG("UDP header port is not equal to proxy node port, dropping packet\n");
+			return -1;
+		}
+
+		if(tmp->next->bnd_addr.is_v6){
+			if(header_v6){
+				same_address = memcmp(tmp->next->bnd_addr.addr.v6, header_addr.addr.v6, 16);
+			}
+		}
+		else{
+			same_address = memcmp(&(tmp->next->bnd_addr.addr.v4), header_v6?(&(header_addr.addr.v6)+11):&(header_addr.addr.v4), 4);
+		}
+			
+
+		if(!same_address){
+			PDEBUG("UDP header addr is not equal to proxy node addr, dropping packet\n");
+			return -1;
+		}	
+
+		PDEBUG("UDP header's addr and port correspond to proxy node's addr and port\n");
+		tmp = tmp->next;
+
+	}
+
+	PDEBUG("all UDP headers validated\n");
+
+
+	// Decapsulate the last header. No checks needed here, just pass the source addr and port as return values
+	char frag;
+	rc = read_udp_header(buffer+read, bytes_received-read, &header_addr, src_port, &frag);
+	if(-1 == rc){
+		PDEBUG("error reading UDP header\n");
+		return -1;
+	}
+	read += rc;
+
+	if(header_addr.atyp == ATYP_DOM){ // do the reverse mapping
+		PDEBUG("Fetching matching IP for hostname\n");
+		DUMP_BUFFER(header_addr.addr.dom.name,header_addr.addr.dom.len);
+		ip_type4 tmp_ip = IPT4_INVALID;
+		char host_string[256];
+		memcpy(host_string, header_addr.addr.dom.name, header_addr.addr.dom.len);
+		host_string[header_addr.addr.dom.len] = 0x00;
+
+		tmp_ip = rdns_get_ip_for_host(host_string, header_addr.addr.dom.len);
+		if(tmp_ip.as_int == -1){
+			PDEBUG("No matching IP found for hostname\n");
+			return -1;
+		}
+		header_addr.atyp = ATYP_V4;
+		header_addr.addr.v4.as_int = tmp_ip.as_int;
+	
+	}
+	
+	src_addr->is_v6 = (header_addr.atyp == ATYP_V6); 
+	if(src_addr->is_v6){
+		memcpy(src_addr->addr.v6, header_addr.addr.v6, 16);
+	} else{
+		src_addr->addr.v4.as_int = header_addr.addr.v4.as_int;
+	}
+
+
+	int min = ((bytes_received-read)>data_len)?data_len:(bytes_received-read);
+	memcpy(data,buffer+read, min);
+	
+	
+	return min;
 }
 
 int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len) {
@@ -663,10 +814,11 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 	if(!target_ip.is_v6 && proxychains_resolver >= DNSLF_RDNS_START && target_ip.addr.v4.octet[0] == remote_dns_subnet) {
 		target_addr.atyp = ATYP_DOM;
 		dns_len = rdns_get_host_for_ip(target_ip.addr.v4, target_addr.addr.dom.name);
+		PDEBUG("dnslen: %d\n", dns_len);
 		if(!dns_len) goto err;
 		else dns_name = target_addr.addr.dom.name;
-		target_addr.addr.dom.len = dns_len && 0xFF;
-		
+		target_addr.addr.dom.len = dns_len & 0xFF;
+		PDEBUG("dnslen in struct: %d\n", target_addr.addr.dom.len);
 		
 	} else {
 		if(target_ip.is_v6){
@@ -689,20 +841,22 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 	int len = 0;
 	while(tmp->next != NULL){
 		
-		switch ((tmp->next)->bnd_addr.atyp)
-		{
-		case ATYP_V4:
-			len = 4;
-			break;
-		case ATYP_V6:
-			len = 6;
-			break;
-		case ATYP_DOM:
-			len = (tmp->next)->bnd_addr.addr.dom.len + 1;
-			break;
-		default:
-			break;
-		}
+		// switch ((tmp->next)->bnd_addr.atyp)
+		// {
+		// case ATYP_V4:
+		// 	len = 4;
+		// 	break;
+		// case ATYP_V6:
+		// 	len = 6;
+		// 	break;
+		// case ATYP_DOM:
+		// 	len = (tmp->next)->bnd_addr.addr.dom.len + 1;
+		// 	break;
+		// default:
+		// 	break;
+		// }
+
+		len = (tmp->next)->bnd_addr.is_v6?16:4;
 
 		headers_size += len + 6;
 		tmp = tmp->next;
@@ -740,7 +894,12 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 	tmp = chain.head;
 	while (tmp->next != NULL)
 	{
-		written = write_udp_header((tmp->next)->bnd_addr, (tmp->next)->bnd_port, 0, buff+offset, headers_size + data_len - offset);
+
+		socks5_addr tmpaddr;
+		tmpaddr.atyp = (tmp->next)->bnd_addr.is_v6?ATYP_V6:ATYP_V4;
+		memcpy(tmpaddr.addr.v6, (tmp->next)->bnd_addr.addr.v6, (tmp->next)->bnd_addr.is_v6?16:4);
+
+		written = write_udp_header(tmpaddr, (tmp->next)->bnd_port, 0, buff+offset, headers_size + data_len - offset);
 		if (written == -1){
 			PDEBUG("error write_udp_header\n");
 			goto err;
@@ -763,11 +922,11 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 	// Send the packet
 	// FIXME: should write_n_bytes be used here instead ?
 
-	if(chain.head->bnd_addr.atyp == ATYP_DOM){
-		PDEBUG("BND_ADDR of type DOMAINE (0x03) not supported yet\n");
-		goto err;
-	}
-	int v6 = chain.head->bnd_addr.atyp == ATYP_V6;
+	// if(chain.head->bnd_addr.atyp == ATYP_DOM){
+	// 	PDEBUG("BND_ADDR of type DOMAINE (0x03) not supported yet\n");
+	// 	goto err;
+	// }
+	int v6 = chain.head->bnd_addr.is_v6 == ATYP_V6;
 
 	struct sockaddr_in addr = {
 		.sin_family = AF_INET,

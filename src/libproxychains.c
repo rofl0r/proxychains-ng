@@ -1015,7 +1015,7 @@ HOOKFUNC(ssize_t, recv, int sockfd, void *buf, size_t len, int flags){
 	INIT();
 	PFUNC();
 	//TODO hugoc
-	return true_recv(sockfd, buf, len, flags);
+	return recvfrom(sockfd, buf, len, flags, NULL, NULL);
 }
 
 HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags, 
@@ -1023,7 +1023,102 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	INIT();
 	PFUNC();
 	//TODO hugoc
-	return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+	DEBUGDECL(char str[256]);
+	int socktype = 0;
+	socklen_t optlen = 0;
+	optlen = sizeof(socktype);
+	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	if( socktype != SOCK_DGRAM){
+		PDEBUG("sockfd %d is not a SOCK_DGRAM socket, returning to true_recvfrom\n", sockfd);
+		return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+	}
+	PDEBUG("sockfd %d is a SOCK_DGRAM socket\n", sockfd);
+
+	struct sockaddr addr;
+	socklen_t addr_len = sizeof(addr);
+	if(SUCCESS != getsockname(sockfd, &addr, &addr_len )){
+		PDEBUG("error getsockname, errno=%d. Returning to true_recvfrom()\n", errno);
+		return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+	}
+	sa_family_t fam = SOCKFAMILY(addr);
+	if(!(fam  == AF_INET || fam == AF_INET6)){
+		PDEBUG("sockfd %d address familiy is not a AF_INET or AF_INET6, returning to true_recvfrom\n", sockfd);
+		return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+	}
+
+	PDEBUG("sockfd %d's address family is AF_INET or AF_INET6\n", sockfd);
+
+
+	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
+	if(relay_chain == NULL){
+		// No chain is opened for this socket
+		PDEBUG("sockfd %d does not corresponds to any opened relay chain, returning to true_recvfrom\n", sockfd);
+		return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
+	}	
+	PDEBUG("sockfd %d is associated with udp_relay_chain %x\n", sockfd, relay_chain);
+	
+	// On lance un receive_udp_packet()
+	
+	char tmp_buffer[65535]; //maximum theoretical size of a UDP packet. 
+	int bytes_received;
+	ip_type from_addr;
+	unsigned short from_port;
+	bytes_received = receive_udp_packet(sockfd, *relay_chain, &from_addr, &from_port, tmp_buffer, 65535);
+	
+	if(-1 == bytes_received){
+		PDEBUG("true_recvfrom returned -1\n");
+		return -1;
+	}
+
+	PDEBUG("received %d bytes through receive_udp_packet()\n", bytes_received);
+	PDEBUG("data: ");
+	DUMP_BUFFER(tmp_buffer, bytes_received);
+	PDEBUG("from_addr: ");
+	DUMP_BUFFER(from_addr.addr.v6, from_addr.is_v6?16:4);
+	PDEBUG("from_addr: %s\n", inet_ntop(from_addr.is_v6 ? AF_INET6 : AF_INET, from_addr.is_v6 ? (void*)from_addr.addr.v6 : (void*)from_addr.addr.v4.octet, str, sizeof(str)));
+	PDEBUG("from_port: %hu\n", ntohs(from_port));
+	
+	// WARNING : Est ce que si le client avait envoyé des packets UDP avec resolution DNS dans le socks,
+	// on doit lui filer comme address source pour les packets recu l'addresse de mapping DNS ? Si oui comment
+	// la retrouver ? 
+	
+	int min = (bytes_received > len)?len:bytes_received; 
+	memcpy(buf, tmp_buffer, min);
+
+	if (src_addr == NULL){ // No need to fill src_addr in this case
+		return min;
+	}
+
+	struct sockaddr_in* src_addr_v4;
+	struct sockaddr_in6* src_addr_v6;
+
+	//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
+	// 
+
+	if(from_addr.is_v6){
+		if(addrlen < sizeof(struct sockaddr_in6)){
+			PDEBUG("addrlen too short for ipv6\n");
+			return -1;
+		}
+		src_addr_v6 = (struct sockaddr_in6*)src_addr;
+		src_addr_v6->sin6_family = AF_INET6;
+		src_addr_v6->sin6_port = from_port;
+		memcpy(src_addr_v6->sin6_addr.s6_addr, from_addr.addr.v6, 16);
+		*addrlen = sizeof(src_addr_v6);
+	}else {
+		if(addrlen < sizeof(struct sockaddr_in)){
+			PDEBUG("addrlen too short for ipv4\n");
+		}
+		src_addr_v4 = (struct sockaddr_in*)src_addr;
+		src_addr_v4->sin_family = AF_INET;
+		src_addr_v4->sin_port = from_port;
+		src_addr_v4->sin_addr.s_addr = (in_addr_t) from_addr.addr.v4.as_int;
+		*addrlen = sizeof(src_addr_v4);
+	}
+
+
+
+	return min;
 }
 
 HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){

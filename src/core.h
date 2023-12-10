@@ -109,7 +109,7 @@ typedef struct{
 		unsigned char v6[16];
 		struct {
 			char len;
-			char name[256];
+			char name[255];
 		} dom;
 	} addr ;
 } socks5_addr;
@@ -119,9 +119,9 @@ with a UDP_ASSOCIATE command issued on the tcp_sockfd */
 typedef struct s_udp_relay_node {
 	int tcp_sockfd;	// the tcp socket on which the UDP_ASSOCIATE command has been issued. Closing this fd closes the udp relay.
 	proxy_data pd; // the associated SOCKS5 server
-	socks5_addr bnd_addr; // the BND_ADDR returned by the udp relay server in the response to the UDP_ASSOCIATE command. 
+	ip_type bnd_addr; // the BND_ADDR returned by the udp relay server in the response to the UDP_ASSOCIATE command. 
 	unsigned short bnd_port; // the BND_PORT returned by the udp relay server in the response to the UDP_ASSOCIATE command.
-	socks5_addr dst_addr; // ?? the DST_ADDR sent in the UDP_ASSOCIATE command.
+	ip_type dst_addr; // ?? the DST_ADDR sent in the UDP_ASSOCIATE command.
 	unsigned short dst_port; // ?? the DST_PORT sent in the UDP_ASSOCIATE command.
 	struct s_udp_relay_node * prev;
 	struct s_udp_relay_node * next;
@@ -178,6 +178,9 @@ extern freeaddrinfo_t true_freeaddrinfo;
 extern getnameinfo_t true_getnameinfo;
 extern gethostbyaddr_t true_gethostbyaddr;
 extern sendto_t true_sendto;
+extern recvfrom_t true_recvfrom;
+extern recv_t true_recv;
+extern send_t true_send;
 
 struct gethostbyname_data {
 	struct hostent hostent_space;
@@ -196,13 +199,13 @@ void proxy_freeaddrinfo(struct addrinfo *res);
 void core_initialize(void);
 void core_unload(void);
 
-static int udp_associate(int sock, ip_type * dst_addr, unsigned short dst_port, socks5_addr *bnd_addr, unsigned short *bnd_port, char *user, char *pass);
+static int udp_associate(int sock, ip_type * dst_addr, unsigned short dst_port, ip_type *bnd_addr, unsigned short *bnd_port, char *user, char *pass);
 udp_relay_chain* get_relay_chain(udp_relay_chain_list chains_list, int sockfd);
 void del_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* chain);
 void add_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* new_chain);
 udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, chain_type ct, unsigned int max_chains);
 int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len);
-
+int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, unsigned short* src_port, char* data, unsigned int data_len  );
 #include "debug.h"
 
 #endif
