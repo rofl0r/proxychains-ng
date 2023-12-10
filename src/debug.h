@@ -8,6 +8,7 @@
 # define PDEBUG(fmt, args...) PSTDERR("DEBUG:pid[%d]:" fmt, getpid(), ## args)
 # define DEBUGDECL(args...) args
 # define DUMP_PROXY_CHAIN(A, B) dump_proxy_chain(A, B)
+# define DUMP_BUFFER(data, len) dump_buffer(data, len)
 #else
 # define PDEBUG(fmt, args...) do {} while (0)
 # define DEBUGDECL(args...)
@@ -18,7 +19,7 @@
 
 #include "core.h"
 void dump_proxy_chain(proxy_data *pchain, unsigned int count);
-
+void dump_buffer(unsigned char* data, size_t len);
 
 #endif
 

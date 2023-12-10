@@ -22,6 +22,14 @@ void dump_proxy_chain(proxy_data *pchain, unsigned int count) {
 	}
 }
 
+void dump_buffer(unsigned char * data, size_t len){
+	printf("buffer_dump[");
+	for(int i=0; i<len; i++){
+		printf("%d ", *(data+i));
+	}
+	printf("]\n");
+}
+
 #else
 
 // Do not allow this translation unit to end up empty
