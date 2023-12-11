@@ -103,7 +103,6 @@ typedef enum {
 } ATYP;
 
 typedef struct{
-	ATYP atyp;
 	union {
 		ip_type4 v4;
 		unsigned char v6[16];
@@ -112,6 +111,7 @@ typedef struct{
 			char name[255];
 		} dom;
 	} addr ;
+	ATYP atyp;
 } socks5_addr;
 
 /* A structure to hold necessary information about an UDP relay server that has been set up 
@@ -170,6 +170,9 @@ typedef ssize_t (*recv_t) (int sockfd, void *buf, size_t len, int flags);
 typedef ssize_t (*recvfrom_t) (int sockfd, void *buf, size_t len, int flags, 
 			struct sockaddr *src_addr, socklen_t *addrlen);
 
+typedef ssize_t (*sendmsg_t) (int sockfd, const struct msghdr *msg, int flags);
+typedef ssize_t (*recvmsg_t) (int sockfd, struct msghdr *msg, int flags);
+
 
 extern connect_t true_connect;
 extern gethostbyname_t true_gethostbyname;
@@ -181,6 +184,8 @@ extern sendto_t true_sendto;
 extern recvfrom_t true_recvfrom;
 extern recv_t true_recv;
 extern send_t true_send;
+extern sendmsg_t true_sendmsg;
+extern recvmsg_t true_recvmsg;
 
 struct gethostbyname_data {
 	struct hostent hostent_space;
@@ -207,6 +212,10 @@ int free_relay_chain_nodes(udp_relay_chain chain);
 udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, chain_type ct, unsigned int max_chains);
 int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len);
 int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, unsigned short* src_port, char* data, unsigned int data_len  );
+size_t get_msg_iov_total_len(struct iovec* iov, size_t iov_len);
+size_t write_buf_to_iov(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len);
+int is_from_chain_head(udp_relay_chain chain, struct sockaddr src_addr);
+int unsocks_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void* udp_data, size_t* udp_data_len);
 #include "debug.h"
 
 #endif

@@ -633,13 +633,13 @@ int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned s
 	case ATYP_V6:
 		PDEBUG("UDP header with ATYP_V4/6 addr type\n");
 		v6 = src_addr->atyp == ATYP_V6;
-		PDEBUG("buflen : %d\n", buflen);
 		if(buflen < (4 + 2 + v6?16:4) ){
 			PDEBUG("buffer too short to read the UDP header\n");
 			return -1;			
 		}
 		memcpy(src_addr->addr.v6, buf + buf_iter, v6?16:4);
 		buf_iter += v6?16:4;
+		cast_socks5addr_v4inv6_to_v4(src_addr);
 		break;
 	default:
 		break;
@@ -651,7 +651,186 @@ int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned s
 	return buf_iter;
 }
 
-int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, unsigned short* src_port, char* data, unsigned int data_len ){
+size_t get_iov_total_len(struct iovec* iov, size_t iov_len){
+	size_t n = 0;
+	for(int i=0; i<iov_len; i++){
+		n += iov[i].iov_len;
+	}
+	return n;
+}
+
+size_t write_buf_to_iov(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len){
+	size_t written = 0;
+	int i = 0;
+	size_t min = 0;
+	//size_t iov_total_len = get_iov_total_len(iov, iov_len);
+
+	while( (written < buff_len) && (i < iov_len)){
+		min = ((buff_len-written)<iov[i].iov_len)?(buff_len-written):iov[i].iov_len;
+		memcpy(iov[i].iov_base, buff+written, min);
+		written += min;
+		i += 1;
+	}
+	return written;
+}
+
+void cast_socks5addr_v4inv6_to_v4(socks5_addr* addr){
+	if( (addr->atyp == ATYP_V6) && !memcmp(addr->addr.v6, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12)){
+		PDEBUG("casting v4inv6 address to v4 address\n");
+		addr->atyp=ATYP_V4;
+		memcpy(addr->addr.v4.octet, addr->addr.v6+12, 4);
+	}
+}
+
+int compare_iptype_sockaddr(ip_type addr1, struct sockaddr addr2){
+	if(addr1.is_v6 && (((struct sockaddr_in6 *) &(addr2))->sin6_family == AF_INET6)){
+		//Both are IPv6
+		return !memcmp(((struct sockaddr_in6 *)&addr2)->sin6_addr.s6_addr, addr1.addr.v6, 16);
+	} else if(!addr1.is_v6 && (((struct sockaddr_in *) &(addr2))->sin_family == AF_INET)){
+		//Both are IPv4
+		return ((uint32_t)(((struct sockaddr_in *)&addr2)->sin_addr.s_addr) == addr1.addr.v4.as_int);
+	} else {
+		// Not the same address type
+		return 0;
+	}
+}
+
+int compare_socks5_addr_iptype(socks5_addr addr1, ip_type addr2){
+	PFUNC();
+	if(addr1.atyp == ATYP_DOM){
+		//addr1 is a domain name
+		return 0;
+	}
+
+	if((addr1.atyp == ATYP_V6) && addr2.is_v6){
+		//Both are IPv6
+		return !memcmp(addr1.addr.v6, addr2.addr.v6, 16);
+	} else if((addr1.atyp == ATYP_V4) && !addr2.is_v6){
+		//Both are IPv4
+		return (addr1.addr.v4.as_int == addr2.addr.v4.as_int);
+	} else {
+		// Not the same address type
+		return 0;
+	}
+}
+
+int is_from_chain_head(udp_relay_chain chain, struct sockaddr src_addr){
+
+	if(compare_iptype_sockaddr(chain.head->bnd_addr, src_addr)){
+		return (chain.head->bnd_port == ((struct sockaddr_in*)&src_addr)->sin_port); 
+	}
+	return 0;
+}
+
+
+int decapsulate_check_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, socks5_addr* src_addr, unsigned short* src_port, void* udp_data, size_t* udp_data_len){
+	
+	PFUNC();
+	// Go through the whole proxy chain, decapsulate each header and check that the addresses match
+
+	udp_relay_node * tmp = chain.head;
+	int read = 0;
+	int rc = 0;
+	socks5_addr header_addr;
+	unsigned short header_port;
+	char header_frag;
+	while (tmp->next != NULL)
+	{
+		rc = read_udp_header(in_buffer+read, in_buffer_len-read, &header_addr, &header_port, &header_frag );
+		if(-1 == rc){
+			PDEBUG("error reading UDP header\n");
+			return -1;
+		}
+		read += rc;
+
+		if(header_frag != 0x00){
+			printf("WARNING: received UDP packet with frag != 0 while fragmentation is unsupported.\n");
+		}
+
+		if(!compare_socks5_addr_iptype(header_addr, tmp->next->bnd_addr)){
+			PDEBUG("UDP header addr is not equal to proxy node addr, dropping packet\n");
+			return -1;
+		}
+
+		if(tmp->next->bnd_port != header_port){
+			PDEBUG("UDP header port is not equal to proxy node port, dropping packet\n");
+			return -1;
+		}
+
+		PDEBUG("UDP header's addr and port correspond to proxy node's addr and port\n");
+		tmp = tmp->next;
+	}
+
+	PDEBUG("all UDP headers validated\n");
+
+
+	// Decapsulate the last header. No checks needed here, just pass the source addr and port as return values
+	rc = read_udp_header(in_buffer+read, in_buffer_len-read, src_addr, src_port, &header_frag);
+	if(-1 == rc){
+		PDEBUG("error reading UDP header\n");
+		return -1;
+	}
+	read += rc;
+
+	if(header_frag != 0x00){
+		printf("WARNING: received UDP packet with frag != 0 while fragmentation is unsupported.\n");
+	}
+
+	
+	// Copy the UDP data to the provided buffer. If the provided buffer is too small, data is truncated
+	int min = ((in_buffer_len-read)>*udp_data_len)?*udp_data_len:(in_buffer_len-read);
+	memcpy(udp_data,in_buffer+read, min);
+	
+	// Write back the length of written UDP data in the input/output parameter udp_data_len
+	*udp_data_len = min;
+	
+	return 0;
+}
+
+int unsocks_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void* udp_data, size_t* udp_data_len){
+	PFUNC();
+	// Decapsulate all the UDP headers and check that the packet came from the right proxy nodes
+	int rc;
+	socks5_addr src_addr;
+	rc = decapsulate_check_udp_packet(in_buffer, in_buffer_len, chain, &src_addr, src_port, udp_data, udp_data_len);
+	if(rc != SUCCESS){
+		PDEBUG("error decapsulating the packet\n");
+		return -1;
+	}
+	PDEBUG("all UDP headers decapsulated and validated\n");
+
+	// If the innermost UDP header (containing the address of the final target) is of type ATYP_DOM, perform a 
+	// reverse mapping to hand the 224.X.X.X IP to the client application
+	
+	if(src_addr.atyp == ATYP_DOM){ 
+		PDEBUG("Fetching matching IP for hostname\n");
+		DUMP_BUFFER(src_addr.addr.dom.name,src_addr.addr.dom.len);
+		ip_type4 tmp_ip = IPT4_INVALID;
+		char host_string[256];
+		memcpy(host_string, src_addr.addr.dom.name, src_addr.addr.dom.len);
+		host_string[src_addr.addr.dom.len] = 0x00;
+
+		tmp_ip = rdns_get_ip_for_host(host_string, src_addr.addr.dom.len);
+		if(tmp_ip.as_int == -1){
+			PDEBUG("error getting ip for host\n");
+			return -1;
+		}
+		src_addr.atyp = ATYP_V4;
+		src_addr.addr.v4.as_int = tmp_ip.as_int;
+	
+	}
+	
+	src_ip->is_v6 = (src_addr.atyp == ATYP_V6); 
+	if(src_ip->is_v6){
+		memcpy(src_ip->addr.v6, src_addr.addr.v6, 16);
+	} else{
+		src_ip->addr.v4.as_int = src_addr.addr.v4.as_int;
+	}
+	
+	return 0;
+}
+
+int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, char* data, unsigned int data_len ){
 	//receives data on sockfd, decapsulates the header for each relay in chain and check they match, returns UDP data and source address/port
 	
 	PFUNC();
@@ -671,129 +850,68 @@ int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, uns
 	PDEBUG("successful recvfrom(), %d bytes received\n", bytes_received);
 	//Check that the packet was received from the first relay of the chain
 	// i.e. does from == chain.head.bnd_addr ?
-	int from_isv6 = ((struct sockaddr_in *) &(from))->sin_family == AF_INET6;
-	int same_address = 0;
-	int same_port = 0;
 
-	if(chain.head->bnd_addr.is_v6){
-		if(from_isv6){
-			same_address = memcmp(((struct sockaddr_in6 *)&from)->sin6_addr.s6_addr, chain.head->bnd_addr.addr.v6, 16);
-		}
-	}
-	else{
-		uint32_t from_v4_asint;
-		if(from_isv6){
-			// Maybe from is a ipv4-mapped ipv6 ? // TODO: use the existing is_v4inv6 as in connect and sendto
-			memcpy(from_v4_asint, ((struct sockaddr_in6 *)&from)->sin6_addr.s6_addr + 11, 4);
-		}
-		else{
-			from_v4_asint = (uint32_t)(((struct sockaddr_in *)&from)->sin_addr.s_addr);
-		}
-
-		same_address = from_v4_asint == chain.head->bnd_addr.addr.v4.as_int;
-	}
-
-	same_port = chain.head->bnd_port == from_isv6?((struct sockaddr_in6 *)&from)->sin6_port:((struct sockaddr_in *)&from)->sin_port;
-
-	if(!(same_address && same_port)){
+	if(!is_from_chain_head(chain, from)){
 		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
 		int min = (bytes_received <= data_len)?bytes_received:data_len;
+		//TODO : il faut aussi transmettre les adresses et ports qu ón a recu a l'appli qui a fait le call !!!!!
 		memcpy(data, buffer, min);
 		return min;
 	}
 
 	PDEBUG("packet received from the proxy chain's head\n");
-	// Go through the whole proxy chain, decapsulate each header and check that the addresses match
 
-	udp_relay_node * tmp = chain.head;
-	int read = 0;
-	int rc = 0;
-	socks5_addr header_addr;
-	unsigned short header_port;
-	char header_frag;
-	while (tmp->next != NULL)
-	{
-		same_address = 0;
-		
-
-
-		rc = read_udp_header(buffer+read, bytes_received-read, &header_addr, &header_port, &header_frag );
-		if(-1 == rc){
-			PDEBUG("error reading UDP header\n");
-			return -1;
-		}
-		read += rc;
-
-		int header_v6 = header_addr.atyp == ATYP_V6;
-
-		if(tmp->next->bnd_port != header_port){
-			PDEBUG("UDP header port is not equal to proxy node port, dropping packet\n");
-			return -1;
-		}
-
-		if(tmp->next->bnd_addr.is_v6){
-			if(header_v6){
-				same_address = memcmp(tmp->next->bnd_addr.addr.v6, header_addr.addr.v6, 16);
-			}
-		}
-		else{
-			same_address = memcmp(&(tmp->next->bnd_addr.addr.v4), header_v6?(&(header_addr.addr.v6)+11):&(header_addr.addr.v4), 4);
-		}
-			
-
-		if(!same_address){
-			PDEBUG("UDP header addr is not equal to proxy node addr, dropping packet\n");
-			return -1;
-		}	
-
-		PDEBUG("UDP header's addr and port correspond to proxy node's addr and port\n");
-		tmp = tmp->next;
-
-	}
-
-	PDEBUG("all UDP headers validated\n");
-
-
-	// Decapsulate the last header. No checks needed here, just pass the source addr and port as return values
-	char frag;
-	rc = read_udp_header(buffer+read, bytes_received-read, &header_addr, src_port, &frag);
-	if(-1 == rc){
-		PDEBUG("error reading UDP header\n");
+	int rc;
+	size_t udp_data_len = data_len;
+	rc = unsocks_udp_packet(buffer, bytes_received, chain, src_ip, src_port, data, &udp_data_len);
+	if(rc != SUCCESS){
+		PDEBUG("error unSOCKSing the UDP packet\n");
 		return -1;
 	}
-	read += rc;
-
-	if(header_addr.atyp == ATYP_DOM){ // do the reverse mapping
-		PDEBUG("Fetching matching IP for hostname\n");
-		DUMP_BUFFER(header_addr.addr.dom.name,header_addr.addr.dom.len);
-		ip_type4 tmp_ip = IPT4_INVALID;
-		char host_string[256];
-		memcpy(host_string, header_addr.addr.dom.name, header_addr.addr.dom.len);
-		host_string[header_addr.addr.dom.len] = 0x00;
-
-		tmp_ip = rdns_get_ip_for_host(host_string, header_addr.addr.dom.len);
-		if(tmp_ip.as_int == -1){
-			PDEBUG("No matching IP found for hostname\n");
-			return -1;
-		}
-		header_addr.atyp = ATYP_V4;
-		header_addr.addr.v4.as_int = tmp_ip.as_int;
+	PDEBUG("UDP packet successfully unSOCKified\n");
 	
-	}
-	
-	src_addr->is_v6 = (header_addr.atyp == ATYP_V6); 
-	if(src_addr->is_v6){
-		memcpy(src_addr->addr.v6, header_addr.addr.v6, 16);
-	} else{
-		src_addr->addr.v4.as_int = header_addr.addr.v4.as_int;
-	}
+	return udp_data_len;
 
+	// // Decapsulate all the UDP headers and check that the packet came from the right proxy nodes
+	// int rc;
+	// socks5_addr src_addr;
+	// size_t udp_data_len = data_len;
+	// rc = decapsulate_check_udp_packet(buffer, bytes_received, chain, &src_addr, src_port, data, &udp_data_len);
+	// if(rc != SUCCESS){
+	// 	PDEBUG("error decapsulating the packet\n");
+	// 	return -1;
+	// }
+	// PDEBUG("all UDP headers decapsulated and validated\n");
 
-	int min = ((bytes_received-read)>data_len)?data_len:(bytes_received-read);
-	memcpy(data,buffer+read, min);
+	// // If the innermost UDP header (containing the address of the final target) is of type ATYP_DOM, perform a 
+	// // reverse mapping to hand the 224.X.X.X IP to the client application
 	
+	// if(src_addr.atyp == ATYP_DOM){ 
+	// 	PDEBUG("Fetching matching IP for hostname\n");
+	// 	DUMP_BUFFER(src_addr.addr.dom.name,src_addr.addr.dom.len);
+	// 	ip_type4 tmp_ip = IPT4_INVALID;
+	// 	char host_string[256];
+	// 	memcpy(host_string, src_addr.addr.dom.name, src_addr.addr.dom.len);
+	// 	host_string[src_addr.addr.dom.len] = 0x00;
+
+	// 	tmp_ip = rdns_get_ip_for_host(host_string, src_addr.addr.dom.len);
+	// 	if(tmp_ip.as_int == -1){
+	// 		PDEBUG("error getting ip for host\n");
+	// 		return -1;
+	// 	}
+	// 	src_addr.atyp = ATYP_V4;
+	// 	src_addr.addr.v4.as_int = tmp_ip.as_int;
 	
-	return min;
+	// }
+	
+	// src_ip->is_v6 = (src_addr.atyp == ATYP_V6); 
+	// if(src_ip->is_v6){
+	// 	memcpy(src_ip->addr.v6, src_addr.addr.v6, 16);
+	// } else{
+	// 	src_ip->addr.v4.as_int = src_addr.addr.v4.as_int;
+	// }
+	
+	// return udp_data_len;
 }
 
 int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len) {

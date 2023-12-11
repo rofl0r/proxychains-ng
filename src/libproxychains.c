@@ -67,6 +67,8 @@ sendto_t true_sendto;
 send_t true_send;
 recv_t true_recv;
 recvfrom_t true_recvfrom;
+sendmsg_t true_sendmsg;
+recvmsg_t true_recvmsg;
 
 int tcp_read_time_out;
 int tcp_connect_time_out;
@@ -810,10 +812,13 @@ HOOKFUNC(int, getaddrinfo, const char *node, const char *service, const struct a
 	INIT();
 	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
-	if(proxychains_resolver != DNSLF_LIBC)
+	if(proxychains_resolver != DNSLF_LIBC){
+		PDEBUG("using proxy_getaddrinfo()\n");
 		return proxy_getaddrinfo(node, service, hints, res);
-	else
+	}
+	else{
 		return true_getaddrinfo(node, service, hints, res);
+	}
 }
 
 HOOKFUNC(void, freeaddrinfo, struct addrinfo *res) {
@@ -1026,6 +1031,185 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	return SUCCESS;
 }
 
+// HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
+// 	//TODO hugoc
+// 	return 0;
+// }
+
+HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
+
+
+	INIT();
+	PFUNC();
+
+	int socktype = 0;
+	socklen_t optlen = 0;
+	optlen = sizeof(socktype);
+	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	if( socktype != SOCK_DGRAM){
+		PDEBUG("sockfd %d is not a SOCK_DGRAM socket, returning to true_recvmsg\n", sockfd);
+		return true_recvmsg(sockfd, msg, flags);
+	}
+	PDEBUG("sockfd %d is a SOCK_DGRAM socket\n", sockfd);
+
+	struct sockaddr addr;
+	socklen_t addr_len = sizeof(addr);
+	if(SUCCESS != getsockname(sockfd, &addr, &addr_len )){
+		PDEBUG("error getsockname, errno=%d. Returning to true_recvmsg()\n", errno);
+		return true_recvmsg(sockfd,msg, flags);
+	}
+	sa_family_t fam = SOCKFAMILY(addr);
+	if(!(fam  == AF_INET || fam == AF_INET6)){
+		PDEBUG("sockfd %d address familiy is not a AF_INET or AF_INET6, returning to true_recvmsg\n", sockfd);
+		return true_recvmsg(sockfd,msg, flags);
+	}
+
+	PDEBUG("sockfd %d's address family is AF_INET or AF_INET6\n", sockfd);
+
+	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
+	if(relay_chain == NULL){
+		// No chain is opened for this socket
+		PDEBUG("sockfd %d does not corresponds to any opened relay chain, returning to true_recvmsg\n", sockfd);
+		return true_recvmsg(sockfd,msg, flags);
+	}	
+	PDEBUG("sockfd %d is associated with udp_relay_chain %x\n", sockfd, relay_chain);
+
+
+	char buffer[65535]; //buffer to receive and decapsulate a UDP relay packet. UDP maxsize is 65535
+	size_t bytes_received;
+
+	struct sockaddr from;
+
+
+
+	struct iovec iov[1];
+	iov[0].iov_base = buffer;
+	iov[0].iov_len = sizeof(buffer);
+
+
+	struct msghdr tmp_msg;
+
+	tmp_msg.msg_name = &from;
+	tmp_msg.msg_namelen = sizeof(from);
+	tmp_msg.msg_iov = iov;
+	tmp_msg.msg_iovlen = 1;
+	tmp_msg.msg_control = msg->msg_control; // Pass directly
+	tmp_msg.msg_controllen = msg->msg_controllen; // Pass directly
+	tmp_msg.msg_flags = msg->msg_flags;
+
+	PDEBUG("exec true_recvmsg\n");
+	bytes_received = true_recvmsg(sockfd, &tmp_msg, flags);
+	if(-1 == bytes_received){
+		PDEBUG("true_recvmsg returned -1\n");
+		return -1;
+	}
+
+	// Transfer the fields we do not manage
+
+	msg->msg_controllen = tmp_msg.msg_controllen;
+	msg->msg_control = tmp_msg.msg_control; //Not sure this one is necessary 
+	msg->msg_flags = tmp_msg.msg_flags;
+
+	PDEBUG("successful recvmsg(), %d bytes received\n", bytes_received);
+	//Check that the packet was received from the first relay of the chain
+
+	if(!is_from_chain_head(*relay_chain, *(struct sockaddr *)(msg->msg_name))){
+		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
+		// Write the data we received in tmp_msg to msg
+		int written = write_buf_to_iov(buffer, bytes_received, msg->msg_iov, msg->msg_iovlen);
+
+		// Write the addr we received in tmp_msg to msg	
+	    if(msg->msg_name != NULL){
+			socklen_t min = (msg->msg_namelen>tmp_msg.msg_namelen)?tmp_msg.msg_namelen:msg->msg_namelen;
+			memcpy(msg->msg_name, tmp_msg.msg_name, min);
+			msg->msg_namelen = min;
+		}
+
+		return written;
+	}
+
+	PDEBUG("packet received from the proxy chain's head\n");
+
+
+	int rc;
+	ip_type src_ip;
+	unsigned short src_port;
+	char udp_data[65535];
+	size_t udp_data_len = sizeof(udp_data);
+
+	rc = unsocks_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, udp_data, &udp_data_len);
+	if(rc != SUCCESS){
+		PDEBUG("error unSOCKSing the UDP packet\n");
+		return -1;
+	}
+	PDEBUG("UDP packet successfully unSOCKified\n");
+	
+
+	/*debug*/
+	DEBUGDECL(char str[256]);
+	PDEBUG("received %d bytes through receive_udp_packet()\n", udp_data_len);
+	PDEBUG("data: ");
+	DUMP_BUFFER(udp_data, udp_data_len);
+	PDEBUG("src_ip: ");
+	DUMP_BUFFER(src_ip.addr.v6, src_ip.is_v6?16:4);
+	PDEBUG("src_ip: %s\n", inet_ntop(src_ip.is_v6 ? AF_INET6 : AF_INET, src_ip.is_v6 ? (void*)src_ip.addr.v6 : (void*)src_ip.addr.v4.octet, str, sizeof(str)));
+	PDEBUG("from_port: %hu\n", ntohs(src_port));
+	/*end debug*/
+
+	
+	// Write the udp data we received in tmp_msg and unsocksified to msg
+	int written = write_buf_to_iov(udp_data, udp_data_len, msg->msg_iov, msg->msg_iovlen);
+
+	// Overwrite the addresse in msg with the src_addr retrieved from unsocks_udp_packet();
+	
+	if(msg->msg_name != NULL){
+		struct sockaddr_in* src_addr_v4;
+		struct sockaddr_in6* src_addr_v6;
+
+		//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
+		// TODO faire une fonction cast_iptype_to_sockaddr() 
+
+		if(src_ip.is_v6 && is_v4inv6((struct in6_addr*)src_ip.addr.v6)){
+			PDEBUG("src_ip is v4 in v6 ip\n");
+			if(msg->msg_namelen < sizeof(struct sockaddr_in)){
+				PDEBUG("msg_namelen too short for ipv4\n");
+			}
+			src_addr_v4 = (struct sockaddr_in*)(msg->msg_name);
+			src_addr_v4->sin_family = AF_INET;
+			src_addr_v4->sin_port = src_port;
+			memcpy(&(src_addr_v4->sin_addr.s_addr), src_ip.addr.v6+12, 4);
+			msg->msg_namelen = sizeof(src_addr_v4);
+		}
+		else if(src_ip.is_v6){
+			PDEBUG("src_ip is true v6\n");
+			if(msg->msg_namelen < sizeof(struct sockaddr_in6)){
+				PDEBUG("addrlen too short for ipv6\n");
+				return -1;
+			}
+			src_addr_v6 = (struct sockaddr_in6*)(msg->msg_name);
+			src_addr_v6->sin6_family = AF_INET6;
+			src_addr_v6->sin6_port = src_port;
+			memcpy(src_addr_v6->sin6_addr.s6_addr, src_ip.addr.v6, 16);
+			msg->msg_namelen = sizeof(src_addr_v6);
+		}else {
+			if(msg->msg_namelen < sizeof(struct sockaddr_in)){
+				PDEBUG("addrlen too short for ipv4\n");
+			}
+			src_addr_v4 = (struct sockaddr_in*)(msg->msg_name);
+			src_addr_v4->sin_family = AF_INET;
+			src_addr_v4->sin_port = src_port;
+			src_addr_v4->sin_addr.s_addr = (in_addr_t) src_ip.addr.v4.as_int;
+			msg->msg_namelen = sizeof(src_addr_v4);
+		} 
+	}
+	
+
+	return udp_data_len;
+}
+
+
+
+
 HOOKFUNC(ssize_t, recv, int sockfd, void *buf, size_t len, int flags){
 	INIT();
 	PFUNC();
@@ -1095,7 +1279,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	
 	// WARNING : Est ce que si le client avait envoyé des packets UDP avec resolution DNS dans le socks,
 	// on doit lui filer comme address source pour les packets recu l'addresse de mapping DNS ? Si oui comment
-	// la retrouver ? 
+	// la retrouver ? -> done in receive_udp_packet()
 	
 	int min = (bytes_received > len)?len:bytes_received; 
 	memcpy(buf, tmp_buffer, min);
@@ -1197,6 +1381,8 @@ static void setup_hooks(void) {
 	SETUP_SYM(send);
 	SETUP_SYM(sendto);
 	SETUP_SYM(recvfrom);
+	SETUP_SYM(recvmsg);
+	//SETUP_SYM(sendmsg);
 	SETUP_SYM(recv);
 	SETUP_SYM(gethostbyname);
 	SETUP_SYM(getaddrinfo);
