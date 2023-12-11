@@ -203,6 +203,7 @@ static int udp_associate(int sock, ip_type * dst_addr, unsigned short dst_port, 
 udp_relay_chain* get_relay_chain(udp_relay_chain_list chains_list, int sockfd);
 void del_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* chain);
 void add_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* new_chain);
+int free_relay_chain_nodes(udp_relay_chain chain);
 udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, chain_type ct, unsigned int max_chains);
 int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len);
 int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, unsigned short* src_port, char* data, unsigned int data_len  );

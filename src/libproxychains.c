@@ -593,6 +593,20 @@ HOOKFUNC(int, close, int fd) {
 		errno = 0;
 		return 0;
 	}
+
+	/***** UDP STUFF *******/
+
+	udp_relay_chain* chain = NULL;
+
+	chain = get_relay_chain(relay_chains, fd);
+	if(NULL != chain){
+		free_relay_chain_nodes(*chain);
+		del_relay_chain(&relay_chains, chain);
+	}
+
+
+	/***** END UDP STUFF *******/
+
 	if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close(fd);
 
 	/* prevent rude programs (like ssh) from closing our pipes */
@@ -999,6 +1013,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		relay_chain->sockfd = sockfd;
 		add_relay_chain(&relay_chains, relay_chain);
 	}
+	DUMP_RELAY_CHAINS_LIST(relay_chains);
 
 	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
 	if (SUCCESS != send_udp_packet(sockfd, *relay_chain, dest_ip, htons(port),0, buf, len)){
@@ -1095,7 +1110,19 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
 	// 
 
-	if(from_addr.is_v6){
+	if(from_addr.is_v6 && is_v4inv6((struct in6_addr*)from_addr.addr.v6)){
+		PDEBUG("src_ip is v4 in v6 ip\n");
+		if(addrlen < sizeof(struct sockaddr_in)){
+			PDEBUG("addrlen too short for ipv4\n");
+		}
+		src_addr_v4 = (struct sockaddr_in*)src_addr;
+		src_addr_v4->sin_family = AF_INET;
+		src_addr_v4->sin_port = from_port;
+		memcpy(&(src_addr_v4->sin_addr.s_addr), from_addr.addr.v6+12, 4);
+		*addrlen = sizeof(src_addr_v4);
+	}
+	else if(from_addr.is_v6){
+		PDEBUG("src_ip is true v6\n");
 		if(addrlen < sizeof(struct sockaddr_in6)){
 			PDEBUG("addrlen too short for ipv6\n");
 			return -1;
