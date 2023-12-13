@@ -1021,6 +1021,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	DUMP_RELAY_CHAINS_LIST(relay_chains);
 
 	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
+	//TODO: is it better to do 'return send_udp_packet' ? 
 	if (SUCCESS != send_udp_packet(sockfd, *relay_chain, dest_ip, htons(port),0, buf, len)){
 		PDEBUG("could not send udp packet\n");
 		errno = ECONNREFUSED;
@@ -1031,10 +1032,188 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	return SUCCESS;
 }
 
-// HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
-// 	//TODO hugoc
-// 	return 0;
-// }
+HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
+	INIT();
+	PFUNC();
+
+	//TODO : do we keep this FASTOPEN code from sendto() ?
+	// if (flags & MSG_FASTOPEN) {
+	// 	if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
+	// 		return -1;
+	// 	}
+	// 	dest_addr = NULL;
+	// 	addrlen = 0;
+	// 	flags &= ~MSG_FASTOPEN;
+
+	// 	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+	// }
+
+	//TODO hugoc: case of SOCK_DGRAM with AF_INET or AF_INET6
+	struct sockaddr* dest_addr;
+	dest_addr = msg->msg_name;
+	socklen_t addrlen = msg->msg_namelen;
+
+	DEBUGDECL(char str[256]);
+	int socktype = 0, ret = 0;
+	socklen_t optlen = 0;
+	optlen = sizeof(socktype);
+	sa_family_t fam = SOCKFAMILY(*dest_addr);
+	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_DGRAM)){
+		return true_sendmsg(sockfd, msg, flags);
+	}
+
+	PDEBUG("before send dump : ");
+	DUMP_BUFFER(msg->msg_name, msg->msg_namelen);
+	
+	ip_type dest_ip;
+	struct in_addr *p_addr_in;
+	struct in6_addr *p_addr_in6;
+	dnat_arg *dnat = NULL;
+	size_t i;
+	int remote_dns_connect = 0;
+	unsigned short port;
+	int v6 = dest_ip.is_v6 = fam == AF_INET6;
+
+	p_addr_in = &((struct sockaddr_in *) dest_addr)->sin_addr;
+	p_addr_in6 = &((struct 
+	sockaddr_in6 *) dest_addr)->sin6_addr;
+	port = !v6 ? ntohs(((struct sockaddr_in *) dest_addr)->sin_port)
+	           : ntohs(((struct sockaddr_in6 *) dest_addr)->sin6_port);
+	struct in_addr v4inv6;
+	if(v6 && is_v4inv6(p_addr_in6)) {
+		memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr[12], 4);
+		v6 = dest_ip.is_v6 = 0;
+		p_addr_in = &v4inv6;
+	}
+	if(!v6 && !memcmp(p_addr_in, "\0\0\0\0", 4)) {
+		errno = ECONNREFUSED;
+		return -1;
+	}
+
+	PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
+	PDEBUG("port: %d\n", port);
+	PDEBUG("client socket: %d\n", sockfd);
+
+	// check if connect called from proxydns
+        remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
+
+	// more specific first
+	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
+			if(dnats[i].orig_port && (dnats[i].orig_port == port))
+				dnat = &dnats[i];
+
+	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
+			if(!dnats[i].orig_port)
+				dnat = &dnats[i];
+
+	if (dnat) {
+		p_addr_in = &dnat->new_dst;
+		if (dnat->new_port)
+			port = dnat->new_port;
+	}
+
+	for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
+		if (localnet_addr[i].port && localnet_addr[i].port != port)
+			continue;
+		if (localnet_addr[i].family != (v6 ? AF_INET6 : AF_INET))
+			continue;
+		if (v6) {
+			size_t prefix_bytes = localnet_addr[i].in6_prefix / CHAR_BIT;
+			size_t prefix_bits = localnet_addr[i].in6_prefix % CHAR_BIT;
+			if (prefix_bytes && memcmp(p_addr_in6->s6_addr, localnet_addr[i].in6_addr.s6_addr, prefix_bytes) != 0)
+				continue;
+			if (prefix_bits && (p_addr_in6->s6_addr[prefix_bytes] ^ localnet_addr[i].in6_addr.s6_addr[prefix_bytes]) >> (CHAR_BIT - prefix_bits))
+				continue;
+		} else {
+			if((p_addr_in->s_addr ^ localnet_addr[i].in_addr.s_addr) & localnet_addr[i].in_mask.s_addr)
+				continue;
+		}
+		PDEBUG("accessing localnet using true_sendmsg\n");
+		return true_sendmsg(sockfd, msg, flags);
+	}
+
+	// Check if a chain of UDP relay is already opened for this socket
+	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
+	if(relay_chain == NULL){
+		// No chain is opened for this socket, open one
+		PDEBUG("opening new chain of relays for %d\n", sockfd);
+		if(NULL == (relay_chain = open_relay_chain(proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain))){
+			PDEBUG("could not open a chain of relay\n");
+			errno = ECONNREFUSED;
+			return -1;
+		}
+		relay_chain->sockfd = sockfd;
+		add_relay_chain(&relay_chains, relay_chain);
+	}
+	DUMP_RELAY_CHAINS_LIST(relay_chains);
+
+	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
+
+
+	// Allocate buffer for header creation
+	char send_buffer[65535]; //TODO maybe we can do better about size ? 
+	size_t send_buffer_len = sizeof(send_buffer);
+
+	//Move iovec udp data contained in msg to one buffer
+	char udp_data[65535];
+	size_t udp_data_len = sizeof(udp_data);
+	udp_data_len = write_iov_to_buf(udp_data, udp_data_len, msg->msg_iov, msg->msg_iovlen);
+
+	// Exec socksify_udp_packet 
+	int rc;
+	rc = socksify_udp_packet(udp_data, udp_data_len, *relay_chain, dest_ip, htons(port),send_buffer, &send_buffer_len);
+	if(rc != SUCCESS){
+		PDEBUG("error socksify_udp_packet()\n");
+		return -1;
+	}
+
+
+	// send with true_sendmsg()
+	//prepare our msg
+	struct iovec iov[1];
+	iov[0].iov_base = send_buffer;
+	iov[0].iov_len = send_buffer_len;
+
+
+	struct msghdr tmp_msg;
+	tmp_msg.msg_control = msg->msg_control;
+	tmp_msg.msg_controllen = msg->msg_controllen;
+	tmp_msg.msg_flags = msg->msg_flags;
+	tmp_msg.msg_iov = iov;
+	tmp_msg.msg_iovlen = 1;
+	
+	v6 = relay_chain->head->bnd_addr.is_v6 == ATYP_V6;
+	struct sockaddr_in addr = {
+		.sin_family = AF_INET,
+		.sin_port = relay_chain->head->bnd_port,
+		.sin_addr.s_addr = (in_addr_t) relay_chain->head->bnd_addr.addr.v4.as_int,
+	};
+	struct sockaddr_in6 addr6 = {
+		.sin6_family = AF_INET6,
+		.sin6_port = relay_chain->head->bnd_port,
+	};
+	if(v6) memcpy(&addr6.sin6_addr.s6_addr, relay_chain->head->bnd_addr.addr.v6, 16);
+
+	
+
+	tmp_msg.msg_name = (struct sockaddr*)(v6?(void*)&addr6:(void*)&addr);
+	tmp_msg.msg_namelen = v6?sizeof(addr6):sizeof(addr) ;
+	
+	
+	//send it
+
+	int sent = 0;
+	sent = true_sendmsg(sockfd, &tmp_msg, flags);
+	if(-1 == sent){
+		PDEBUG("error true_sendmsg\n");
+		return -1;
+	}
+	PDEBUG("Successfully sent UDP packet with true_sendmsg()\n");
+	return sent;
+}
 
 HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 
@@ -1100,7 +1279,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	PDEBUG("exec true_recvmsg\n");
 	bytes_received = true_recvmsg(sockfd, &tmp_msg, flags);
 	if(-1 == bytes_received){
-		PDEBUG("true_recvmsg returned -1\n");
+		PDEBUG("true_recvmsg returned -1, errno: %d, %s\n", errno,strerror(errno));
 		return -1;
 	}
 
@@ -1112,8 +1291,9 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 
 	PDEBUG("successful recvmsg(), %d bytes received\n", bytes_received);
 	//Check that the packet was received from the first relay of the chain
-
-	if(!is_from_chain_head(*relay_chain, *(struct sockaddr *)(msg->msg_name))){
+	DUMP_BUFFER(tmp_msg.msg_name, tmp_msg.msg_namelen);
+	DUMP_BUFFER(relay_chain->head->bnd_addr.addr.v4.octet, 4);
+	if(!is_from_chain_head(*relay_chain, *(struct sockaddr *)(tmp_msg.msg_name))){
 		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
 		// Write the data we received in tmp_msg to msg
 		int written = write_buf_to_iov(buffer, bytes_received, msg->msg_iov, msg->msg_iovlen);
@@ -1137,7 +1317,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	char udp_data[65535];
 	size_t udp_data_len = sizeof(udp_data);
 
-	rc = unsocks_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, udp_data, &udp_data_len);
+	rc = unsocksify_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, udp_data, &udp_data_len);
 	if(rc != SUCCESS){
 		PDEBUG("error unSOCKSing the UDP packet\n");
 		return -1;
@@ -1178,7 +1358,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 			src_addr_v4->sin_family = AF_INET;
 			src_addr_v4->sin_port = src_port;
 			memcpy(&(src_addr_v4->sin_addr.s_addr), src_ip.addr.v6+12, 4);
-			msg->msg_namelen = sizeof(src_addr_v4);
+			msg->msg_namelen = sizeof(struct sockaddr_in);
 		}
 		else if(src_ip.is_v6){
 			PDEBUG("src_ip is true v6\n");
@@ -1190,7 +1370,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 			src_addr_v6->sin6_family = AF_INET6;
 			src_addr_v6->sin6_port = src_port;
 			memcpy(src_addr_v6->sin6_addr.s6_addr, src_ip.addr.v6, 16);
-			msg->msg_namelen = sizeof(src_addr_v6);
+			msg->msg_namelen = sizeof(struct sockaddr_in6);
 		}else {
 			if(msg->msg_namelen < sizeof(struct sockaddr_in)){
 				PDEBUG("addrlen too short for ipv4\n");
@@ -1199,9 +1379,11 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 			src_addr_v4->sin_family = AF_INET;
 			src_addr_v4->sin_port = src_port;
 			src_addr_v4->sin_addr.s_addr = (in_addr_t) src_ip.addr.v4.as_int;
-			msg->msg_namelen = sizeof(src_addr_v4);
+			msg->msg_namelen = sizeof(struct sockaddr_in);
 		} 
 	}
+	PDEBUG("after recv dump : ");
+	DUMP_BUFFER(msg->msg_name, msg->msg_namelen);
 	
 
 	return udp_data_len;
@@ -1382,7 +1564,7 @@ static void setup_hooks(void) {
 	SETUP_SYM(sendto);
 	SETUP_SYM(recvfrom);
 	SETUP_SYM(recvmsg);
-	//SETUP_SYM(sendmsg);
+	SETUP_SYM(sendmsg);
 	SETUP_SYM(recv);
 	SETUP_SYM(gethostbyname);
 	SETUP_SYM(getaddrinfo);
