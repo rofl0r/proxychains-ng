@@ -1049,22 +1049,38 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	// }
 
 	//TODO hugoc: case of SOCK_DGRAM with AF_INET or AF_INET6
-	struct sockaddr* dest_addr;
-	dest_addr = msg->msg_name;
-	socklen_t addrlen = msg->msg_namelen;
+
+	//TODO: check what to do when a UDP socket has been "connected" before and then sendmsg is called with msg->msg_name = NULL ?  
+
+	struct sockaddr dest_addr;
+	socklen_t addrlen = sizeof(struct sockaddr);
+
+	if(msg->msg_name == NULL){ // try to find a peer addr that could have been set with connect()
+		int rc = 0;
+		rc = getpeername(sockfd, &dest_addr, &addrlen);
+		if(rc != SUCCESS){
+			PDEBUG("error in getpeername(): %d\n", errno);
+			return -1;
+		}
+	} else {
+		dest_addr = *( (struct sockaddr *) (msg->msg_name));
+		addrlen = msg->msg_namelen;
+	}
+	
+
 
 	DEBUGDECL(char str[256]);
 	int socktype = 0, ret = 0;
 	socklen_t optlen = 0;
 	optlen = sizeof(socktype);
-	sa_family_t fam = SOCKFAMILY(*dest_addr);
+	sa_family_t fam = SOCKFAMILY(dest_addr);
 	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
 	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_DGRAM)){
 		return true_sendmsg(sockfd, msg, flags);
 	}
 
 	PDEBUG("before send dump : ");
-	DUMP_BUFFER(msg->msg_name, msg->msg_namelen);
+	DUMP_BUFFER(&dest_addr, addrlen);
 	
 	ip_type dest_ip;
 	struct in_addr *p_addr_in;
@@ -1075,11 +1091,11 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	unsigned short port;
 	int v6 = dest_ip.is_v6 = fam == AF_INET6;
 
-	p_addr_in = &((struct sockaddr_in *) dest_addr)->sin_addr;
+	p_addr_in = &((struct sockaddr_in *) &dest_addr)->sin_addr;
 	p_addr_in6 = &((struct 
-	sockaddr_in6 *) dest_addr)->sin6_addr;
-	port = !v6 ? ntohs(((struct sockaddr_in *) dest_addr)->sin_port)
-	           : ntohs(((struct sockaddr_in6 *) dest_addr)->sin6_port);
+	sockaddr_in6 *) &dest_addr)->sin6_addr;
+	port = !v6 ? ntohs(((struct sockaddr_in *) &dest_addr)->sin_port)
+	           : ntohs(((struct sockaddr_in6 *) &dest_addr)->sin6_port);
 	struct in_addr v4inv6;
 	if(v6 && is_v4inv6(p_addr_in6)) {
 		memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr[12], 4);
