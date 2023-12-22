@@ -462,8 +462,10 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	error1:
 	proxychains_write_log(TP " timeout\n");
 	error:
-	if(*fd != -1)
+	if(*fd != -1) {
 		close(*fd);
+		*fd = -1;
+	}
 	return SOCKET_ERROR;
 }
 
@@ -537,7 +539,6 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 		if(!inet_ntop(v6?AF_INET6:AF_INET,pto->ip.addr.v6,ip_buf,sizeof ip_buf)) {
 			pto->ps = DOWN_STATE;
 			proxychains_write_log("<--ip conversion error!\n");
-			close(ns);
 			return SOCKET_ERROR;
 		}
 		hostname = ip_buf;
@@ -552,12 +553,10 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 		case BLOCKED:
 			pto->ps = BLOCKED_STATE;
 			proxychains_write_log("<--denied\n");
-			close(ns);
 			break;
 		case SOCKET_ERROR:
 			pto->ps = DOWN_STATE;
 			proxychains_write_log("<--socket error or timeout!\n");
-			close(ns);
 			break;
 	}
 	return retcode;
@@ -581,6 +580,10 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	PFUNC();
 
 	again:
+	if (ns != -1) {
+		close(ns);
+		ns = -1;
+	}
 	rc = -1;
 	DUMP_PROXY_CHAIN(pd, proxy_count);
 
@@ -716,6 +719,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	dup2(ns, sock);
 	close(ns);
 	return 0;
+
 	error:
 	if(ns != -1)
 		close(ns);
