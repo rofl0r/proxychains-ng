@@ -69,6 +69,7 @@ recv_t true_recv;
 recvfrom_t true_recvfrom;
 sendmsg_t true_sendmsg;
 recvmsg_t true_recvmsg;
+sendmmsg_t true_sendmmsg;
 
 int tcp_read_time_out;
 int tcp_connect_time_out;
@@ -589,6 +590,8 @@ inv_host:
 #endif
 
 HOOKFUNC(int, close, int fd) {
+	PFUNC();
+
 	if(!init_l) {
 		if(close_fds_cnt>=(sizeof close_fds/sizeof close_fds[0])) goto err;
 		close_fds[close_fds_cnt++] = fd;
@@ -597,11 +600,12 @@ HOOKFUNC(int, close, int fd) {
 	}
 
 	/***** UDP STUFF *******/
-
+	PDEBUG("checking if a relay chain is opened for fd %d\n", fd);
 	udp_relay_chain* chain = NULL;
 
 	chain = get_relay_chain(relay_chains, fd);
 	if(NULL != chain){
+		PDEBUG("fd %d corresponds to chain %x, closing it\n", fd, chain);
 		free_relay_chain_nodes(*chain);
 		del_relay_chain(&relay_chains, chain);
 	}
@@ -620,6 +624,7 @@ HOOKFUNC(int, close, int fd) {
 	errno = EBADF;
 	return -1;
 }
+
 static int is_v4inv6(const struct in6_addr *a) {
 	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
@@ -1022,14 +1027,16 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 
 	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
 	//TODO: is it better to do 'return send_udp_packet' ? 
-	if (SUCCESS != send_udp_packet(sockfd, *relay_chain, dest_ip, htons(port),0, buf, len)){
+	int sent = 0;
+	sent = send_udp_packet(sockfd, *relay_chain, dest_ip, htons(port),0, buf, len, flags);
+	if (-1 == sent ){
 		PDEBUG("could not send udp packet\n");
 		errno = ECONNREFUSED;
 		return -1;
 	}
 
-	PDEBUG("Successfully sent UDP packet, leaving hook\n");			
-	return SUCCESS;
+	PDEBUG("Successfully sent UDP packet, leaving hook\n\n");			
+	return sent;
 }
 
 HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
@@ -1171,11 +1178,11 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 
 	// Allocate buffer for header creation
 	char send_buffer[65535]; //TODO maybe we can do better about size ? 
-	size_t send_buffer_len = sizeof(send_buffer);
+	size_t send_buffer_len = 65535;
 
 	//Move iovec udp data contained in msg to one buffer
 	char udp_data[65535];
-	size_t udp_data_len = sizeof(udp_data);
+	size_t udp_data_len = 65535;
 	udp_data_len = write_iov_to_buf(udp_data, udp_data_len, msg->msg_iov, msg->msg_iovlen);
 
 	// Exec socksify_udp_packet 
@@ -1229,6 +1236,282 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	}
 	PDEBUG("Successfully sent UDP packet with true_sendmsg()\n");
 	return sent;
+}
+
+HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, int flags){
+
+	
+	int nmsg = -1; // The sendmmsg return code (-1 if error, otherwise number of messages sent)
+	int allocated_len = 0; // A counter for dynamic memory allocations, used in freeAndExit section
+
+	// As the call contains multiple message, we only filter on the first one address type :)
+
+	struct sockaddr dest_addr;
+	socklen_t addrlen = sizeof(struct sockaddr);
+
+	if(msgvec[0].msg_hdr.msg_name == NULL){ // try to find a peer addr that could have been set with connect()
+		int rc = 0;
+		rc = getpeername(sockfd, &dest_addr, &addrlen);
+		if(rc != SUCCESS){
+			PDEBUG("error in getpeername(): %d\n", errno);
+			goto freeAndExit;
+		}
+	} else {
+		dest_addr = *( (struct sockaddr *) (msgvec[0].msg_hdr.msg_name));
+		addrlen = msgvec[0].msg_hdr.msg_namelen;
+	}
+	
+
+
+	DEBUGDECL(char str[256]);
+	int socktype = 0, ret = 0;
+	socklen_t optlen = 0;
+	optlen = sizeof(socktype);
+	sa_family_t fam = SOCKFAMILY(dest_addr);
+	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_DGRAM)){
+		nmsg = true_sendmmsg(sockfd, msgvec, vlen, flags);
+		goto freeAndExit;
+	}
+
+	// Check if a chain of UDP relay is already opened for this socket
+	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
+	if(relay_chain == NULL){
+		// No chain is opened for this socket, open one
+		PDEBUG("opening new chain of relays for %d\n", sockfd);
+		if(NULL == (relay_chain = open_relay_chain(proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain))){
+			PDEBUG("could not open a chain of relay\n");
+			errno = ECONNREFUSED;
+			goto freeAndExit;
+		}
+		relay_chain->sockfd = sockfd;
+		add_relay_chain(&relay_chains, relay_chain);
+	}
+	DUMP_RELAY_CHAINS_LIST(relay_chains);
+
+
+	// Prepare our mmsg
+	struct mmsghdr* tmp_msgvec = NULL;
+	if(NULL == (tmp_msgvec = (struct mmsghdr*)calloc(vlen, sizeof(struct mmsghdr)))){
+		PDEBUG("error allocating memory for tmp_mmsghdr\n");
+		goto freeAndExit;
+	}
+
+
+
+	for(int i=0; i<vlen; i++){ // Go through each individual mmsghdr of msgvec
+
+		// Declare pointers for dynamicly allocated memory
+		char* send_buffer = NULL;
+		struct iovec* iov = NULL;
+		struct sockaddr_in* pAddr = NULL;
+		struct sockaddr_in6* pAddr6 = NULL;
+
+
+
+		struct sockaddr dest_addr;
+		socklen_t addrlen = sizeof(struct sockaddr);
+
+		if(msgvec[i].msg_hdr.msg_name == NULL){ // try to find a peer addr that could have been set with connect()
+			int rc = 0;
+			rc = getpeername(sockfd, &dest_addr, &addrlen);
+			if(rc != SUCCESS){
+				PDEBUG("error in getpeername(): %d\n", errno);
+				goto cleanCurrentLoop;
+			}
+		} else {
+			dest_addr = *( (struct sockaddr *) (msgvec[i].msg_hdr.msg_name));
+			addrlen = msgvec[i].msg_hdr.msg_namelen;
+		}
+
+		ip_type dest_ip;
+		struct in_addr *p_addr_in;
+		struct in6_addr *p_addr_in6;
+		dnat_arg *dnat = NULL;
+		size_t i;
+		int remote_dns_connect = 0;
+		unsigned short port;
+		int v6 = dest_ip.is_v6 = fam == AF_INET6;
+
+		p_addr_in = &((struct sockaddr_in *) &dest_addr)->sin_addr;
+		p_addr_in6 = &((struct 
+		sockaddr_in6 *) &dest_addr)->sin6_addr;
+		port = !v6 ? ntohs(((struct sockaddr_in *) &dest_addr)->sin_port)
+				: ntohs(((struct sockaddr_in6 *) &dest_addr)->sin6_port);
+		struct in_addr v4inv6;
+		if(v6 && is_v4inv6(p_addr_in6)) {
+			memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr[12], 4);
+			v6 = dest_ip.is_v6 = 0;
+			p_addr_in = &v4inv6;
+		}
+		if(!v6 && !memcmp(p_addr_in, "\0\0\0\0", 4)) {
+			errno = ECONNREFUSED;
+			goto cleanCurrentLoop;
+		}
+
+		PDEBUG("message %d/%d\n", i, vlen);
+		PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
+		PDEBUG("port: %d\n", port);
+		PDEBUG("client socket: %d\n", sockfd);		
+
+		// check if connect called from proxydns
+		remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
+
+		// more specific first
+		if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+			if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
+				if(dnats[i].orig_port && (dnats[i].orig_port == port))
+					dnat = &dnats[i];
+
+		if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+			if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
+				if(!dnats[i].orig_port)
+					dnat = &dnats[i];
+
+		if (dnat) {
+			p_addr_in = &dnat->new_dst;
+			if (dnat->new_port)
+				port = dnat->new_port;
+		}
+
+		for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
+			if (localnet_addr[i].port && localnet_addr[i].port != port)
+				continue;
+			if (localnet_addr[i].family != (v6 ? AF_INET6 : AF_INET))
+				continue;
+			if (v6) {
+				size_t prefix_bytes = localnet_addr[i].in6_prefix / CHAR_BIT;
+				size_t prefix_bits = localnet_addr[i].in6_prefix % CHAR_BIT;
+				if (prefix_bytes && memcmp(p_addr_in6->s6_addr, localnet_addr[i].in6_addr.s6_addr, prefix_bytes) != 0)
+					continue;
+				if (prefix_bits && (p_addr_in6->s6_addr[prefix_bytes] ^ localnet_addr[i].in6_addr.s6_addr[prefix_bytes]) >> (CHAR_BIT - prefix_bits))
+					continue;
+			} else {
+				if((p_addr_in->s_addr ^ localnet_addr[i].in_addr.s_addr) & localnet_addr[i].in_mask.s_addr)
+					continue;
+			}
+			PDEBUG("message %d/%d is accessing localnet\n", i, vlen);
+			goto cleanCurrentLoop;
+		}
+
+		memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
+
+		// Allocate buffer for header creation
+		
+		if(NULL == (send_buffer = (char*)malloc(65535))){
+			PDEBUG("error malloc\n");
+			goto cleanCurrentLoop;
+		}
+		size_t send_buffer_len = 65535;
+
+		//Move iovec udp data contained in msg to one buffer
+		char udp_data[65535];
+		size_t udp_data_len = 65535;
+
+		udp_data_len = write_iov_to_buf(udp_data, udp_data_len,msgvec[i].msg_hdr.msg_iov ,msgvec[i].msg_hdr.msg_iovlen);
+
+		// Exec socksify_udp_packet 
+		int rc;
+		rc = socksify_udp_packet(udp_data, udp_data_len, *relay_chain, dest_ip, htons(port),send_buffer, &send_buffer_len);
+		if(rc != SUCCESS){
+			PDEBUG("error socksify_udp_packet()\n");
+			goto cleanCurrentLoop;
+		}
+
+		//prepare our msg
+		
+		if(NULL == (iov = (struct iovec*)calloc(1, sizeof(struct iovec)))){
+			PDEBUG("error calloc\n");
+			goto cleanCurrentLoop;
+		}
+		iov->iov_base = send_buffer;
+		iov->iov_len = send_buffer_len;
+
+
+		
+		tmp_msgvec[i].msg_hdr.msg_control = msgvec[i].msg_hdr.msg_control;
+		tmp_msgvec[i].msg_hdr.msg_controllen = msgvec[i].msg_hdr.msg_controllen;
+		tmp_msgvec[i].msg_hdr.msg_flags = msgvec[i].msg_hdr.msg_flags;
+
+		tmp_msgvec[i].msg_hdr.msg_iov = iov;
+		tmp_msgvec[i].msg_hdr.msg_iovlen = 1;
+		
+		v6 = relay_chain->head->bnd_addr.is_v6 == ATYP_V6;
+
+		if(v6){
+			
+			if(NULL == (pAddr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in)))){
+				PDEBUG("error malloc\n");
+				goto cleanCurrentLoop;
+			}
+			pAddr->sin_family = AF_INET;
+			pAddr->sin_port = relay_chain->head->bnd_port;
+			pAddr->sin_addr.s_addr = (in_addr_t) relay_chain->head->bnd_addr.addr.v4.as_int;
+
+			tmp_msgvec[i].msg_hdr.msg_name = (struct sockaddr*)pAddr;
+			tmp_msgvec[i].msg_hdr.msg_namelen = sizeof(*pAddr) ;
+		} else{
+			
+			if(NULL == (pAddr6 = (struct sockaddr_in6*)malloc(sizeof(struct sockaddr_in6)))){
+				PDEBUG("error malloc\n");
+				goto cleanCurrentLoop;
+			}
+			pAddr6->sin6_family = AF_INET6;
+			pAddr6->sin6_port = relay_chain->head->bnd_port;
+			if(v6) memcpy(pAddr6->sin6_addr.s6_addr, relay_chain->head->bnd_addr.addr.v6, 16);
+
+			tmp_msgvec[i].msg_hdr.msg_name = (struct sockaddr*)pAddr6;
+			tmp_msgvec[i].msg_hdr.msg_namelen = sizeof(*pAddr6);
+		}
+		
+		allocated_len += 1;
+		continue;
+
+	cleanCurrentLoop:
+		if(send_buffer != NULL){
+			free(send_buffer);
+		}
+		if(iov != NULL){
+			free(iov);
+		}
+		if(pAddr != NULL){
+			free(pAddr);
+		}
+		if(pAddr6 != NULL){
+			free(pAddr6);
+		}
+
+		goto freeAndExit;
+	}
+	
+
+	nmsg = true_sendmmsg(sockfd, tmp_msgvec, vlen, flags);
+
+	if(nmsg == -1){
+		PDEBUG("error true_sendmmsg: %d - %s\n", errno, strerror(errno) );
+		goto freeAndExit;
+	}
+
+	// Update msg_len values of msgvec for the nmsg sent messages
+	for(int i=0; i<nmsg; i++){
+		msgvec[i].msg_len = tmp_msgvec[i].msg_len;
+	}
+
+	PDEBUG("Successfully sent %d UDP packets with true_sendmmsg()\n", nmsg);
+	
+freeAndExit:
+
+	// Free memory allocated for tmp_msgvec contents
+	for(int i=0; i<allocated_len; i++){
+		free(tmp_msgvec[i].msg_hdr.msg_name);
+		free(tmp_msgvec[i].msg_hdr.msg_iov->iov_base);
+		free(tmp_msgvec[i].msg_hdr.msg_iov);
+	}
+	if(NULL != tmp_msgvec){
+		free(tmp_msgvec);
+	}
+
+	return nmsg;
 }
 
 HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
@@ -1581,6 +1864,7 @@ static void setup_hooks(void) {
 	SETUP_SYM(recvfrom);
 	SETUP_SYM(recvmsg);
 	SETUP_SYM(sendmsg);
+	SETUP_SYM(sendmmsg);
 	SETUP_SYM(recv);
 	SETUP_SYM(gethostbyname);
 	SETUP_SYM(getaddrinfo);

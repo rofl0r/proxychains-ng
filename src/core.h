@@ -171,6 +171,7 @@ typedef ssize_t (*recvfrom_t) (int sockfd, void *buf, size_t len, int flags,
 			struct sockaddr *src_addr, socklen_t *addrlen);
 
 typedef ssize_t (*sendmsg_t) (int sockfd, const struct msghdr *msg, int flags);
+typedef int (*sendmmsg_t) (int sockfd, struct mmsghdr* msgvec, unsigned int vlen, int flags);
 typedef ssize_t (*recvmsg_t) (int sockfd, struct msghdr *msg, int flags);
 
 
@@ -185,6 +186,7 @@ extern recvfrom_t true_recvfrom;
 extern recv_t true_recv;
 extern send_t true_send;
 extern sendmsg_t true_sendmsg;
+extern sendmmsg_t true_sendmmsg;
 extern recvmsg_t true_recvmsg;
 
 struct gethostbyname_data {
@@ -210,7 +212,7 @@ void del_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* chain);
 void add_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* new_chain);
 int free_relay_chain_nodes(udp_relay_chain chain);
 udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, chain_type ct, unsigned int max_chains);
-int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len);
+int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len, int flags);
 int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, unsigned short* src_port, char* data, unsigned int data_len  );
 size_t get_msg_iov_total_len(struct iovec* iov, size_t iov_len);
 size_t write_buf_to_iov(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len);

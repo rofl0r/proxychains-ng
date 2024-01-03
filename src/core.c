@@ -250,7 +250,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			                ulen ? "Proxy-Authorization: Basic " : dst,
 			                dst, ulen ? "\r\n" : dst);
 
-			if(len < 0 || len != send(sock, buff, len, 0))
+			if(len < 0 || len != true_send(sock, buff, len, 0))
 				goto err;
 
 			len = 0;
@@ -1028,7 +1028,7 @@ int socksify_udp_packet(void* udp_data, size_t udp_data_len, udp_relay_chain cha
 
 }
 
-int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len) {
+int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len, int flags) {
 	
 	PFUNC();
 	char send_buffer[65535];
@@ -1063,13 +1063,14 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 
 	int sent = 0;
 
-	sent = true_sendto(sockfd, send_buffer, send_buffer_len, 0, (struct sockaddr *) (v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr) );
+	sent = true_sendto(sockfd, send_buffer, send_buffer_len, flags, (struct sockaddr *) (v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr) );
 	if (sent != send_buffer_len){
 		PDEBUG("true_sendto error\n");
 		return -1;
 	}
 	
-	return SUCCESS;
+	
+	return data_len;
 
 }
 
