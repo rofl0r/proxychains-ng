@@ -70,6 +70,7 @@ recvfrom_t true_recvfrom;
 sendmsg_t true_sendmsg;
 recvmsg_t true_recvmsg;
 sendmmsg_t true_sendmmsg;
+getpeername_t true_getpeername;
 
 int tcp_read_time_out;
 int tcp_connect_time_out;
@@ -600,13 +601,13 @@ HOOKFUNC(int, close, int fd) {
 	}
 
 	/***** UDP STUFF *******/
-	PDEBUG("checking if a relay chain is opened for fd %d\n", fd);
+	//PDEBUG("checking if a relay chain is opened for fd %d\n", fd);
 	udp_relay_chain* chain = NULL;
 
 	chain = get_relay_chain(relay_chains, fd);
 	if(NULL != chain){
 		PDEBUG("fd %d corresponds to chain %x, closing it\n", fd, chain);
-		free_relay_chain_nodes(*chain);
+		free_relay_chain(*chain);
 		del_relay_chain(&relay_chains, chain);
 	}
 
@@ -692,6 +693,68 @@ HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
 	return res;
 }
 
+HOOKFUNC(int, getpeername, int sockfd, struct sockaddr *restrict addr, socklen_t *restrict addrlen){
+	INIT();
+	PFUNC();
+
+
+	int socktype = 0;
+	socklen_t optlen = 0;
+	optlen = sizeof(socktype);
+	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	if( socktype != SOCK_DGRAM){
+		PDEBUG("sockfd %d is not a SOCK_DGRAM socket, returning to true_getpeername\n", sockfd);
+		return true_getpeername(sockfd, addr, addrlen);
+	}
+	PDEBUG("sockfd %d is a SOCK_DGRAM socket\n", sockfd);
+
+	struct sockaddr sock_addr;
+	socklen_t sock_addr_len = sizeof(sock_addr);
+	if(SUCCESS != getsockname(sockfd, &sock_addr, &sock_addr_len )){
+		PDEBUG("error getsockname, errno=%d. Returning to true_getpeernam()\n", errno);
+		return true_getpeername(sockfd, addr, addrlen);
+	}
+	sa_family_t fam = SOCKFAMILY(sock_addr);
+	if(!(fam  == AF_INET || fam == AF_INET6)){
+		PDEBUG("sockfd %d address familiy is not a AF_INET or AF_INET6, returning to true_getpeername\n", sockfd);
+		return true_getpeername(sockfd, addr, addrlen);
+	}
+
+	PDEBUG("sockfd %d's address family is AF_INET or AF_INET6\n", sockfd);
+
+	
+	/* BEGIN UDP STUFF*/
+
+
+	// Check if a relay chain exists for the socket
+	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
+	if(relay_chain == NULL){
+		PDEBUG("no relay chain exists for socket %d, returning true_getpeername()\n", sockfd);
+		return true_getpeername(sockfd, addr, addrlen);
+	}
+
+	// Check if a connected peer address is stored in the relay chain structure
+	if(relay_chain->connected_peer_addr == NULL){
+		PDEBUG("no connected peer address is stored for socket %d, returning true_getpeername()\n", sockfd);
+		return true_getpeername(sockfd, addr, addrlen);			
+	}
+
+	// If a connected peer address is stored in the relay chain structure, return it
+
+	socklen_t provided_addr_len = *addrlen;
+	
+
+	size_t min = (provided_addr_len<relay_chain->connected_peer_addr_len)?provided_addr_len:relay_chain->connected_peer_addr_len;
+	memcpy(addr, relay_chain->connected_peer_addr, min);
+
+	*addrlen =  min;
+
+	return SUCCESS;
+
+	/* END UDP STUFF */
+
+}
+
 HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) {
 	INIT();
 	PFUNC();
@@ -710,6 +773,51 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 	optlen = sizeof(socktype);
 	sa_family_t fam = SOCKFAMILY(*addr);
 	getsockopt(sock, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	
+	/* BEGIN UDP STUFF*/
+	if(((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_DGRAM)){
+		PDEBUG("connect() on an UDP socket\n");
+
+		// Check if a relay chain is already opened for the socket fd, otherwise open it
+		udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sock);
+		if(relay_chain == NULL){
+			// No chain is opened for this socket, open one
+			PDEBUG("opening new chain of relays for %d\n", sock);
+			if(NULL == (relay_chain = open_relay_chain(proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain))){
+				PDEBUG("could not open a chain of relay\n");
+				errno = ECONNREFUSED;
+				return -1;
+			}
+			relay_chain->sockfd = sock;
+			add_relay_chain(&relay_chains, relay_chain);
+		}
+		DUMP_RELAY_CHAINS_LIST(relay_chains);
+
+
+		// Store the peer address in the relay chain structure, in order to be able to retrieve it in subsequent calls to send(), sendmsg(), ...
+		set_connected_peer_addr(relay_chain, addr, len);
+
+
+		// Connect the socket to the relay chain's head, so that subsequent calls to poll(), recv(), recvfrom(), ... can return data comming from this peer
+		
+		int v6 = relay_chain->head->bnd_addr.is_v6 == ATYP_V6;
+
+		struct sockaddr_in addr = {
+			.sin_family = AF_INET,
+			.sin_port = relay_chain->head->bnd_port,
+			.sin_addr.s_addr = (in_addr_t) relay_chain->head->bnd_addr.addr.v4.as_int,
+		};
+		struct sockaddr_in6 addr6 = {
+			.sin6_family = AF_INET6,
+			.sin6_port = relay_chain->head->bnd_port,
+		};
+		if(v6) memcpy(&addr6.sin6_addr.s6_addr, relay_chain->head->bnd_addr.addr.v6, 16);
+			
+		return true_connect(sock, (struct sockaddr *) (v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr)  );
+	}
+
+	/* END UDP STUFF*/
+
 	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_STREAM))
 				return true_connect(sock, addr, len);
 
@@ -1859,6 +1967,7 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 
 static void setup_hooks(void) {
 	SETUP_SYM(connect);
+	SETUP_SYM(getpeername);
 	SETUP_SYM(send);
 	SETUP_SYM(sendto);
 	SETUP_SYM(recvfrom);

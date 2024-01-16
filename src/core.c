@@ -1655,7 +1655,12 @@ int add_node_to_chain(proxy_data * pd, udp_relay_chain * chain){
 	return -1;
 }
 
-int free_relay_chain_nodes(udp_relay_chain chain){
+int free_relay_chain(udp_relay_chain chain){
+	if(NULL != chain.connected_peer_addr){
+		free(chain.connected_peer_addr);
+		chain.connected_peer_addr = NULL;
+	}
+
 	if(chain.head == NULL){
 		return SUCCESS;
 	}
@@ -1687,6 +1692,8 @@ udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, cha
 
 	new_chain->head = NULL;
 	new_chain->sockfd = -1;
+	new_chain->connected_peer_addr = NULL;
+	new_chain->connected_peer_addr_len = -1;
 
 	
 	unsigned int alive_count = 0;
@@ -1730,10 +1737,51 @@ udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, cha
 	error:
 	PDEBUG("error\n");
 	release_all(pd, proxy_count);
-	free_relay_chain_nodes(*new_chain);
+	free_relay_chain(*new_chain);
 	free(new_chain);
 	errno = ETIMEDOUT;
 	return NULL;
+}
+
+// Checks the address family of addr, allocates a matching structure and keeps a pointer to it in the chain structure to store the address of the connected peer
+void set_connected_peer_addr(udp_relay_chain* chain, struct sockaddr* addr, socklen_t addrlen){
+	
+	sa_family_t fam = ((struct sockaddr_in*)addr)->sin_family;
+	int v6 = fam == AF_INET6;
+
+
+
+	if(v6){
+		struct sockaddr_in6* old_addr6 = (struct sockaddr_in6*)addr;
+		struct sockaddr_in6* new_addr6 = NULL;
+		if(NULL == (new_addr6 = (struct sockaddr_in6*)malloc(sizeof(struct sockaddr_in6)))){
+			PDEBUG("error malloc\n");
+			return -1;
+		}
+
+		new_addr6->sin6_family = old_addr6->sin6_family;
+		new_addr6->sin6_port = old_addr6->sin6_port;
+		memcpy(new_addr6->sin6_addr.s6_addr, old_addr6->sin6_addr.s6_addr, 16);
+
+		chain->connected_peer_addr = (struct sockaddr*)new_addr6;
+		chain->connected_peer_addr_len = sizeof(struct sockaddr_in6);
+
+	} else{
+		struct sockaddr_in* old_addr = (struct sockaddr_in*)addr;
+		struct sockaddr_in* new_addr = NULL;
+		if(NULL == (new_addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in)))){
+			PDEBUG("error malloc\n"); 
+			return -1;
+		}
+
+		new_addr->sin_family = old_addr->sin_family;
+		new_addr->sin_port = old_addr->sin_port;
+		new_addr->sin_addr.s_addr = old_addr->sin_addr.s_addr;
+
+		chain->connected_peer_addr = (struct sockaddr*)new_addr;
+		chain->connected_peer_addr_len = sizeof(struct sockaddr_in);
+	}
+
 }
 
 
