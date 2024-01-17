@@ -1039,8 +1039,9 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 	}
 
-	//TODO hugoc: case of SOCK_DGRAM with AF_INET or AF_INET6
 	DEBUGDECL(char str[256]);
+
+	// Check that sockfd is a SOCK_DGRAM socket with an AF_INET or AF_INET6 address
 	int socktype = 0, ret = 0;
 	socklen_t optlen = 0;
 	optlen = sizeof(socktype);
@@ -1050,6 +1051,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 	}
 
+	// Here we have a SOCK_DRGAM socket with an AF_INET or AF_INET6 address
 	ip_type dest_ip;
 	struct in_addr *p_addr_in;
 	struct in6_addr *p_addr_in6;
@@ -1079,7 +1081,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	PDEBUG("client socket: %d\n", sockfd);
 
 	// check if connect called from proxydns
-        remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
+    remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
 
 	// more specific first
 	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
@@ -1802,7 +1804,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 HOOKFUNC(ssize_t, recv, int sockfd, void *buf, size_t len, int flags){
 	INIT();
 	PFUNC();
-	//TODO hugoc
+	
 	return recvfrom(sockfd, buf, len, flags, NULL, NULL);
 }
 
@@ -1924,11 +1926,8 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	INIT();
 	PFUNC();
-	//TODO hugoc
-
-	//Checker si c'est une SOCK_DGRAM + AFINET ou AFINET6
-	// Récupérer l'adresse liée avec getpeername
-	// Exécuter le hook sendto
+	
+	// Check if sockfd is a SOCK_DGRAM socket 
 	int socktype = 0;
 	socklen_t optlen = 0;
 	optlen = sizeof(socktype);
@@ -1938,14 +1937,13 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 		return true_send(sockfd, buf, len, flags);
 	}
 
+	// Retreive the peer address the socket is connected to, and check it is of AF_INET or AF_INET6 family
 	struct sockaddr addr;
 	socklen_t addr_len = sizeof(addr);
-
 	if(SUCCESS != getpeername(sockfd, &addr, &addr_len )){
 		PDEBUG("error getpeername, errno=%d. Returning to true_send()\n", errno);
 		return true_send(sockfd, buf, len, flags);
 	}
-	//DEBUGDECL(char str[256]);
 
 	sa_family_t fam = SOCKFAMILY(addr);
 	if(!(fam  == AF_INET || fam == AF_INET6)){
@@ -1953,6 +1951,7 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 		return true_send(sockfd, buf, len, flags);
 	}
 
+	// Call the sendto() hook with the send() parameters and the retrieved peer address 
 	return sendto(sockfd, buf, len, flags, &addr, addr_len);
 }
 

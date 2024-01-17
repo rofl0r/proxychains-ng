@@ -427,7 +427,6 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 /* Given a socket connected to a SOCKS5 proxy server, performs a UDP_ASSOCIATE handshake and returns BND_ADDR and BND_PORT if successfull.
 Pass NULL dst_addr and dst_port to fill those fields with 0 if expected local addr and port for udp sending are unknown (see RFC1928) */
 static int udp_associate(int sock, ip_type* dst_addr, unsigned short dst_port, ip_type* bnd_addr, unsigned short* bnd_port, char* user, char* pass){
-	//TODO hugoc
 
 	PFUNC();
 
@@ -889,47 +888,6 @@ int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_ip, unsig
 	PDEBUG("UDP packet successfully unSOCKified\n");
 	
 	return udp_data_len;
-
-	// // Decapsulate all the UDP headers and check that the packet came from the right proxy nodes
-	// int rc;
-	// socks5_addr src_addr;
-	// size_t udp_data_len = data_len;
-	// rc = decapsulate_check_udp_packet(buffer, bytes_received, chain, &src_addr, src_port, data, &udp_data_len);
-	// if(rc != SUCCESS){
-	// 	PDEBUG("error decapsulating the packet\n");
-	// 	return -1;
-	// }
-	// PDEBUG("all UDP headers decapsulated and validated\n");
-
-	// // If the innermost UDP header (containing the address of the final target) is of type ATYP_DOM, perform a 
-	// // reverse mapping to hand the 224.X.X.X IP to the client application
-	
-	// if(src_addr.atyp == ATYP_DOM){ 
-	// 	PDEBUG("Fetching matching IP for hostname\n");
-	// 	DUMP_BUFFER(src_addr.addr.dom.name,src_addr.addr.dom.len);
-	// 	ip_type4 tmp_ip = IPT4_INVALID;
-	// 	char host_string[256];
-	// 	memcpy(host_string, src_addr.addr.dom.name, src_addr.addr.dom.len);
-	// 	host_string[src_addr.addr.dom.len] = 0x00;
-
-	// 	tmp_ip = rdns_get_ip_for_host(host_string, src_addr.addr.dom.len);
-	// 	if(tmp_ip.as_int == -1){
-	// 		PDEBUG("error getting ip for host\n");
-	// 		return -1;
-	// 	}
-	// 	src_addr.atyp = ATYP_V4;
-	// 	src_addr.addr.v4.as_int = tmp_ip.as_int;
-	
-	// }
-	
-	// src_ip->is_v6 = (src_addr.atyp == ATYP_V6); 
-	// if(src_ip->is_v6){
-	// 	memcpy(src_ip->addr.v6, src_addr.addr.v6, 16);
-	// } else{
-	// 	src_ip->addr.v4.as_int = src_addr.addr.v4.as_int;
-	// }
-	
-	// return udp_data_len;
 }
 
 int encapsulate_udp_packet(udp_relay_chain chain, socks5_addr dst_addr, unsigned short dst_port, void* buffer, size_t* buffer_len){
@@ -1042,7 +1000,8 @@ int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsign
 	}
 
 	// Send the packet
-	// FIXME: should write_n_bytes be used here instead ?
+	// FIXME: should write_n_bytes be used here instead ? -> No, because we send data on an unconnected socket, so we need to use sendto with an address and not send.
+	// We thus cannot use write(), which cannot be given an address
 
 	// if(chain.head->bnd_addr.atyp == ATYP_DOM){
 	// 	PDEBUG("BND_ADDR of type DOMAINE (0x03) not supported yet\n");
