@@ -847,48 +847,6 @@ int unsocksify_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain
 	return 0;
 }
 
-int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, char* data, unsigned int data_len ){
-	//receives data on sockfd, decapsulates the header for each relay in chain and check they match, returns UDP data and source address/port
-	
-	PFUNC();
-
-	char buffer[65535]; //buffer to receive and decapsulate a UDP relay packet. UDP maxsize is 65535
-	int bytes_received;
-	struct sockaddr from;
-	socklen_t addrlen = sizeof(from);
-	PDEBUG("test\n");
-
-	bytes_received = true_recvfrom(sockfd, buffer,sizeof(buffer), 0, &from, &addrlen);
-	if(-1 == bytes_received){
-		PDEBUG("true_receive returned -1\n");
-		return -1;
-	}
-
-	PDEBUG("successful recvfrom(), %d bytes received\n", bytes_received);
-	//Check that the packet was received from the first relay of the chain
-	// i.e. does from == chain.head.bnd_addr ?
-
-	if(!is_from_chain_head(chain, from)){
-		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
-		int min = (bytes_received <= data_len)?bytes_received:data_len;
-		//TODO : il faut aussi transmettre les adresses et ports qu ón a recu a l'appli qui a fait le call !!!!!
-		memcpy(data, buffer, min);
-		return min;
-	}
-
-	PDEBUG("packet received from the proxy chain's head\n");
-
-	int rc;
-	size_t udp_data_len = data_len;
-	rc = unsocksify_udp_packet(buffer, bytes_received, chain, src_ip, src_port, data, &udp_data_len);
-	if(rc != SUCCESS){
-		PDEBUG("error unSOCKSing the UDP packet\n");
-		return -1;
-	}
-	PDEBUG("UDP packet successfully unSOCKified\n");
-	
-	return udp_data_len;
-}
 
 int encapsulate_udp_packet(udp_relay_chain chain, socks5_addr dst_addr, unsigned short dst_port, void* buffer, size_t* buffer_len){
 	

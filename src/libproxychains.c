@@ -1145,7 +1145,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		return -1;
 	}
 
-	PDEBUG("Successfully sent UDP packet, leaving hook\n\n");			
+	PDEBUG("Successful sendto() hook\n\n");			
 	return sent;
 }
 
@@ -1345,6 +1345,8 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 		return -1;
 	}
 	PDEBUG("Successfully sent UDP packet with true_sendmsg()\n");
+
+	PDEBUG("Successful sendmsg() hook\n\n");
 	return sent;
 }
 
@@ -1608,6 +1610,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 	}
 
 	PDEBUG("Successfully sent %d UDP packets with true_sendmmsg()\n", nmsg);
+	PDEBUG("Successful sendmmsg() hook\n\n");
 	
 freeAndExit:
 
@@ -1795,6 +1798,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	DUMP_BUFFER(msg->msg_name, msg->msg_namelen);
 	
 
+	PDEBUG("Successful recvmsg() hook\n\n");
 	return udp_data_len;
 }
 
@@ -1851,32 +1855,66 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	
 	char tmp_buffer[65535]; //maximum theoretical size of a UDP packet. 
 	int bytes_received;
-	ip_type from_addr;
-	unsigned short from_port;
-	bytes_received = receive_udp_packet(sockfd, *relay_chain, &from_addr, &from_port, tmp_buffer, 65535);
-	
+	ip_type src_ip;
+	unsigned short src_port;
+
+
+	struct sockaddr from;
+	socklen_t from_len = sizeof(from);
+	bytes_received = true_recvfrom(sockfd, tmp_buffer, sizeof(tmp_buffer), 0, &from, &from_len);
 	if(-1 == bytes_received){
 		PDEBUG("true_recvfrom returned -1\n");
 		return -1;
 	}
-
-	PDEBUG("received %d bytes through receive_udp_packet()\n", bytes_received);
-	PDEBUG("data: ");
+	PDEBUG("successful recvfrom(), %d bytes received\n", bytes_received);
+	PDEBUG("packet: ");
 	DUMP_BUFFER(tmp_buffer, bytes_received);
+	
+	//Check that the packet was received from the first relay of the chain
+	// i.e. does from == chain.head.bnd_addr ?
+
+	if(!is_from_chain_head(*relay_chain, from)){
+		//TODO: Decide whether we should transfer such packets not coming from the proxy chain
+		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
+		int min = (bytes_received <= len)?bytes_received:len;
+	
+		memcpy(buf, tmp_buffer, min);
+		if(src_addr != NULL){ //TODO: check that the address copy is done correctly
+			socklen_t min_addr_len = (from_len<*addrlen)?from_len:*addrlen;
+			memcpy(src_addr, &from, min_addr_len);
+			*addrlen = min_addr_len;
+		}
+		
+		return min;
+	}
+	PDEBUG("packet received from the proxy chain's head\n");
+	
+	int rc;
+	size_t  udp_data_len = len;
+	rc = unsocksify_udp_packet(tmp_buffer, bytes_received, *relay_chain, &src_ip, &src_port, buf, &udp_data_len);
+	if(rc != SUCCESS){
+		PDEBUG("error unsocksifying the UDP packet\n");
+		return -1;
+	}
+	PDEBUG("UDP packet successfully unsocksifyied\n");
+
+	
+
+	PDEBUG("received %d bytes through receive_udp_packet()\n", udp_data_len);
+	PDEBUG("data: ");
+	DUMP_BUFFER(buf, udp_data_len);
 	PDEBUG("from_addr: ");
-	DUMP_BUFFER(from_addr.addr.v6, from_addr.is_v6?16:4);
-	PDEBUG("from_addr: %s\n", inet_ntop(from_addr.is_v6 ? AF_INET6 : AF_INET, from_addr.is_v6 ? (void*)from_addr.addr.v6 : (void*)from_addr.addr.v4.octet, str, sizeof(str)));
-	PDEBUG("from_port: %hu\n", ntohs(from_port));
+	DUMP_BUFFER(src_ip.addr.v6, src_ip.is_v6?16:4);
+	PDEBUG("from_addr: %s\n", inet_ntop(src_ip.is_v6 ? AF_INET6 : AF_INET, src_ip.is_v6 ? (void*)src_ip.addr.v6 : (void*)src_ip.addr.v4.octet, str, sizeof(str)));
+	PDEBUG("from_port: %hu\n", ntohs(src_port));
 	
 	// WARNING : Est ce que si le client avait envoyé des packets UDP avec resolution DNS dans le socks,
 	// on doit lui filer comme address source pour les packets recu l'addresse de mapping DNS ? Si oui comment
-	// la retrouver ? -> done in receive_udp_packet()
+	// la retrouver ? -> done in unsocksify_udp_packet()
 	
-	int min = (bytes_received > len)?len:bytes_received; 
-	memcpy(buf, tmp_buffer, min);
 
 	if (src_addr == NULL){ // No need to fill src_addr in this case
-		return min;
+		return udp_data_len;
 	}
 
 	struct sockaddr_in* src_addr_v4;
@@ -1885,18 +1923,18 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
 	// 
 
-	if(from_addr.is_v6 && is_v4inv6((struct in6_addr*)from_addr.addr.v6)){
+	if(src_ip.is_v6 && is_v4inv6((struct in6_addr*)src_ip.addr.v6)){
 		PDEBUG("src_ip is v4 in v6 ip\n");
 		if(addrlen < sizeof(struct sockaddr_in)){
 			PDEBUG("addrlen too short for ipv4\n");
 		}
 		src_addr_v4 = (struct sockaddr_in*)src_addr;
 		src_addr_v4->sin_family = AF_INET;
-		src_addr_v4->sin_port = from_port;
-		memcpy(&(src_addr_v4->sin_addr.s_addr), from_addr.addr.v6+12, 4);
+		src_addr_v4->sin_port = src_port;
+		memcpy(&(src_addr_v4->sin_addr.s_addr), src_ip.addr.v6+12, 4);
 		*addrlen = sizeof(src_addr_v4);
 	}
-	else if(from_addr.is_v6){
+	else if(src_ip.is_v6){
 		PDEBUG("src_ip is true v6\n");
 		if(addrlen < sizeof(struct sockaddr_in6)){
 			PDEBUG("addrlen too short for ipv6\n");
@@ -1904,8 +1942,8 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 		}
 		src_addr_v6 = (struct sockaddr_in6*)src_addr;
 		src_addr_v6->sin6_family = AF_INET6;
-		src_addr_v6->sin6_port = from_port;
-		memcpy(src_addr_v6->sin6_addr.s6_addr, from_addr.addr.v6, 16);
+		src_addr_v6->sin6_port = src_port;
+		memcpy(src_addr_v6->sin6_addr.s6_addr, src_ip.addr.v6, 16);
 		*addrlen = sizeof(src_addr_v6);
 	}else {
 		if(addrlen < sizeof(struct sockaddr_in)){
@@ -1913,14 +1951,14 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 		}
 		src_addr_v4 = (struct sockaddr_in*)src_addr;
 		src_addr_v4->sin_family = AF_INET;
-		src_addr_v4->sin_port = from_port;
-		src_addr_v4->sin_addr.s_addr = (in_addr_t) from_addr.addr.v4.as_int;
+		src_addr_v4->sin_port = src_port;
+		src_addr_v4->sin_addr.s_addr = (in_addr_t) src_ip.addr.v4.as_int;
 		*addrlen = sizeof(src_addr_v4);
 	}
 
 
-
-	return min;
+	PDEBUG("Successful recvfrom() hook\n\n");
+	return udp_data_len;
 }
 
 HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
