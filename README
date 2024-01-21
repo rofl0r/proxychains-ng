@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.16 README
+ProxyChains-NG ver 4.17 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,15 @@ ProxyChains-NG ver 4.16 README
 
 Changelog:
 ----------
+Version 4.17
+- add hook for close_range function, fixing newer versions of openssh
+- fat-binary-m1 option for mac
+- fix DNS error handling in proxy_dns_old
+- simplify init code
+- fix openbsd preloading
+- fix double-close in multithreaded apps
+- various improvements to configure script
+
 Version 4.16
 - fix regression in configure script linker flag detection
 - remove 10 year old workaround for wrong glibc getnameinfo signature
