@@ -48,6 +48,7 @@
 #define     SOCKPORT(x)     (satosin(x)->sin_port)
 #define     SOCKFAMILY(x)     (satosin(x)->sin_family)
 #define     MAX_CHAIN 512
+#define 	RECV_BUFFER_SIZE 65536 //Should be larger than any possible UDP packet
 
 #ifdef IS_SOLARIS
 #undef connect
@@ -1680,7 +1681,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 		errno = EOPNOTSUPP;
 		return -1;
 	}
-	
+
 	nmsg = true_sendmmsg(sockfd, tmp_msgvec, vlen, flags);
 
 	if(nmsg == -1){
@@ -1750,7 +1751,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	PDEBUG("sockfd %d is associated with udp_relay_chain %x\n", sockfd, relay_chain);
 
 
-	char buffer[65535]; //buffer to receive and decapsulate a UDP relay packet. UDP maxsize is 65535
+	char buffer[RECV_BUFFER_SIZE]; //buffer to receive and decapsulate a UDP relay packet
 	size_t bytes_received;
 
 	struct sockaddr_storage from;
@@ -1810,7 +1811,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	int rc;
 	ip_type src_ip;
 	unsigned short src_port;
-	char udp_data[65535];
+	char udp_data[RECV_BUFFER_SIZE];
 	size_t udp_data_len = sizeof(udp_data);
 
 	rc = unsocksify_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, udp_data, &udp_data_len);
