@@ -1136,13 +1136,45 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	DUMP_RELAY_CHAINS_LIST(relay_chains);
 
 	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
-	//TODO: is it better to do 'return send_udp_packet' ? 
-	int sent = 0;
-	sent = send_udp_packet(sockfd, *relay_chain, dest_ip, htons(port),0, buf, len, flags);
-	if (-1 == sent ){
-		PDEBUG("could not send udp packet\n");
-		errno = ECONNREFUSED;
+
+	char send_buffer[65535];
+	size_t send_buffer_len = sizeof(send_buffer);
+
+	int rc;
+	rc = socksify_udp_packet(buf, len, *relay_chain, dest_ip, htons(port), send_buffer, &send_buffer_len);
+	if(rc != SUCCESS){
+		PDEBUG("error socksify_udp_packet()\n");
 		return -1;
+	}
+
+	// Send the packet
+	// FIXME: should write_n_bytes be used here instead ? -> No, because we send data on an unconnected socket, so we need to use sendto with an address and not send.
+	// We thus cannot use write(), which cannot be given an address
+
+	// if(chain.head->bnd_addr.atyp == ATYP_DOM){
+	// 	PDEBUG("BND_ADDR of type DOMAINE (0x03) not supported yet\n");
+	// 	goto err;
+	// }
+
+	v6 = relay_chain->head->bnd_addr.is_v6;
+
+	struct sockaddr_in addr = { 
+		.sin_family = AF_INET,
+		.sin_port = relay_chain->head->bnd_port,
+		.sin_addr.s_addr = (in_addr_t) relay_chain->head->bnd_addr.addr.v4.as_int,
+	};
+	struct sockaddr_in6 addr6 = {
+		.sin6_family = AF_INET6,
+		.sin6_port = relay_chain->head->bnd_port,
+	};
+	if(v6) memcpy(&addr6.sin6_addr.s6_addr, relay_chain->head->bnd_addr.addr.v6, 16);
+
+	int sent = 0;
+	sent = true_sendto(sockfd, send_buffer, send_buffer_len, flags, (struct sockaddr*)(v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr));
+
+	if(sent == -1){
+		PDEBUG("error true_sendto()\n");
+		return sent;
 	}
 
 	PDEBUG("Successful sendto() hook\n\n");			
@@ -1989,7 +2021,7 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	}
 
 	// Retreive the peer address the socket is connected to, and check it is of AF_INET or AF_INET6 family
-	
+
 	struct sockaddr_storage addr;
 	socklen_t addr_len = sizeof(addr);
 	if(SUCCESS != getpeername(sockfd, (struct sockaddr*)&addr, &addr_len )){
