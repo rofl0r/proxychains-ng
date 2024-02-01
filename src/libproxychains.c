@@ -1169,6 +1169,20 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	};
 	if(v6) memcpy(&addr6.sin6_addr.s6_addr, relay_chain->head->bnd_addr.addr.v6, 16);
 
+
+	//Drop the MSG_DONTROUTE flag if it exists
+	if(flags & MSG_DONTROUTE){
+		proxychains_write_log(LOG_PREFIX "dropping MSG_DONTROUTE flag\n");
+		flags ^= MSG_DONTROUTE;
+	}
+	//Return EOPNOTSUPP if flag MSG_MORE is set 
+	//TODO: implement MSG_MORE logic so that data from multiple sendto calls can be merged into one UDP datagram and sent to the SOCKS
+	if(flags & MSG_MORE){
+		PDEBUG("error, MSG_MORE not yet supported\n");
+		errno = EOPNOTSUPP;
+		return -1;
+	}
+
 	int sent = 0;
 	sent = true_sendto(sockfd, send_buffer, send_buffer_len, flags, (struct sockaddr*)(v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr));
 
@@ -1373,6 +1387,19 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	
 	
 	//send it
+
+	//Drop the MSG_DONTROUTE flag if it exists
+	if(flags & MSG_DONTROUTE){
+		proxychains_write_log(LOG_PREFIX "dropping MSG_DONTROUTE flag\n");
+		flags ^= MSG_DONTROUTE;
+	}
+	//Return EOPNOTSUPP if flag MSG_MORE is set 
+	//TODO: implement MSG_MORE logic so that data from multiple sendto calls can be merged into one UDP datagram and sent to the SOCKS
+	if(flags & MSG_MORE){
+		PDEBUG("error, MSG_MORE not yet supported\n");
+		errno = EOPNOTSUPP;
+		return -1;
+	}
 
 	int sent = 0;
 	sent = true_sendmsg(sockfd, &tmp_msg, flags);
@@ -1641,6 +1668,19 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 	}
 	
 
+	//Drop the MSG_DONTROUTE flag if it exists
+	if(flags & MSG_DONTROUTE){
+		proxychains_write_log(LOG_PREFIX "dropping MSG_DONTROUTE flag\n");
+		flags ^= MSG_DONTROUTE;
+	}
+	//Return EOPNOTSUPP if flag MSG_MORE is set 
+	//TODO: implement MSG_MORE logic so that data from multiple sendto calls can be merged into one UDP datagram and sent to the SOCKS
+	if(flags & MSG_MORE){
+		PDEBUG("error, MSG_MORE not yet supported\n");
+		errno = EOPNOTSUPP;
+		return -1;
+	}
+	
 	nmsg = true_sendmmsg(sockfd, tmp_msgvec, vlen, flags);
 
 	if(nmsg == -1){
@@ -1905,7 +1945,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 
 	struct sockaddr_storage from;
 	socklen_t from_len = sizeof(from);
-	bytes_received = true_recvfrom(sockfd, tmp_buffer, sizeof(tmp_buffer), 0, (struct sockaddr*)&from, &from_len);
+	bytes_received = true_recvfrom(sockfd, tmp_buffer, sizeof(tmp_buffer), flags, (struct sockaddr*)&from, &from_len);
 	if(-1 == bytes_received){
 		PDEBUG("true_recvfrom returned -1\n");
 		return -1;
