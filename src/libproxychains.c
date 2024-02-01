@@ -1811,16 +1811,16 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	int rc;
 	ip_type src_ip;
 	unsigned short src_port;
-	char udp_data[RECV_BUFFER_SIZE];
-	size_t udp_data_len = sizeof(udp_data);
+	void* udp_data = NULL;
+	size_t udp_data_len = 0;
 
-	rc = unsocksify_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, udp_data, &udp_data_len);
+	rc = unsocksify_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, &udp_data);
 	if(rc != SUCCESS){
 		PDEBUG("error unSOCKSing the UDP packet\n");
 		return -1;
 	}
 	PDEBUG("UDP packet successfully unSOCKified\n");
-	
+	udp_data_len = bytes_received - (udp_data - (void*)buffer);
 
 	/*debug*/
 	DEBUGDECL(char str[256]);
@@ -1975,23 +1975,29 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	PDEBUG("packet received from the proxy chain's head\n");
 	
 	int rc;
-	size_t  udp_data_len = len;
-	rc = unsocksify_udp_packet(tmp_buffer, bytes_received, *relay_chain, &src_ip, &src_port, buf, &udp_data_len);
+	void* udp_data = NULL;
+	size_t  udp_data_len = 0;
+	rc = unsocksify_udp_packet(tmp_buffer, bytes_received, *relay_chain, &src_ip, &src_port, &udp_data);
 	if(rc != SUCCESS){
 		PDEBUG("error unsocksifying the UDP packet\n");
 		return -1;
 	}
 	PDEBUG("UDP packet successfully unsocksifyied\n");
+	udp_data_len = bytes_received - (udp_data - (void*)tmp_buffer);
 
 	
 
 	PDEBUG("received %d bytes through receive_udp_packet()\n", udp_data_len);
 	PDEBUG("data: ");
-	DUMP_BUFFER(buf, udp_data_len);
+	DUMP_BUFFER(udp_data, udp_data_len);
 	PDEBUG("from_addr: ");
 	DUMP_BUFFER(src_ip.addr.v6, src_ip.is_v6?16:4);
 	PDEBUG("from_addr: %s\n", inet_ntop(src_ip.is_v6 ? AF_INET6 : AF_INET, src_ip.is_v6 ? (void*)src_ip.addr.v6 : (void*)src_ip.addr.v4.octet, str, sizeof(str)));
 	PDEBUG("from_port: %hu\n", ntohs(src_port));
+
+	// Copy received UDP data to the buffer provided by the client
+	size_t min = (udp_data_len < len)?udp_data_len:len;
+	memcpy(buf, udp_data, min);
 	
 	// WARNING : Est ce que si le client avait envoyé des packets UDP avec resolution DNS dans le socks,
 	// on doit lui filer comme address source pour les packets recu l'addresse de mapping DNS ? Si oui comment

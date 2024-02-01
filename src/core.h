@@ -222,7 +222,7 @@ size_t get_msg_iov_total_len(struct iovec* iov, size_t iov_len);
 size_t write_buf_to_iov(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len);
 size_t write_iov_to_buf(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len);
 int is_from_chain_head(udp_relay_chain chain, struct sockaddr* src_addr);
-int unsocksify_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void* udp_data, size_t* udp_data_len);
+int unsocksify_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void** udp_data);
 int socksify_udp_packet(void* udp_data, size_t udp_data_len, udp_relay_chain chain, ip_type dst_ip, unsigned short dst_port, void* buffer, size_t* buffer_len);
 int encapsulate_udp_packet(udp_relay_chain chain, socks5_addr dst_addr, unsigned short dst_port, void* buffer, size_t* buffer_len);
 void set_connected_peer_addr(udp_relay_chain* chain, struct sockaddr* addr, socklen_t addrlen);

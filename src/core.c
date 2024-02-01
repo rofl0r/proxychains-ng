@@ -740,7 +740,7 @@ int is_from_chain_head(udp_relay_chain chain, struct sockaddr* src_addr){
 
 
 
-int decapsulate_check_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, socks5_addr* src_addr, unsigned short* src_port, void* udp_data, size_t* udp_data_len){
+int decapsulate_check_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, socks5_addr* src_addr, unsigned short* src_port, void** udp_data){
 	
 	PFUNC();
 	// Go through the whole proxy chain, decapsulate each header and check that the addresses match
@@ -793,23 +793,20 @@ int decapsulate_check_udp_packet(void* in_buffer, size_t in_buffer_len, udp_rela
 		printf("WARNING: received UDP packet with frag != 0 while fragmentation is unsupported.\n");
 	}
 
-	
-	// Copy the UDP data to the provided buffer. If the provided buffer is too small, data is truncated
-	int min = ((in_buffer_len-read)>*udp_data_len)?*udp_data_len:(in_buffer_len-read);
-	memcpy(udp_data,in_buffer+read, min);
-	
-	// Write back the length of written UDP data in the input/output parameter udp_data_len
-	*udp_data_len = min;
+
+	// Point udp_data to the position of the UDP data inside in_buffer
+	*udp_data = in_buffer+read;
 	
 	return 0;
 }
 
-int unsocksify_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void* udp_data, size_t* udp_data_len){
+//Takes an in_buffer of size in_buffer_len, checks that all UDP headers are correct (against chain), fills src_ip and src_port with address of the peer sending the packet through the relay, and fills udp_data with the address of the udp data inside in_buff
+int unsocksify_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void** udp_data){
 	PFUNC();
 	// Decapsulate all the UDP headers and check that the packet came from the right proxy nodes
 	int rc;
 	socks5_addr src_addr;
-	rc = decapsulate_check_udp_packet(in_buffer, in_buffer_len, chain, &src_addr, src_port, udp_data, udp_data_len);
+	rc = decapsulate_check_udp_packet(in_buffer, in_buffer_len, chain, &src_addr, src_port, udp_data);
 	if(rc != SUCCESS){
 		PDEBUG("error decapsulating the packet\n");
 		return -1;
