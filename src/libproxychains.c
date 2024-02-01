@@ -708,9 +708,9 @@ HOOKFUNC(int, getpeername, int sockfd, struct sockaddr *restrict addr, socklen_t
 	}
 	PDEBUG("sockfd %d is a SOCK_DGRAM socket\n", sockfd);
 
-	struct sockaddr sock_addr;
+	struct sockaddr_storage sock_addr;
 	socklen_t sock_addr_len = sizeof(sock_addr);
-	if(SUCCESS != getsockname(sockfd, &sock_addr, &sock_addr_len )){
+	if(SUCCESS != getsockname(sockfd, (struct sockaddr *)&sock_addr, &sock_addr_len )){
 		PDEBUG("error getsockname, errno=%d. Returning to true_getpeernam()\n", errno);
 		return true_getpeername(sockfd, addr, addrlen);
 	}
@@ -1169,19 +1169,23 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 
 	//TODO: check what to do when a UDP socket has been "connected" before and then sendmsg is called with msg->msg_name = NULL ?  
 
-	struct sockaddr dest_addr;
-	socklen_t addrlen = sizeof(struct sockaddr);
+	struct sockaddr_storage dest_addr;
+	socklen_t addrlen = sizeof(dest_addr);
 
 	if(msg->msg_name == NULL){ // try to find a peer addr that could have been set with connect()
 		int rc = 0;
-		rc = getpeername(sockfd, &dest_addr, &addrlen);
+		rc = getpeername(sockfd, (struct sockaddr*)&dest_addr, &addrlen);
 		if(rc != SUCCESS){
 			PDEBUG("error in getpeername(): %d\n", errno);
 			return -1;
 		}
 	} else {
-		dest_addr = *( (struct sockaddr *) (msg->msg_name));
+		if(msg->msg_namelen > addrlen){
+			PDEBUG("msg->msg_name too long\n");
+			return -1;
+		}
 		addrlen = msg->msg_namelen;
+		memcpy(&dest_addr, msg->msg_name, addrlen);
 	}
 	
 
@@ -1358,19 +1362,23 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 
 	// As the call contains multiple message, we only filter on the first one address type :)
 
-	struct sockaddr dest_addr;
-	socklen_t addrlen = sizeof(struct sockaddr);
+	struct sockaddr_storage dest_addr;
+	socklen_t addrlen = sizeof(dest_addr);
 
 	if(msgvec[0].msg_hdr.msg_name == NULL){ // try to find a peer addr that could have been set with connect()
 		int rc = 0;
-		rc = getpeername(sockfd, &dest_addr, &addrlen);
+		rc = getpeername(sockfd, (struct sockaddr*)&dest_addr, &addrlen);
 		if(rc != SUCCESS){
 			PDEBUG("error in getpeername(): %d\n", errno);
 			goto freeAndExit;
 		}
 	} else {
-		dest_addr = *( (struct sockaddr *) (msgvec[0].msg_hdr.msg_name));
+		if(msgvec[0].msg_hdr.msg_namelen > addrlen){
+			PDEBUG("msgvec[0].msg_hdr.msg_namelen too long\n");
+			return -1;
+		}
 		addrlen = msgvec[0].msg_hdr.msg_namelen;
+		memcpy(&dest_addr, msgvec[0].msg_hdr.msg_name, addrlen);
 	}
 	
 
@@ -1421,19 +1429,23 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 
 
 
-		struct sockaddr dest_addr;
-		socklen_t addrlen = sizeof(struct sockaddr);
+		struct sockaddr_storage dest_addr;
+		socklen_t addrlen = sizeof(dest_addr);
 
 		if(msgvec[i].msg_hdr.msg_name == NULL){ // try to find a peer addr that could have been set with connect()
 			int rc = 0;
-			rc = getpeername(sockfd, &dest_addr, &addrlen);
+			rc = getpeername(sockfd, (struct sockaddr*)&dest_addr, &addrlen);
 			if(rc != SUCCESS){
 				PDEBUG("error in getpeername(): %d\n", errno);
 				goto cleanCurrentLoop;
 			}
 		} else {
-			dest_addr = *( (struct sockaddr *) (msgvec[i].msg_hdr.msg_name));
+			if(msgvec[i].msg_hdr.msg_namelen > addrlen){
+				PDEBUG("msgvec[%d].msg_hdr.msg_namelen too long\n", i);
+				return -1;
+			}
 			addrlen = msgvec[i].msg_hdr.msg_namelen;
+			memcpy(&dest_addr, msgvec[i].msg_hdr.msg_name, addrlen);
 		}
 
 		ip_type dest_ip;
@@ -1643,9 +1655,9 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	}
 	PDEBUG("sockfd %d is a SOCK_DGRAM socket\n", sockfd);
 
-	struct sockaddr addr;
+	struct sockaddr_storage addr;
 	socklen_t addr_len = sizeof(addr);
-	if(SUCCESS != getsockname(sockfd, &addr, &addr_len )){
+	if(SUCCESS != getsockname(sockfd, (struct sockaddr*)&addr, &addr_len )){
 		PDEBUG("error getsockname, errno=%d. Returning to true_recvmsg()\n", errno);
 		return true_recvmsg(sockfd,msg, flags);
 	}
@@ -1669,7 +1681,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	char buffer[65535]; //buffer to receive and decapsulate a UDP relay packet. UDP maxsize is 65535
 	size_t bytes_received;
 
-	struct sockaddr from;
+	struct sockaddr_storage from;
 
 
 
@@ -1680,7 +1692,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 
 	struct msghdr tmp_msg;
 
-	tmp_msg.msg_name = &from;
+	tmp_msg.msg_name = (void *)&from;
 	tmp_msg.msg_namelen = sizeof(from);
 	tmp_msg.msg_iov = iov;
 	tmp_msg.msg_iovlen = 1;
@@ -1705,7 +1717,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	//Check that the packet was received from the first relay of the chain
 	DUMP_BUFFER(tmp_msg.msg_name, tmp_msg.msg_namelen);
 	DUMP_BUFFER(relay_chain->head->bnd_addr.addr.v4.octet, 4);
-	if(!is_from_chain_head(*relay_chain, *(struct sockaddr *)(tmp_msg.msg_name))){
+	if(!is_from_chain_head(*relay_chain, (struct sockaddr *)(tmp_msg.msg_name))){
 		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
 		// Write the data we received in tmp_msg to msg
 		int written = write_buf_to_iov(buffer, bytes_received, msg->msg_iov, msg->msg_iovlen);
@@ -1828,9 +1840,9 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	}
 	PDEBUG("sockfd %d is a SOCK_DGRAM socket\n", sockfd);
 
-	struct sockaddr addr;
+	struct sockaddr_storage addr;
 	socklen_t addr_len = sizeof(addr);
-	if(SUCCESS != getsockname(sockfd, &addr, &addr_len )){
+	if(SUCCESS != getsockname(sockfd, (struct sockaddr*)&addr, &addr_len )){
 		PDEBUG("error getsockname, errno=%d. Returning to true_recvfrom()\n", errno);
 		return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 	}
@@ -1859,9 +1871,9 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	unsigned short src_port;
 
 
-	struct sockaddr from;
+	struct sockaddr_storage from;
 	socklen_t from_len = sizeof(from);
-	bytes_received = true_recvfrom(sockfd, tmp_buffer, sizeof(tmp_buffer), 0, &from, &from_len);
+	bytes_received = true_recvfrom(sockfd, tmp_buffer, sizeof(tmp_buffer), 0, (struct sockaddr*)&from, &from_len);
 	if(-1 == bytes_received){
 		PDEBUG("true_recvfrom returned -1\n");
 		return -1;
@@ -1873,7 +1885,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	//Check that the packet was received from the first relay of the chain
 	// i.e. does from == chain.head.bnd_addr ?
 
-	if(!is_from_chain_head(*relay_chain, from)){
+	if(!is_from_chain_head(*relay_chain, (struct sockaddr*)&from)){
 		//TODO: Decide whether we should transfer such packets not coming from the proxy chain
 		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
 		int min = (bytes_received <= len)?bytes_received:len;
@@ -1966,6 +1978,7 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	PFUNC();
 	
 	// Check if sockfd is a SOCK_DGRAM socket 
+
 	int socktype = 0;
 	socklen_t optlen = 0;
 	optlen = sizeof(socktype);
@@ -1976,9 +1989,10 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	}
 
 	// Retreive the peer address the socket is connected to, and check it is of AF_INET or AF_INET6 family
-	struct sockaddr addr;
+	
+	struct sockaddr_storage addr;
 	socklen_t addr_len = sizeof(addr);
-	if(SUCCESS != getpeername(sockfd, &addr, &addr_len )){
+	if(SUCCESS != getpeername(sockfd, (struct sockaddr*)&addr, &addr_len )){
 		PDEBUG("error getpeername, errno=%d. Returning to true_send()\n", errno);
 		return true_send(sockfd, buf, len, flags);
 	}
@@ -1990,7 +2004,7 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	}
 
 	// Call the sendto() hook with the send() parameters and the retrieved peer address 
-	return sendto(sockfd, buf, len, flags, &addr, addr_len);
+	return sendto(sockfd, buf, len, flags, (struct sockaddr*)&addr, addr_len);
 }
 
 #ifdef MONTEREY_HOOKING

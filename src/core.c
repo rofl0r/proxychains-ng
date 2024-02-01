@@ -698,13 +698,13 @@ void cast_socks5addr_v4inv6_to_v4(socks5_addr* addr){
 	}
 }
 
-int compare_iptype_sockaddr(ip_type addr1, struct sockaddr addr2){
-	if(addr1.is_v6 && (((struct sockaddr_in6 *) &(addr2))->sin6_family == AF_INET6)){
+int compare_iptype_sockaddr(ip_type addr1, struct sockaddr* addr2){
+	if(addr1.is_v6 && (((struct sockaddr_in6 *)addr2)->sin6_family == AF_INET6)){
 		//Both are IPv6
-		return !memcmp(((struct sockaddr_in6 *)&addr2)->sin6_addr.s6_addr, addr1.addr.v6, 16);
-	} else if(!addr1.is_v6 && (((struct sockaddr_in *) &(addr2))->sin_family == AF_INET)){
+		return !memcmp(((struct sockaddr_in6 *)addr2)->sin6_addr.s6_addr, addr1.addr.v6, 16);
+	} else if(!addr1.is_v6 && (((struct sockaddr_in *)addr2)->sin_family == AF_INET)){
 		//Both are IPv4
-		return ((uint32_t)(((struct sockaddr_in *)&addr2)->sin_addr.s_addr) == addr1.addr.v4.as_int);
+		return ((uint32_t)(((struct sockaddr_in *)addr2)->sin_addr.s_addr) == addr1.addr.v4.as_int);
 	} else {
 		// Not the same address type
 		return 0;
@@ -730,10 +730,10 @@ int compare_socks5_addr_iptype(socks5_addr addr1, ip_type addr2){
 	}
 }
 
-int is_from_chain_head(udp_relay_chain chain, struct sockaddr src_addr){
+int is_from_chain_head(udp_relay_chain chain, struct sockaddr* src_addr){
 
 	if(compare_iptype_sockaddr(chain.head->bnd_addr, src_addr)){
-		return (chain.head->bnd_port == ((struct sockaddr_in*)&src_addr)->sin_port); 
+		return (chain.head->bnd_port == ((struct sockaddr_in*)src_addr)->sin_port); 
 	}
 	return 0;
 }
