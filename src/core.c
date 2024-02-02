@@ -658,6 +658,8 @@ size_t get_iov_total_len(struct iovec* iov, size_t iov_len){
 	return n;
 }
 
+//Tries to write buff_len bytes from buff into the scatter-gather location described by iov and iov_len.
+//Stops when all iov's buffers are full. Returns the number of bytes written 
 size_t write_buf_to_iov(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len){
 	size_t written = 0;
 	int i = 0;
