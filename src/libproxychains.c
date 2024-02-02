@@ -1754,6 +1754,8 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	char buffer[RECV_BUFFER_SIZE]; //buffer to receive and decapsulate a UDP relay packet
 	size_t bytes_received;
 
+	int trunc = flags & MSG_TRUNC;
+
 	struct sockaddr_storage from;
 
 
@@ -1779,6 +1781,9 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 		PDEBUG("true_recvmsg returned -1, errno: %d, %s\n", errno,strerror(errno));
 		return -1;
 	}
+	if(RECV_BUFFER_SIZE == bytes_received){
+		PDEBUG("UDP PACKET SHOULD NOT BE THAT BIG\n");
+	}
 
 	// Transfer the fields we do not manage
 
@@ -1802,7 +1807,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 			msg->msg_namelen = min;
 		}
 
-		return written;
+		return trunc?bytes_received:written; //if MSG_TRUNC flag is set, return the real length of the packet/datagram even when it was longer than the passed buffer (msg->msg_iov)
 	}
 
 	PDEBUG("packet received from the proxy chain's head\n");
@@ -1884,7 +1889,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	
 
 	PDEBUG("Successful recvmsg() hook\n\n");
-	return udp_data_len;
+	return trunc?udp_data_len:written;//if MSG_TRUNC flag is set, return the real length of the packet/datagram even when it was longer than the passed buffer (msg->msg_iov)
 }
 
 
@@ -1936,24 +1941,29 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	}	
 	PDEBUG("sockfd %d is associated with udp_relay_chain %x\n", sockfd, relay_chain);
 	
-	// On lance un receive_udp_packet()
+
 	
-	char tmp_buffer[65535]; //maximum theoretical size of a UDP packet. 
+	char buffer[RECV_BUFFER_SIZE]; //maximum theoretical size of a UDP packet. 
 	int bytes_received;
 	ip_type src_ip;
 	unsigned short src_port;
 
+	int trunc = flags & MSG_TRUNC;
+
 
 	struct sockaddr_storage from;
 	socklen_t from_len = sizeof(from);
-	bytes_received = true_recvfrom(sockfd, tmp_buffer, sizeof(tmp_buffer), flags, (struct sockaddr*)&from, &from_len);
+	bytes_received = true_recvfrom(sockfd, buffer, sizeof(buffer), flags, (struct sockaddr*)&from, &from_len);
 	if(-1 == bytes_received){
 		PDEBUG("true_recvfrom returned -1\n");
 		return -1;
 	}
+	if(RECV_BUFFER_SIZE == bytes_received){
+		PDEBUG("UDP PACKET SHOULD NOT BE THAT BIG\n");
+	}
 	PDEBUG("successful recvfrom(), %d bytes received\n", bytes_received);
 	PDEBUG("packet: ");
-	DUMP_BUFFER(tmp_buffer, bytes_received);
+	DUMP_BUFFER(buffer, bytes_received);
 	
 	//Check that the packet was received from the first relay of the chain
 	// i.e. does from == chain.head.bnd_addr ?
@@ -1963,27 +1973,27 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 		PDEBUG("UDP packet not received from the proxy chain's head, transfering it as is\n");
 		int min = (bytes_received <= len)?bytes_received:len;
 	
-		memcpy(buf, tmp_buffer, min);
+		memcpy(buf, buffer, min);
 		if(src_addr != NULL){ //TODO: check that the address copy is done correctly
 			socklen_t min_addr_len = (from_len<*addrlen)?from_len:*addrlen;
 			memcpy(src_addr, &from, min_addr_len);
 			*addrlen = min_addr_len;
 		}
 		
-		return min;
+		return trunc?bytes_received:min; //if MSG_TRUNC flag is set, return the real length of the packet/datagram even when it was longer than the passed buffer (buf)
 	}
 	PDEBUG("packet received from the proxy chain's head\n");
 	
 	int rc;
 	void* udp_data = NULL;
 	size_t  udp_data_len = 0;
-	rc = unsocksify_udp_packet(tmp_buffer, bytes_received, *relay_chain, &src_ip, &src_port, &udp_data);
+	rc = unsocksify_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, &udp_data);
 	if(rc != SUCCESS){
 		PDEBUG("error unsocksifying the UDP packet\n");
 		return -1;
 	}
 	PDEBUG("UDP packet successfully unsocksifyied\n");
-	udp_data_len = bytes_received - (udp_data - (void*)tmp_buffer);
+	udp_data_len = bytes_received - (udp_data - (void*)buffer);
 
 	
 
@@ -2004,52 +2014,50 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	// la retrouver ? -> done in unsocksify_udp_packet()
 	
 
-	if (src_addr == NULL){ // No need to fill src_addr in this case
-		return udp_data_len;
-	}
 
-	struct sockaddr_in* src_addr_v4;
-	struct sockaddr_in6* src_addr_v6;
+	if(src_addr != NULL){ // No need to fill src_addr if the passed pointer is NULL
+		struct sockaddr_in* src_addr_v4;
+		struct sockaddr_in6* src_addr_v6;
 
-	//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
-	// 
+		//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
+		// 
 
-	if(src_ip.is_v6 && is_v4inv6((struct in6_addr*)src_ip.addr.v6)){
-		PDEBUG("src_ip is v4 in v6 ip\n");
-		if(addrlen < sizeof(struct sockaddr_in)){
-			PDEBUG("addrlen too short for ipv4\n");
+		if(src_ip.is_v6 && is_v4inv6((struct in6_addr*)src_ip.addr.v6)){
+			PDEBUG("src_ip is v4 in v6 ip\n");
+			if(addrlen < sizeof(struct sockaddr_in)){
+				PDEBUG("addrlen too short for ipv4\n");
+			}
+			src_addr_v4 = (struct sockaddr_in*)src_addr;
+			src_addr_v4->sin_family = AF_INET;
+			src_addr_v4->sin_port = src_port;
+			memcpy(&(src_addr_v4->sin_addr.s_addr), src_ip.addr.v6+12, 4);
+			*addrlen = sizeof(src_addr_v4);
 		}
-		src_addr_v4 = (struct sockaddr_in*)src_addr;
-		src_addr_v4->sin_family = AF_INET;
-		src_addr_v4->sin_port = src_port;
-		memcpy(&(src_addr_v4->sin_addr.s_addr), src_ip.addr.v6+12, 4);
-		*addrlen = sizeof(src_addr_v4);
-	}
-	else if(src_ip.is_v6){
-		PDEBUG("src_ip is true v6\n");
-		if(addrlen < sizeof(struct sockaddr_in6)){
-			PDEBUG("addrlen too short for ipv6\n");
-			return -1;
+		else if(src_ip.is_v6){
+			PDEBUG("src_ip is true v6\n");
+			if(addrlen < sizeof(struct sockaddr_in6)){
+				PDEBUG("addrlen too short for ipv6\n");
+				return -1;
+			}
+			src_addr_v6 = (struct sockaddr_in6*)src_addr;
+			src_addr_v6->sin6_family = AF_INET6;
+			src_addr_v6->sin6_port = src_port;
+			memcpy(src_addr_v6->sin6_addr.s6_addr, src_ip.addr.v6, 16);
+			*addrlen = sizeof(src_addr_v6);
+		}else {
+			if(addrlen < sizeof(struct sockaddr_in)){
+				PDEBUG("addrlen too short for ipv4\n");
+			}
+			src_addr_v4 = (struct sockaddr_in*)src_addr;
+			src_addr_v4->sin_family = AF_INET;
+			src_addr_v4->sin_port = src_port;
+			src_addr_v4->sin_addr.s_addr = (in_addr_t) src_ip.addr.v4.as_int;
+			*addrlen = sizeof(src_addr_v4);
 		}
-		src_addr_v6 = (struct sockaddr_in6*)src_addr;
-		src_addr_v6->sin6_family = AF_INET6;
-		src_addr_v6->sin6_port = src_port;
-		memcpy(src_addr_v6->sin6_addr.s6_addr, src_ip.addr.v6, 16);
-		*addrlen = sizeof(src_addr_v6);
-	}else {
-		if(addrlen < sizeof(struct sockaddr_in)){
-			PDEBUG("addrlen too short for ipv4\n");
-		}
-		src_addr_v4 = (struct sockaddr_in*)src_addr;
-		src_addr_v4->sin_family = AF_INET;
-		src_addr_v4->sin_port = src_port;
-		src_addr_v4->sin_addr.s_addr = (in_addr_t) src_ip.addr.v4.as_int;
-		*addrlen = sizeof(src_addr_v4);
 	}
-
 
 	PDEBUG("Successful recvfrom() hook\n\n");
-	return udp_data_len;
+	return trunc?udp_data_len:min; //if MSG_TRUNC flag is set, return the real length of the packet/datagram even when it was longer than the passed buffer (buf)
 }
 
 HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
