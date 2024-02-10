@@ -36,6 +36,10 @@
 #include <dlfcn.h>
 #include <pthread.h>
 
+#include <sys/stat.h>
+
+
+
 
 #include "core.h"
 #include "common.h"
@@ -72,6 +76,8 @@ sendmsg_t true_sendmsg;
 recvmsg_t true_recvmsg;
 sendmmsg_t true_sendmmsg;
 getpeername_t true_getpeername;
+read_t true_read;
+write_t true_write;
 
 int tcp_read_time_out;
 int tcp_connect_time_out;
@@ -1080,6 +1086,8 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
 	PDEBUG("port: %d\n", port);
 	PDEBUG("client socket: %d\n", sockfd);
+	PDEBUG("trying to send %lu bytes : ", len);
+	DUMP_BUFFER(buf, len);
 
 	// check if connect called from proxydns
     remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
@@ -1184,7 +1192,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		return -1;
 	}
 
-	int sent = 0;
+	ssize_t sent = 0;
 	sent = true_sendto(sockfd, send_buffer, send_buffer_len, flags, (struct sockaddr*)(v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr));
 
 	if(sent == -1){
@@ -2094,6 +2102,40 @@ HOOKFUNC(ssize_t, send, int sockfd, const void *buf, size_t len, int flags){
 	return sendto(sockfd, buf, len, flags, (struct sockaddr*)&addr, addr_len);
 }
 
+
+HOOKFUNC(ssize_t, read,int fd, void* buf, size_t count){
+	
+	// If fd is a socket, call recv() with no flags as it is equivalent to read()
+	// WARNING: As stated in https://man7.org/linux/man-pages/man2/recv.2.html in NOTES, 
+	//"If a zero-length datagram is pending, read(2) and recv() with a
+    // flags argument of zero provide different behavior.  In this
+	// circumstance, read(2) has no effect (the datagram remains
+	// pending), while recv() consumes the pending datagram."
+
+	struct stat statbuf;
+	fstat(fd, &statbuf);
+	if(S_ISSOCK(statbuf.st_mode)){
+		PDEBUG("hooked read() on a socket file descriptor, calling recv() with 0 flags\n");
+		return recv(fd, buf, count, 0);
+	}
+	return true_read(fd, buf, count);
+}
+
+HOOKFUNC(ssize_t, write, int fd, const void* buf, size_t count ){
+
+	PDEBUG("fd : %d, count: %zu, buf: %p\n", fd, count, buf);
+	DUMP_BUFFER(buf, count);
+
+	// If fd is a socket, call send() with no flags as it is equivalent to write()
+	struct stat statbuf;
+	fstat(fd, &statbuf);
+	if(S_ISSOCK(statbuf.st_mode)){
+		PDEBUG("hooked write() on a socket file descriptor, calling send() with 0 flags\n");
+		return send(fd, buf,count, 0);
+	}
+	return true_write(fd, buf, count);
+}
+
 #ifdef MONTEREY_HOOKING
 #define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = &X; } while(0)
 #define SETUP_SYM_OPTIONAL(X)
@@ -2118,6 +2160,8 @@ static void setup_hooks(void) {
 	SETUP_SYM(freeaddrinfo);
 	SETUP_SYM(gethostbyaddr);
 	SETUP_SYM(getnameinfo);
+	SETUP_SYM(write);
+	SETUP_SYM(read);
 #ifdef IS_SOLARIS
 	SETUP_SYM(__xnet_connect);
 #endif

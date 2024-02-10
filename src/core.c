@@ -122,7 +122,7 @@ static int write_n_bytes(int fd, char *buff, size_t size) {
 	int i = 0;
 	size_t wrote = 0;
 	for(;;) {
-		i = write(fd, &buff[wrote], size - wrote);
+		i = true_write(fd, &buff[wrote], size - wrote);
 		if(i <= 0)
 			return i;
 		wrote += i;
@@ -141,7 +141,7 @@ static int read_n_bytes(int fd, char *buff, size_t size) {
 	for(i = 0; i < size; i++) {
 		pfd[0].revents = 0;
 		ready = poll_retry(pfd, 1, tcp_read_time_out);
-		if(ready != 1 || !(pfd[0].revents & POLLIN) || 1 != read(fd, &buff[i], 1))
+		if(ready != 1 || !(pfd[0].revents & POLLIN) || 1 != true_read(fd, &buff[i], 1))
 			return -1;
 	}
 	return (int) size;
@@ -934,7 +934,8 @@ int socksify_udp_packet(void* udp_data, size_t udp_data_len, udp_relay_chain cha
 
 
 	// Append UDP data in the remaining space of the buffer
-	int min = (udp_data_len>(buffer_len-tmp_buffer_len))?(buffer_len-tmp_buffer_len):udp_data_len;
+	size_t min = (udp_data_len>(buffer_len-tmp_buffer_len))?(buffer_len-tmp_buffer_len):udp_data_len;
+	PDEBUG("test, min = %lu\n", min);
 	memcpy(buffer + tmp_buffer_len, udp_data, min);
 
 	*buffer_len = tmp_buffer_len + min;
@@ -1628,7 +1629,7 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 			close(pipe_fd[1]);
 			waitpid(pid, &status, 0);
 			buff[0] = 0;
-			read(pipe_fd[0],&buff,sizeof(buff));
+			true_read(pipe_fd[0],&buff,sizeof(buff));
 			close(pipe_fd[0]);
 got_buff:
 			l = strlen(buff);

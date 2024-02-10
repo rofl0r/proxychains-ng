@@ -176,6 +176,8 @@ typedef ssize_t (*sendmsg_t) (int sockfd, const struct msghdr *msg, int flags);
 typedef int (*sendmmsg_t) (int sockfd, struct mmsghdr* msgvec, unsigned int vlen, int flags);
 typedef ssize_t (*recvmsg_t) (int sockfd, struct msghdr *msg, int flags);
 typedef int (*getpeername_t) (int sockfd, struct sockaddr *restrict addr, socklen_t *restrict addrlen);
+typedef ssize_t (*read_t)(int fd, void* buf, size_t count);
+typedef ssize_t (*write_t)(int fd, const void* buf, size_t count);
 
 
 extern connect_t true_connect;
@@ -192,6 +194,8 @@ extern sendmsg_t true_sendmsg;
 extern sendmmsg_t true_sendmmsg;
 extern recvmsg_t true_recvmsg;
 extern getpeername_t true_getpeername;
+extern read_t true_read;
+extern write_t true_write;
 
 struct gethostbyname_data {
 	struct hostent hostent_space;
