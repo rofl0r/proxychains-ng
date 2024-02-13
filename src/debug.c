@@ -34,7 +34,7 @@ void dump_relay_chains_list(udp_relay_chain_list list){
 	udp_relay_chain* current;
 	current = list.head;
 
-	PDEBUG("relay chains list dump: \n");
+	PDEBUG("relay chains list (head: %x, tail: %x) dump: \n", list.head, list.tail);
 	while(current != NULL){
 		dump_relay_chain(current);
 		current = current->next;
@@ -47,7 +47,7 @@ void dump_relay_chain(udp_relay_chain* chain){
 	current_node = chain->head;
 	char ip_buf[INET6_ADDRSTRLEN];
 	char ip_buf2[INET6_ADDRSTRLEN];
-	while(current_node ){
+	while(current_node){
 		printf("\tNode%x", current_node);
 		printf("[%s:%i]", inet_ntop(current_node->bnd_addr.is_v6?AF_INET6:AF_INET, current_node->bnd_addr.is_v6?(void*)current_node->bnd_addr.addr.v6:(void*)current_node->bnd_addr.addr.v4.octet, ip_buf2, sizeof(ip_buf2))  , ntohs(current_node->bnd_port));
 		printf("(ctrl_fd%i-%s:%i)",  current_node->tcp_sockfd, inet_ntop(current_node->pd.ip.is_v6?AF_INET6:AF_INET, current_node->pd.ip.is_v6?(void*)current_node->pd.ip.addr.v6:(void*)current_node->pd.ip.addr.v4.octet, ip_buf, sizeof(ip_buf)) , ntohs(current_node->pd.port) );

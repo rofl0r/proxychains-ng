@@ -44,6 +44,7 @@
 #include "core.h"
 #include "common.h"
 #include "rdns.h"
+#include "mutex.h"
 
 #undef 		satosin
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
@@ -96,6 +97,7 @@ size_t num_dnats = 0;
 unsigned int remote_dns_subnet = 224;
 
 udp_relay_chain_list relay_chains = {NULL, NULL};
+pthread_mutex_t relay_chains_mutex;
 
 pthread_once_t init_once = PTHREAD_ONCE_INIT;
 
@@ -152,6 +154,7 @@ static void do_init(void) {
 	char *env;
 
 	srand(get_rand_seed());
+	MUTEX_INIT(&relay_chains_mutex);
 	core_initialize();
 
 	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
@@ -609,27 +612,38 @@ HOOKFUNC(int, close, int fd) {
 
 	/***** UDP STUFF *******/
 	//PDEBUG("checking if a relay chain is opened for fd %d\n", fd);
-	udp_relay_chain* chain = NULL;
+	udp_relay_chain* relay_chain = NULL;
 
-	chain = get_relay_chain(relay_chains, fd);
-	if(NULL != chain){
-		PDEBUG("fd %d corresponds to chain %x, closing it\n", fd, chain);
-		free_relay_chain(*chain);
-		del_relay_chain(&relay_chains, chain);
+	PDEBUG("waiting for mutex\n");
+	MUTEX_LOCK(&relay_chains_mutex);
+	PDEBUG("got mutex\n");
+	relay_chain = get_relay_chain(relay_chains, fd);
+	if(NULL != relay_chain){
+		PDEBUG("fd %d corresponds to chain %x, closing it\n", fd, relay_chain);
+		free_relay_chain_contents(relay_chain);
+		del_relay_chain(&relay_chains, relay_chain);
+		PDEBUG("chain %x corresponding to fd %d closed\n", relay_chain, fd);
+		DUMP_RELAY_CHAINS_LIST(relay_chains);
 	}
+	
 
 
 	/***** END UDP STUFF *******/
 
-	if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close(fd);
+	if(proxychains_resolver != DNSLF_RDNS_THREAD){
+		MUTEX_UNLOCK(&relay_chains_mutex);
+		return true_close(fd);
+	}
 
 	/* prevent rude programs (like ssh) from closing our pipes */
 	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
 	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return true_close(fd);
 	}
 	err:
 	errno = EBADF;
+	MUTEX_UNLOCK(&relay_chains_mutex);
 	return -1;
 }
 
@@ -650,6 +664,7 @@ static void intsort(int *a, int n) {
 
 /* Warning: Linux manual says the third arg is `unsigned int`, but unistd.h says `int`. */
 HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
+	PFUNC();
 	if(true_close_range == NULL) {
 		fprintf(stderr, "Calling close_range, but this platform does not provide this system call. ");
 		return -1;
@@ -734,15 +749,20 @@ HOOKFUNC(int, getpeername, int sockfd, struct sockaddr *restrict addr, socklen_t
 
 
 	// Check if a relay chain exists for the socket
+	PDEBUG("waiting for mutex\n");
+	MUTEX_LOCK(&relay_chains_mutex);
+	PDEBUG("got mutex\n");
 	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
 	if(relay_chain == NULL){
 		PDEBUG("no relay chain exists for socket %d, returning true_getpeername()\n", sockfd);
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return true_getpeername(sockfd, addr, addrlen);
 	}
 
 	// Check if a connected peer address is stored in the relay chain structure
 	if(relay_chain->connected_peer_addr == NULL){
 		PDEBUG("no connected peer address is stored for socket %d, returning true_getpeername()\n", sockfd);
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return true_getpeername(sockfd, addr, addrlen);			
 	}
 
@@ -756,6 +776,7 @@ HOOKFUNC(int, getpeername, int sockfd, struct sockaddr *restrict addr, socklen_t
 
 	*addrlen =  min;
 
+	MUTEX_UNLOCK(&relay_chains_mutex);
 	return SUCCESS;
 
 	/* END UDP STUFF */
@@ -786,6 +807,9 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 		PDEBUG("connect() on an UDP socket\n");
 
 		// Check if a relay chain is already opened for the socket fd, otherwise open it
+		PDEBUG("waiting for mutex\n");
+		MUTEX_LOCK(&relay_chains_mutex);
+		PDEBUG("got mutex\n");
 		udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sock);
 		if(relay_chain == NULL){
 			// No chain is opened for this socket, open one
@@ -793,12 +817,14 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 			if(NULL == (relay_chain = open_relay_chain(proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain))){
 				PDEBUG("could not open a chain of relay\n");
 				errno = ECONNREFUSED;
+				MUTEX_UNLOCK(&relay_chains_mutex);
 				return -1;
 			}
 			relay_chain->sockfd = sock;
 			add_relay_chain(&relay_chains, relay_chain);
+			DUMP_RELAY_CHAINS_LIST(relay_chains);
 		}
-		DUMP_RELAY_CHAINS_LIST(relay_chains);
+		
 
 
 		// Store the peer address in the relay chain structure, in order to be able to retrieve it in subsequent calls to send(), sendmsg(), ...
@@ -819,7 +845,8 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 			.sin6_port = relay_chain->head->bnd_port,
 		};
 		if(v6) memcpy(&addr6.sin6_addr.s6_addr, relay_chain->head->bnd_addr.addr.v6, 16);
-			
+		
+		MUTEX_UNLOCK(&relay_chains_mutex);	
 		return true_connect(sock, (struct sockaddr *) (v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr)  );
 	}
 
@@ -1130,6 +1157,9 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	}
 
 	// Check if a chain of UDP relay is already opened for this socket
+	PDEBUG("waiting for mutex\n");
+	MUTEX_LOCK(&relay_chains_mutex);
+	PDEBUG("got mutex\n");
 	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
 	if(relay_chain == NULL){
 		// No chain is opened for this socket, open one
@@ -1137,12 +1167,14 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 		if(NULL == (relay_chain = open_relay_chain(proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain))){
 			PDEBUG("could not open a chain of relay\n");
 			errno = ECONNREFUSED;
+			MUTEX_UNLOCK(&relay_chains_mutex);
 			return -1;
 		}
 		relay_chain->sockfd = sockfd;
 		add_relay_chain(&relay_chains, relay_chain);
+		DUMP_RELAY_CHAINS_LIST(relay_chains);
 	}
-	DUMP_RELAY_CHAINS_LIST(relay_chains);
+	
 
 	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
 
@@ -1153,6 +1185,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	rc = socksify_udp_packet(buf, len, *relay_chain, dest_ip, htons(port), send_buffer, &send_buffer_len);
 	if(rc != SUCCESS){
 		PDEBUG("error socksify_udp_packet()\n");
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return -1;
 	}
 
@@ -1189,8 +1222,10 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	if(flags & MSG_MORE){
 		PDEBUG("error, MSG_MORE not yet supported\n");
 		errno = EOPNOTSUPP;
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return -1;
 	}
+	MUTEX_UNLOCK(&relay_chains_mutex);
 
 	ssize_t sent = 0;
 	sent = true_sendto(sockfd, send_buffer, send_buffer_len, flags, (struct sockaddr*)(v6?(void*)&addr6:(void*)&addr), v6?sizeof(addr6):sizeof(addr));
@@ -1328,6 +1363,9 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	}
 
 	// Check if a chain of UDP relay is already opened for this socket
+	PDEBUG("waiting for mutex\n");
+	MUTEX_LOCK(&relay_chains_mutex);
+	PDEBUG("got mutex\n");
 	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
 	if(relay_chain == NULL){
 		// No chain is opened for this socket, open one
@@ -1335,12 +1373,14 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 		if(NULL == (relay_chain = open_relay_chain(proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain))){
 			PDEBUG("could not open a chain of relay\n");
 			errno = ECONNREFUSED;
+			MUTEX_UNLOCK(&relay_chains_mutex);
 			return -1;
 		}
 		relay_chain->sockfd = sockfd;
 		add_relay_chain(&relay_chains, relay_chain);
+		DUMP_RELAY_CHAINS_LIST(relay_chains);
 	}
-	DUMP_RELAY_CHAINS_LIST(relay_chains);
+	
 
 	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
 
@@ -1359,6 +1399,7 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	rc = socksify_udp_packet(udp_data, udp_data_len, *relay_chain, dest_ip, htons(port),send_buffer, &send_buffer_len);
 	if(rc != SUCCESS){
 		PDEBUG("error socksify_udp_packet()\n");
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return -1;
 	}
 
@@ -1394,6 +1435,7 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	tmp_msg.msg_name = (struct sockaddr*)(v6?(void*)&addr6:(void*)&addr);
 	tmp_msg.msg_namelen = v6?sizeof(addr6):sizeof(addr) ;
 	
+	MUTEX_UNLOCK(&relay_chains_mutex);
 	
 	//send it
 
@@ -1463,6 +1505,9 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 	}
 
 	// Check if a chain of UDP relay is already opened for this socket
+	PDEBUG("waiting for mutex\n");
+	MUTEX_LOCK(&relay_chains_mutex);
+	PDEBUG("got mutex\n");
 	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
 	if(relay_chain == NULL){
 		// No chain is opened for this socket, open one
@@ -1470,18 +1515,21 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 		if(NULL == (relay_chain = open_relay_chain(proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain))){
 			PDEBUG("could not open a chain of relay\n");
 			errno = ECONNREFUSED;
+			MUTEX_UNLOCK(&relay_chains_mutex);
 			goto freeAndExit;
 		}
 		relay_chain->sockfd = sockfd;
 		add_relay_chain(&relay_chains, relay_chain);
-	}
-	DUMP_RELAY_CHAINS_LIST(relay_chains);
+		DUMP_RELAY_CHAINS_LIST(relay_chains);
 
+	}
+	
 
 	// Prepare our mmsg
 	struct mmsghdr* tmp_msgvec = NULL;
 	if(NULL == (tmp_msgvec = (struct mmsghdr*)calloc(vlen, sizeof(struct mmsghdr)))){
 		PDEBUG("error allocating memory for tmp_mmsghdr\n");
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		goto freeAndExit;
 	}
 
@@ -1510,6 +1558,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 		} else {
 			if(msgvec[i].msg_hdr.msg_namelen > addrlen){
 				PDEBUG("msgvec[%d].msg_hdr.msg_namelen too long\n", i);
+				MUTEX_UNLOCK(&relay_chains_mutex);
 				return -1;
 			}
 			addrlen = msgvec[i].msg_hdr.msg_namelen;
@@ -1672,10 +1721,11 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 		if(pAddr6 != NULL){
 			free(pAddr6);
 		}
-
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		goto freeAndExit;
 	}
 	
+	MUTEX_UNLOCK(&relay_chains_mutex);
 
 	//Drop the MSG_DONTROUTE flag if it exists
 	if(flags & MSG_DONTROUTE){
@@ -1750,10 +1800,14 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 
 	PDEBUG("sockfd %d's address family is AF_INET or AF_INET6\n", sockfd);
 
+	PDEBUG("waiting for mutex\n");
+	MUTEX_LOCK(&relay_chains_mutex);
+	PDEBUG("got mutex\n");
 	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
 	if(relay_chain == NULL){
 		// No chain is opened for this socket
 		PDEBUG("sockfd %d does not corresponds to any opened relay chain, returning to true_recvmsg\n", sockfd);
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return true_recvmsg(sockfd,msg, flags);
 	}	
 	PDEBUG("sockfd %d is associated with udp_relay_chain %x\n", sockfd, relay_chain);
@@ -1787,6 +1841,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	bytes_received = true_recvmsg(sockfd, &tmp_msg, flags);
 	if(-1 == bytes_received){
 		PDEBUG("true_recvmsg returned -1, errno: %d, %s\n", errno,strerror(errno));
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return -1;
 	}
 	if(RECV_BUFFER_SIZE == bytes_received){
@@ -1814,7 +1869,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 			memcpy(msg->msg_name, tmp_msg.msg_name, min);
 			msg->msg_namelen = min;
 		}
-
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return trunc?bytes_received:written; //if MSG_TRUNC flag is set, return the real length of the packet/datagram even when it was longer than the passed buffer (msg->msg_iov)
 	}
 
@@ -1828,6 +1883,7 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 	size_t udp_data_len = 0;
 
 	rc = unsocksify_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, &udp_data);
+	MUTEX_UNLOCK(&relay_chains_mutex);
 	if(rc != SUCCESS){
 		PDEBUG("error unSOCKSing the UDP packet\n");
 		return -1;
@@ -1940,11 +1996,14 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 
 	PDEBUG("sockfd %d's address family is AF_INET or AF_INET6\n", sockfd);
 
-
+	PDEBUG("waiting for mutex\n");
+	MUTEX_LOCK(&relay_chains_mutex);
+	PDEBUG("got mutex\n");
 	udp_relay_chain* relay_chain = get_relay_chain(relay_chains, sockfd);
 	if(relay_chain == NULL){
 		// No chain is opened for this socket
 		PDEBUG("sockfd %d does not corresponds to any opened relay chain, returning to true_recvfrom\n", sockfd);
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return true_recvfrom(sockfd, buf, len, flags, src_addr, addrlen);
 	}	
 	PDEBUG("sockfd %d is associated with udp_relay_chain %x\n", sockfd, relay_chain);
@@ -1964,6 +2023,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	bytes_received = true_recvfrom(sockfd, buffer, sizeof(buffer), flags, (struct sockaddr*)&from, &from_len);
 	if(-1 == bytes_received){
 		PDEBUG("true_recvfrom returned -1\n");
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return -1;
 	}
 	if(RECV_BUFFER_SIZE == bytes_received){
@@ -1987,7 +2047,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 			memcpy(src_addr, &from, min_addr_len);
 			*addrlen = min_addr_len;
 		}
-		
+		MUTEX_UNLOCK(&relay_chains_mutex);
 		return trunc?bytes_received:min; //if MSG_TRUNC flag is set, return the real length of the packet/datagram even when it was longer than the passed buffer (buf)
 	}
 	PDEBUG("packet received from the proxy chain's head\n");
@@ -1996,6 +2056,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	void* udp_data = NULL;
 	size_t  udp_data_len = 0;
 	rc = unsocksify_udp_packet(buffer, bytes_received, *relay_chain, &src_ip, &src_port, &udp_data);
+	MUTEX_UNLOCK(&relay_chains_mutex);
 	if(rc != SUCCESS){
 		PDEBUG("error unsocksifying the UDP packet\n");
 		return -1;
@@ -2054,7 +2115,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 			*addrlen = sizeof(src_addr_v6);
 		}else {
 			if(addrlen < sizeof(struct sockaddr_in)){
-				PDEBUG("addrlen too short for ipv4\n");
+				PDEBUG("addrlen too short for  ipv4\n");
 			}
 			src_addr_v4 = (struct sockaddr_in*)src_addr;
 			src_addr_v4->sin_family = AF_INET;

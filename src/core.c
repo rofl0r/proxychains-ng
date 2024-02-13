@@ -935,7 +935,6 @@ int socksify_udp_packet(void* udp_data, size_t udp_data_len, udp_relay_chain cha
 
 	// Append UDP data in the remaining space of the buffer
 	size_t min = (udp_data_len>(buffer_len-tmp_buffer_len))?(buffer_len-tmp_buffer_len):udp_data_len;
-	PDEBUG("test, min = %lu\n", min);
 	memcpy(buffer + tmp_buffer_len, udp_data, min);
 
 	*buffer_len = tmp_buffer_len + min;
@@ -987,7 +986,7 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	proxychains_write_log(TP " timeout\n");
 	error:
 	if(*fd != -1)
-		close(*fd);
+		true_close(*fd);
 	return SOCKET_ERROR;
 }
 
@@ -1348,7 +1347,7 @@ int add_node_to_chain(proxy_data * pd, udp_relay_chain * chain){
 	err:
 	// Ensure new node tcp socket is closed
 	if(new_node->tcp_sockfd != -1){
-		close(new_node->tcp_sockfd);
+		true_close(new_node->tcp_sockfd);
 	}
 
 	// Remove the new node from the chain
@@ -1365,27 +1364,28 @@ int add_node_to_chain(proxy_data * pd, udp_relay_chain * chain){
 	return -1;
 }
 
-int free_relay_chain(udp_relay_chain chain){
-	if(NULL != chain.connected_peer_addr){
-		free(chain.connected_peer_addr);
-		chain.connected_peer_addr = NULL;
+int free_relay_chain_contents(udp_relay_chain* chain){
+	if(NULL != chain->connected_peer_addr){
+		free(chain->connected_peer_addr);
+		chain->connected_peer_addr = NULL; 
 	}
 
-	if(chain.head == NULL){
+	if(chain->head == NULL){
 		return SUCCESS;
 	}
 	
-	udp_relay_node * current = chain.head;
+	udp_relay_node * current = chain->head;
 	udp_relay_node * next = NULL;
-
+	
 	while(current != NULL){
 		next = current->next;
 
-		close(current->tcp_sockfd);
+		true_close(current->tcp_sockfd);
 		free(current);
 
 		current = next;
 	}
+	chain->head = NULL;
 
 	return SUCCESS;
 }
@@ -1447,7 +1447,7 @@ udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, cha
 	error:
 	PDEBUG("error\n");
 	release_all(pd, proxy_count);
-	free_relay_chain(*new_chain);
+	free_relay_chain_contents(new_chain);
 	free(new_chain);
 	errno = ETIMEDOUT;
 	return NULL;
@@ -1491,7 +1491,6 @@ void set_connected_peer_addr(udp_relay_chain* chain, struct sockaddr* addr, sock
 		chain->connected_peer_addr = (struct sockaddr*)new_addr;
 		chain->connected_peer_addr_len = sizeof(struct sockaddr_in);
 	}
-
 }
 
 
@@ -1505,7 +1504,7 @@ void add_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* new_cha
 		new_chain->prev = NULL;
 	} else {
 		// Add the new chain at the end
-		chains_list->tail->next = new_chain;
+		(chains_list->tail)->next = new_chain;
 		new_chain->prev = chains_list->tail;
 		chains_list->tail = new_chain;
 	}
@@ -1519,17 +1518,18 @@ void del_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* chain){
 			chains_list->tail = NULL;
 		}else{
 			chains_list->head = chain->next;
+			chains_list->head->prev = NULL;
 			free(chain);
 		}
-	} else if (chain = chains_list->tail){
+	} else if (chain == chains_list->tail){
 		chains_list->tail = chain->prev;
+		chains_list->tail->next = NULL;
 		free(chain);
 	} else {
 		chain->next->prev = chain->prev;
 		chain->prev->next = chain->next;
 		free(chain);
 	}
-
 }
 
 udp_relay_chain* get_relay_chain(udp_relay_chain_list chains_list, int sockfd){
