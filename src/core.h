@@ -103,7 +103,7 @@ typedef int (*close_t)(int);
 typedef int (*close_range_t)(unsigned, unsigned, int);
 typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
 typedef struct hostent* (*gethostbyname_t)(const char *);
-typedef int (*freeaddrinfo_t)(struct addrinfo *);
+typedef void (*freeaddrinfo_t)(struct addrinfo *);
 typedef struct hostent *(*gethostbyaddr_t) (const void *, socklen_t, int);
 
 typedef int (*getaddrinfo_t)(const char *, const char *, const struct addrinfo *, 
