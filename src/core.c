@@ -1341,6 +1341,8 @@ int add_node_to_chain(proxy_data * pd, udp_relay_chain * chain){
 		goto err;
 	}
 
+	char ip_buf[INET6_ADDRSTRLEN];
+	proxychains_write_log(" --> Node[%s:%i] open\n", inet_ntop(new_node->bnd_addr.is_v6?AF_INET6:AF_INET, new_node->bnd_addr.is_v6?(void*)new_node->bnd_addr.addr.v6:(void*)new_node->bnd_addr.addr.v4.octet, ip_buf, sizeof(ip_buf))  , ntohs(new_node->bnd_port));
 	PDEBUG("new node added and open to relay UDP packets\n");
 	return SUCCESS;
 
