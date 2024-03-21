@@ -719,7 +719,6 @@ HOOKFUNC(int, getpeername, int sockfd, struct sockaddr *restrict addr, socklen_t
 	INIT();
 	PFUNC();
 
-
 	int socktype = 0;
 	socklen_t optlen = 0;
 	optlen = sizeof(socktype);
@@ -1466,29 +1465,29 @@ HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 
 HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, int flags){
 
-	
+	PFUNC();
 	int nmsg = -1; // The sendmmsg return code (-1 if error, otherwise number of messages sent)
 	int allocated_len = 0; // A counter for dynamic memory allocations, used in freeAndExit section
 
 	// As the call contains multiple message, we only filter on the first one address type :)
 
-	struct sockaddr_storage dest_addr;
-	socklen_t addrlen = sizeof(dest_addr);
+	struct sockaddr_storage first_dest_addr;
+	socklen_t first_addrlen = sizeof(first_dest_addr);
 
 	if(msgvec[0].msg_hdr.msg_name == NULL){ // try to find a peer addr that could have been set with connect()
 		int rc = 0;
-		rc = getpeername(sockfd, (struct sockaddr*)&dest_addr, &addrlen);
+		rc = getpeername(sockfd, (struct sockaddr*)&first_dest_addr, &first_addrlen);
 		if(rc != SUCCESS){
 			PDEBUG("error in getpeername(): %d\n", errno);
 			goto freeAndExit;
 		}
 	} else {
-		if(msgvec[0].msg_hdr.msg_namelen > addrlen){
+		if(msgvec[0].msg_hdr.msg_namelen > first_addrlen){
 			PDEBUG("msgvec[0].msg_hdr.msg_namelen too long\n");
 			return -1;
 		}
-		addrlen = msgvec[0].msg_hdr.msg_namelen;
-		memcpy(&dest_addr, msgvec[0].msg_hdr.msg_name, addrlen);
+		first_addrlen = msgvec[0].msg_hdr.msg_namelen;
+		memcpy(&first_dest_addr, msgvec[0].msg_hdr.msg_name, first_addrlen);
 	}
 	
 
@@ -1497,7 +1496,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 	int socktype = 0, ret = 0;
 	socklen_t optlen = 0;
 	optlen = sizeof(socktype);
-	sa_family_t fam = SOCKFAMILY(dest_addr);
+	sa_family_t fam = SOCKFAMILY(first_dest_addr);
 	getsockopt(sockfd, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
 	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_DGRAM)){
 		nmsg = true_sendmmsg(sockfd, msgvec, vlen, flags);
@@ -1535,7 +1534,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 
 
 
-	for(int i=0; i<vlen; i++){ // Go through each individual mmsghdr of msgvec
+	for(int msg_index=0; msg_index<vlen; msg_index++){ // Go through each individual mmsghdr of msgvec
 
 		// Declare pointers for dynamicly allocated memory
 		char* send_buffer = NULL;
@@ -1548,21 +1547,36 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 		struct sockaddr_storage dest_addr;
 		socklen_t addrlen = sizeof(dest_addr);
 
-		if(msgvec[i].msg_hdr.msg_name == NULL){ // try to find a peer addr that could have been set with connect()
-			int rc = 0;
-			rc = getpeername(sockfd, (struct sockaddr*)&dest_addr, &addrlen);
-			if(rc != SUCCESS){
-				PDEBUG("error in getpeername(): %d\n", errno);
-				goto cleanCurrentLoop;
-			}
+		if(msgvec[msg_index].msg_hdr.msg_name == NULL){ // try to find a peer addr that could have been set with connect()
+
+			// WARNING: We assume that if the sendmmsg contains a message with a NULL destination address, then all
+			// messages have a NULL destination address and we use the peer the socket is connected to (with a previous connect() call)
+			// as the destination. Thus, we assume that if we encounter a NULL address here in the code, then msgvec[0].msg_hdr.msg_name == NULL
+			// and the connected peer address was retrieved in the first call to getpeername at the very beginning of the sendmmsg hook.
+			// This allows removing getpeername() calls from this for loop and avoid deadlocks on relay_chains_mutex
+
+
+			// int rc = 0;
+			// rc = getpeername(sockfd, (struct sockaddr*)&dest_addr, &addrlen);
+			// if(rc != SUCCESS){
+			// 	PDEBUG("error in getpeername(): %d\n", errno);
+			// 	goto cleanCurrentLoop;
+			// }
+
+			// We then use first_dest_addr for dest_addr. It should contain the address retrieved with getpeername(), or otherwise (but it should not happen),
+			// the content of msgvec[0].msg_hdr.msg_name
+
+			
+			memcpy(&dest_addr, &first_dest_addr, first_addrlen);
+
 		} else {
-			if(msgvec[i].msg_hdr.msg_namelen > addrlen){
-				PDEBUG("msgvec[%d].msg_hdr.msg_namelen too long\n", i);
+			if(msgvec[msg_index].msg_hdr.msg_namelen > addrlen){
+				PDEBUG("msgvec[%d].msg_hdr.msg_namelen too long\n", msg_index);
 				MUTEX_UNLOCK(&relay_chains_mutex);
 				return -1;
 			}
-			addrlen = msgvec[i].msg_hdr.msg_namelen;
-			memcpy(&dest_addr, msgvec[i].msg_hdr.msg_name, addrlen);
+			addrlen = msgvec[msg_index].msg_hdr.msg_namelen;
+			memcpy(&dest_addr, msgvec[msg_index].msg_hdr.msg_name, addrlen);
 		}
 
 		ip_type dest_ip;
@@ -1590,7 +1604,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 			goto cleanCurrentLoop;
 		}
 
-		PDEBUG("message %d/%d\n", i, vlen);
+		PDEBUG("message %d/%d\n", msg_index+1, vlen);
 		PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
 		PDEBUG("port: %d\n", port);
 		PDEBUG("client socket: %d\n", sockfd);		
@@ -1631,7 +1645,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 				if((p_addr_in->s_addr ^ localnet_addr[i].in_addr.s_addr) & localnet_addr[i].in_mask.s_addr)
 					continue;
 			}
-			PDEBUG("message %d/%d is accessing localnet\n", i, vlen);
+			PDEBUG("message %d/%d is accessing localnet\n", msg_index, vlen);
 			goto cleanCurrentLoop;
 		}
 
@@ -1649,7 +1663,7 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 		char udp_data[65535];
 		size_t udp_data_len = 65535;
 
-		udp_data_len = write_iov_to_buf(udp_data, udp_data_len,msgvec[i].msg_hdr.msg_iov ,msgvec[i].msg_hdr.msg_iovlen);
+		udp_data_len = write_iov_to_buf(udp_data, udp_data_len,msgvec[msg_index].msg_hdr.msg_iov ,msgvec[msg_index].msg_hdr.msg_iovlen);
 
 		// Exec socksify_udp_packet 
 		int rc;
@@ -1670,16 +1684,16 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 
 
 		
-		tmp_msgvec[i].msg_hdr.msg_control = msgvec[i].msg_hdr.msg_control;
-		tmp_msgvec[i].msg_hdr.msg_controllen = msgvec[i].msg_hdr.msg_controllen;
-		tmp_msgvec[i].msg_hdr.msg_flags = msgvec[i].msg_hdr.msg_flags;
+		tmp_msgvec[msg_index].msg_hdr.msg_control = msgvec[msg_index].msg_hdr.msg_control;
+		tmp_msgvec[msg_index].msg_hdr.msg_controllen = msgvec[msg_index].msg_hdr.msg_controllen;
+		tmp_msgvec[msg_index].msg_hdr.msg_flags = msgvec[msg_index].msg_hdr.msg_flags;
 
-		tmp_msgvec[i].msg_hdr.msg_iov = iov;
-		tmp_msgvec[i].msg_hdr.msg_iovlen = 1;
+		tmp_msgvec[msg_index].msg_hdr.msg_iov = iov;
+		tmp_msgvec[msg_index].msg_hdr.msg_iovlen = 1;
 		
 		v6 = relay_chain->head->bnd_addr.is_v6 == ATYP_V6;
 
-		if(v6){
+		if(!v6){
 			
 			if(NULL == (pAddr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in)))){
 				PDEBUG("error malloc\n");
@@ -1689,8 +1703,8 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 			pAddr->sin_port = relay_chain->head->bnd_port;
 			pAddr->sin_addr.s_addr = (in_addr_t) relay_chain->head->bnd_addr.addr.v4.as_int;
 
-			tmp_msgvec[i].msg_hdr.msg_name = (struct sockaddr*)pAddr;
-			tmp_msgvec[i].msg_hdr.msg_namelen = sizeof(*pAddr) ;
+			tmp_msgvec[msg_index].msg_hdr.msg_name = (struct sockaddr*)pAddr;
+			tmp_msgvec[msg_index].msg_hdr.msg_namelen = sizeof(*pAddr) ;
 		} else{
 			
 			if(NULL == (pAddr6 = (struct sockaddr_in6*)malloc(sizeof(struct sockaddr_in6)))){
@@ -1701,8 +1715,8 @@ HOOKFUNC(int, sendmmsg, int sockfd, struct mmsghdr* msgvec, unsigned int vlen, i
 			pAddr6->sin6_port = relay_chain->head->bnd_port;
 			if(v6) memcpy(pAddr6->sin6_addr.s6_addr, relay_chain->head->bnd_addr.addr.v6, 16);
 
-			tmp_msgvec[i].msg_hdr.msg_name = (struct sockaddr*)pAddr6;
-			tmp_msgvec[i].msg_hdr.msg_namelen = sizeof(*pAddr6);
+			tmp_msgvec[msg_index].msg_hdr.msg_name = (struct sockaddr*)pAddr6;
+			tmp_msgvec[msg_index].msg_hdr.msg_namelen = sizeof(*pAddr6);
 		}
 		
 		allocated_len += 1;
