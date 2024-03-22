@@ -1063,7 +1063,7 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 		if(!inet_ntop(v6?AF_INET6:AF_INET,pto->ip.addr.v6,ip_buf,sizeof ip_buf)) {
 			pto->ps = DOWN_STATE;
 			proxychains_write_log("<--ip conversion error!\n");
-			close(ns);
+			true_close(ns);
 			return SOCKET_ERROR;
 		}
 		hostname = ip_buf;
@@ -1078,12 +1078,12 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 		case BLOCKED:
 			pto->ps = BLOCKED_STATE;
 			proxychains_write_log("<--denied\n");
-			close(ns);
+			true_close(ns);
 			break;
 		case SOCKET_ERROR:
 			pto->ps = DOWN_STATE;
 			proxychains_write_log("<--socket error or timeout!\n");
-			close(ns);
+			true_close(ns);
 			break;
 	}
 	return retcode;
@@ -1240,11 +1240,11 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 	proxychains_write_log(TP " OK\n");
 	dup2(ns, sock);
-	close(ns);
+	true_close(ns);
 	return 0;
 	error:
 	if(ns != -1)
-		close(ns);
+		true_close(ns);
 	errno = ECONNREFUSED;	// for nmap ;)
 	return -1;
 
@@ -1255,7 +1255,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	
 	release_all(pd, proxy_count);
 	if(ns != -1)
-		close(ns);
+		true_close(ns);
 	errno = ETIMEDOUT;
 	return -1;
 }
@@ -1612,9 +1612,9 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 
 		case 0: // child
 			proxychains_write_log("|DNS-request| %s \n", name);
-			close(pipe_fd[0]);
+			true_close(pipe_fd[0]);
 			dup2(pipe_fd[1],1);
-			close(pipe_fd[1]);
+			true_close(pipe_fd[1]);
 
 		//	putenv("LD_PRELOAD=");
 			execlp("proxyresolv","proxyresolv",name,NULL);
@@ -1622,17 +1622,17 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 			exit(2);
 
 		case -1: //error
-			close(pipe_fd[0]);
-			close(pipe_fd[1]);
+			true_close(pipe_fd[0]);
+			true_close(pipe_fd[1]);
 			perror("can't fork");
 			goto err;
 
 		default:
-			close(pipe_fd[1]);
+			true_close(pipe_fd[1]);
 			waitpid(pid, &status, 0);
 			buff[0] = 0;
 			true_read(pipe_fd[0],&buff,sizeof(buff));
-			close(pipe_fd[0]);
+			true_close(pipe_fd[0]);
 got_buff:
 			l = strlen(buff);
 			if (!l) goto err_dns;

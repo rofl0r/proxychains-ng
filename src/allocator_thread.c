@@ -352,9 +352,9 @@ void at_close(void) {
 	const int msg = ATM_EXIT;
 	true_write(req_pipefd[1], &msg, sizeof(int));
 	pthread_join(allocator_thread, NULL);
-	close(req_pipefd[0]);
-	close(req_pipefd[1]);
-	close(resp_pipefd[0]);
-	close(resp_pipefd[1]);
+	true_close(req_pipefd[0]);
+	true_close(req_pipefd[1]);
+	true_close(resp_pipefd[0]);
+	true_close(resp_pipefd[1]);
 	MUTEX_DESTROY(internal_ips_lock);
 }
