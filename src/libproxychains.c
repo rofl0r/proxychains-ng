@@ -603,15 +603,53 @@ static int is_v4inv6(const struct in6_addr *a) {
 	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
 
+// quick-sort for huge arrays -- in case they're ever needed
+#define XOR_SWAP(a, b) \
+    do { \
+        (a) ^= (b); \
+        (b) ^= (a); \
+        (a) ^= (b); \
+    } while (0)
+
+static int partition(int *arr, int low, int high) {
+	int pivot_idx, j, pivot, i = low - 1;
+	for (j = low, pivot = arr[high]; j < high; ++j) {
+		if (arr[j] < pivot) {
+			++i;
+			XOR_SWAP(arr[i], arr[j]);
+		}
+	}
+
+	pivot_idx = i + 1;
+	XOR_SWAP(arr[high], arr[pivot_idx]);
+	return pivot_idx;
+}
+
+static void quick_sort(int *arr, int low, int high) {
+	if (low >= high) {
+		return;
+	}
+
+	int pivot_idx = partition(arr, low, high);
+	quick_sort(arr, low, pivot_idx - 1);
+	quick_sort(arr, pivot_idx + 1, high);
+}
+
+static void selection_sort(int *a, int n) {
+	int i, j;
+	for(i = 0; i < n; ++i) {
+		for(j = i + 1; j < n; ++j) {
+			if(a[j] < a[i]) XOR_SWAP(a[i], a[j]);			
+		}
+	}
+}
+
 static void intsort(int *a, int n) {
-	int i, j, s;
-	for(i=0; i<n; ++i)
-		for(j=i+1; j<n; ++j)
-			if(a[j] < a[i]) {
-				s = a[i];
-				a[i] = a[j];
-				a[j] = s;
-			}
+	if (n <= 25) {
+		selection_sort(a, n);
+		return;
+	}
+	quick_sort(a, 0, n - 1);
 }
 
 /* Warning: Linux manual says the third arg is `unsigned int`, but unistd.h says `int`. */
