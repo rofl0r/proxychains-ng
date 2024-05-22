@@ -37,6 +37,7 @@
 #include <pthread.h>
 
 #include <sys/stat.h>
+#include <uv.h>
 
 
 
@@ -63,6 +64,7 @@ connect_t true___xnet_connect;
 
 close_t true_close;
 close_range_t true_close_range;
+uv_close_t true_uv_close;
 connect_t true_connect;
 gethostbyname_t true_gethostbyname;
 getaddrinfo_t true_getaddrinfo;
@@ -645,6 +647,41 @@ HOOKFUNC(int, close, int fd) {
 	errno = EBADF;
 	MUTEX_UNLOCK(&relay_chains_mutex);
 	return -1;
+}
+
+HOOKFUNC(void, uv_close, uv_handle_t* handle, uv_close_cb close_cb){
+	PFUNC();
+
+	switch (handle->type)
+	{
+	case UV_UDP:
+		int fd = ((uv_udp_t*)handle)->io_watcher.fd;
+
+		/***** UDP STUFF *******/
+		//PDEBUG("checking if a relay chain is opened for fd %d\n", fd);
+		udp_relay_chain* relay_chain = NULL;
+
+		PDEBUG("waiting for mutex\n");
+		MUTEX_LOCK(&relay_chains_mutex);
+		PDEBUG("got mutex\n");
+		relay_chain = get_relay_chain(relay_chains, fd);
+		if(NULL != relay_chain){
+			PDEBUG("fd %d corresponds to chain %x, closing it\n", fd, relay_chain);
+			free_relay_chain_contents(relay_chain);
+			del_relay_chain(&relay_chains, relay_chain);
+			PDEBUG("chain %x corresponding to fd %d closed\n", relay_chain, fd);
+			DUMP_RELAY_CHAINS_LIST(relay_chains);
+		}
+		MUTEX_UNLOCK(&relay_chains_mutex);
+		/***** END UDP STUFF *******/
+		break;
+	
+	default:
+		
+		break;
+	}
+	return true_uv_close(handle, close_cb);
+
 }
 
 static int is_v4inv6(const struct in6_addr *a) {
@@ -2240,6 +2277,7 @@ static void setup_hooks(void) {
 #endif
 	SETUP_SYM(close);
 	SETUP_SYM_OPTIONAL(close_range);
+	SETUP_SYM_OPTIONAL(uv_close);
 }
 
 #ifdef MONTEREY_HOOKING

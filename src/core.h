@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <uv.h>
 
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
@@ -151,6 +152,7 @@ void proxychains_write_log(char *str, ...);
 
 typedef int (*close_t)(int);
 typedef int (*close_range_t)(unsigned, unsigned, int);
+typedef void (*uv_close_t)(uv_handle_t* , uv_close_cb);
 typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
 typedef struct hostent* (*gethostbyname_t)(const char *);
 typedef int (*freeaddrinfo_t)(struct addrinfo *);
@@ -197,6 +199,7 @@ extern getpeername_t true_getpeername;
 extern read_t true_read;
 extern write_t true_write;
 extern close_t true_close;
+extern uv_close_t true_uv_close;
 
 struct gethostbyname_data {
 	struct hostent hostent_space;
