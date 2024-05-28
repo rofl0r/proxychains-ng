@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/capability.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -61,6 +62,28 @@ static void set_own_dir(const char *argv0) {
 		memcpy(own_dir, argv0, l - 1);
 		own_dir[l] = 0;
 	}
+}
+
+void check_capabilities(const char *file) {
+	cap_t caps;
+
+	caps = cap_get_file(file);
+    if (caps == NULL) {
+        return;
+    }
+
+	char *caps_text = cap_to_text(caps, NULL);
+    if (caps_text == NULL) {
+        cap_free(caps);
+        return;
+    }
+
+	if (strcmp(caps_text, "=") != 0) {
+		fprintf(stderr, LOG_PREFIX "capabilities set for %s (%s), this breaks proxychains\n", file, caps_text);
+    }
+
+	cap_free(caps_text);
+    cap_free(caps);
 }
 
 #define MAX_COMMANDLINE_FLAGS 2
@@ -134,6 +157,9 @@ int main(int argc, char *argv[]) {
 	}
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "preloading %s/%s\n", prefix, dll_name);
+
+	if(!quiet)
+		check_capabilities(argv[start_argv]);
 
 #if defined(IS_MAC) || defined(IS_OPENBSD)
 #define LD_PRELOAD_SEP ":"

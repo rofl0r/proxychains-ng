@@ -30,7 +30,7 @@ GENH = src/version.h
 
 CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
-LDFLAGS = -fPIC $(NO_AS_NEEDED) $(LIBDL) $(PTHREAD)
+LDFLAGS = -fPIC $(NO_AS_NEEDED) $(LIBDL) $(LIBCAP) $(PTHREAD)
 INC     = 
 PIC     = -fPIC
 AR      = $(CROSS_COMPILE)ar
@@ -97,7 +97,7 @@ $(LDSO_PATHNAME): $(LOBJS)
 		$(USER_LDFLAGS) -shared -o $@ $^ $(SOCKET_LIBS)
 
 $(PXCHAINS): $(OBJS)
-	$(CC) $^ $(FAT_BIN_LDFLAGS) $(USER_LDFLAGS) $(LIBDL) -o $@
+	$(CC) $^ $(FAT_BIN_LDFLAGS) $(USER_LDFLAGS) $(LIBDL) $(LIBCAP) -o $@
 
 $(PXCHAINS_D): $(DOBJS)
 	$(CC) $^ $(FAT_BIN_LDFLAGS) $(USER_LDFLAGS) -o $@

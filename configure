@@ -260,6 +260,11 @@ if check_link "checking whether we can use -ldl" "-ldl" \
 echo "LIBDL = -ldl" >> config.mak
 fi
 
+if check_link "checking whether we can use -lcap" "-lcap" \
+"int main(){return 0;}" ; then
+echo "LIBCAP = -lcap" >> config.mak
+fi
+
 if check_link "checking whether we can use -lpthread" "-lpthread" \
 "int main(){return 0;}" ; then
 echo "PTHREAD = -lpthread" >> config.mak
