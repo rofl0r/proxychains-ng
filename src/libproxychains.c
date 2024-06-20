@@ -627,8 +627,6 @@ HOOKFUNC(int, close, int fd) {
 		PDEBUG("chain %x corresponding to fd %d closed\n", relay_chain, fd);
 		DUMP_RELAY_CHAINS_LIST(relay_chains);
 	}
-	
-
 
 	/***** END UDP STUFF *******/
 
@@ -995,13 +993,10 @@ HOOKFUNC(int, getaddrinfo, const char *node, const char *service, const struct a
 	INIT();
 	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
-	if(proxychains_resolver != DNSLF_LIBC){
-		PDEBUG("using proxy_getaddrinfo()\n");
+	if(proxychains_resolver != DNSLF_LIBC)
 		return proxy_getaddrinfo(node, service, hints, res);
-	}
-	else{
+	else
 		return true_getaddrinfo(node, service, hints, res);
-	}
 }
 
 HOOKFUNC(void, freeaddrinfo, struct addrinfo *res) {
@@ -1226,13 +1221,6 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	}
 
 	// Send the packet
-	// FIXME: should write_n_bytes be used here instead ? -> No, because we send data on an unconnected socket, so we need to use sendto with an address and not send.
-	// We thus cannot use write(), which cannot be given an address
-
-	// if(chain.head->bnd_addr.atyp == ATYP_DOM){
-	// 	PDEBUG("BND_ADDR of type DOMAINE (0x03) not supported yet\n");
-	// 	goto err;
-	// }
 
 	v6 = relay_chain->head->bnd_addr.is_v6;
 
@@ -1278,22 +1266,6 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 HOOKFUNC(ssize_t, sendmsg, int sockfd, const struct msghdr *msg, int flags){
 	INIT();
 	PFUNC();
-
-	//TODO : do we keep this FASTOPEN code from sendto() ?
-	// if (flags & MSG_FASTOPEN) {
-	// 	if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
-	// 		return -1;
-	// 	}
-	// 	dest_addr = NULL;
-	// 	addrlen = 0;
-	// 	flags &= ~MSG_FASTOPEN;
-
-	// 	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
-	// }
-
-	//TODO hugoc: case of SOCK_DGRAM with AF_INET or AF_INET6
-
-	//TODO: check what to do when a UDP socket has been "connected" before and then sendmsg is called with msg->msg_name = NULL ?  
 
 	struct sockaddr_storage dest_addr;
 	socklen_t addrlen = sizeof(dest_addr);
@@ -1963,9 +1935,6 @@ HOOKFUNC(ssize_t, recvmsg, int sockfd, struct msghdr *msg, int flags){
 		struct sockaddr_in* src_addr_v4;
 		struct sockaddr_in6* src_addr_v6;
 
-		//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
-		// TODO faire une fonction cast_iptype_to_sockaddr() 
-
 		if(src_ip.is_v6 && is_v4inv6((struct in6_addr*)src_ip.addr.v6)){
 			PDEBUG("src_ip is v4 in v6 ip\n");
 			if(msg->msg_namelen < sizeof(struct sockaddr_in)){
@@ -2021,7 +1990,6 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 			struct sockaddr *src_addr, socklen_t *addrlen){
 	INIT();
 	PFUNC();
-	//TODO hugoc
 	DEBUGDECL(char str[256]);
 	int socktype = 0;
 	socklen_t optlen = 0;
@@ -2093,7 +2061,7 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 		int min = (bytes_received <= len)?bytes_received:len;
 	
 		memcpy(buf, buffer, min);
-		if(src_addr != NULL){ //TODO: check that the address copy is done correctly
+		if(src_addr != NULL){ 
 			socklen_t min_addr_len = (from_len<*addrlen)?from_len:*addrlen;
 			memcpy(src_addr, &from, min_addr_len);
 			*addrlen = min_addr_len;
@@ -2128,19 +2096,10 @@ HOOKFUNC(ssize_t, recvfrom, int sockfd, void *buf, size_t len, int flags,
 	// Copy received UDP data to the buffer provided by the client
 	size_t min = (udp_data_len < len)?udp_data_len:len;
 	memcpy(buf, udp_data, min);
-	
-	// WARNING : Est ce que si le client avait envoyé des packets UDP avec resolution DNS dans le socks,
-	// on doit lui filer comme address source pour les packets recu l'addresse de mapping DNS ? Si oui comment
-	// la retrouver ? -> done in unsocksify_udp_packet()
-	
-
 
 	if(src_addr != NULL){ // No need to fill src_addr if the passed pointer is NULL
 		struct sockaddr_in* src_addr_v4;
 		struct sockaddr_in6* src_addr_v6;
-
-		//TODO bien gérer le controle de la taille de la src_addr fournie et le retour dans addrlen
-		// 
 
 		if(src_ip.is_v6 && is_v4inv6((struct in6_addr*)src_ip.addr.v6)){
 			PDEBUG("src_ip is v4 in v6 ip\n");

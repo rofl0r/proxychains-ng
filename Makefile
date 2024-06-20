@@ -28,7 +28,7 @@ LOBJS = src/version.o \
 
 GENH = src/version.h
 
-CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe -DDEBUG
+CFLAGS  += -Wall -O0 -g -std=c99 -D_GNU_SOURCE -pipe
 NO_AS_NEEDED = -Wl,--no-as-needed
 LDFLAGS = -fPIC $(NO_AS_NEEDED) $(LIBDL) $(PTHREAD)
 INC     = 

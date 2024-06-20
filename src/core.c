@@ -992,8 +992,6 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 
 static proxy_data *select_proxy(select_type how, proxy_data * pd, unsigned int proxy_count, unsigned int *offset) {
 	PFUNC();
-	PDEBUG("offset: %d\n", *offset);
-	PDEBUG("state: %d\n", pd[0].ps);
 	unsigned int i = 0, k = 0;
 	if(*offset >= proxy_count)
 		return NULL;
@@ -1260,26 +1258,6 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	return -1;
 }
 
-// int connect_to_lastnode(int *sock, udp_relay_chain chain){
-	
-// 	udp_relay_node * current_node = chain.head;
-
-// 	//First connect to the chain head
-// 	if(SUCCESS != start_chain(sock, &(current_node->pd), UDPC)){
-// 		PDEBUG("start_chain failed\n");
-// 		return -1;
-// 	}
-// 	// Connect to the rest of the chain
-// 	while(current_node->next != NULL){
-// 		if(SUCCESS != chain_step(sock, &(current_node->pd), &(current_node->next->pd))){
-// 			PDEBUG("chain step failed\n");
-// 			return -1;
-// 		}
-// 		current_node = current_node->next;
-// 	}
-
-// 	return SUCCESS;
-// }
 
 int add_node_to_chain(proxy_data * pd, udp_relay_chain * chain){
 	PFUNC();

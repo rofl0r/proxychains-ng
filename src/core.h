@@ -20,7 +20,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <uv.h>
+#include <uv.h> //Needed to hook uv_close()
 
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
