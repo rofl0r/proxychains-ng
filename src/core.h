@@ -2,8 +2,8 @@
                           core.h  -  description
                              -------------------
     begin                : Tue May 14 2002
-    copyright          :  netcreature (C) 2002
-    email                 : netcreature@users.sourceforge.net
+    copyright            : netcreature (C) 2002
+    email                : netcreature@users.sourceforge.net
  ***************************************************************************
  ***************************************************************************
  *                                                                         *
@@ -24,78 +24,79 @@
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
 #define     MAX_LOCALNET 64
+#define     MAX_REMOTENET 64
 #define     MAX_DNAT 64
 
 #include "ip_type.h"
 
 /*error codes*/
 typedef enum {
-	SUCCESS=0,
-	MEMORY_FAIL,        // malloc failed
-	SOCKET_ERROR,  // look errno for more
-	CHAIN_DOWN,    // no proxy in chain responds to tcp
-	CHAIN_EMPTY,   //  if proxy_count = 0
-	BLOCKED  //  target's port blocked on last proxy in the chain
+    SUCCESS=0,
+    MEMORY_FAIL,        // malloc failed
+    SOCKET_ERROR,  // look errno for more
+    CHAIN_DOWN,    // no proxy in chain responds to tcp
+    CHAIN_EMPTY,   //  if proxy_count = 0
+    BLOCKED  //  target's port blocked on last proxy in the chain
 } ERR_CODE;
 
 typedef enum {
-	HTTP_TYPE,
-	SOCKS4_TYPE,
-	SOCKS5_TYPE,
-	RAW_TYPE
+    HTTP_TYPE,
+    SOCKS4_TYPE,
+    SOCKS5_TYPE,
+    RAW_TYPE
 } proxy_type;
 
 typedef enum {
-	DYNAMIC_TYPE,
-	STRICT_TYPE,
-	RANDOM_TYPE,
-	ROUND_ROBIN_TYPE
+    DYNAMIC_TYPE,
+    STRICT_TYPE,
+    RANDOM_TYPE,
+    ROUND_ROBIN_TYPE
 } chain_type;
 
 typedef enum {
-	PLAY_STATE,
-	DOWN_STATE,
-	BLOCKED_STATE,
-	BUSY_STATE
+    PLAY_STATE,
+    DOWN_STATE,
+    BLOCKED_STATE,
+    BUSY_STATE
 } proxy_state;
 
 typedef enum {
-	RANDOMLY,
-	FIFOLY
+    RANDOMLY,
+    FIFOLY
 } select_type;
 
 typedef struct {
-	sa_family_t family;
-	unsigned short port;
-	union {
-		struct {
-			struct in_addr in_addr;
-			struct in_addr in_mask;
-		};
-		struct {
-			struct in6_addr in6_addr;
-			unsigned char in6_prefix;
-		};
-	};
-} localaddr_arg;
+    sa_family_t family;
+    unsigned short port;
+    union {
+        struct {
+            struct in_addr in_addr;
+            struct in_addr in_mask;
+        };
+        struct {
+            struct in6_addr in6_addr;
+            unsigned char in6_prefix;
+        };
+    };
+} addr_arg;
 
 typedef struct {
-	struct in_addr orig_dst, new_dst;
-	unsigned short orig_port, new_port;
+    struct in_addr orig_dst, new_dst;
+    unsigned short orig_port, new_port;
 } dnat_arg;
 
 typedef struct {
-	ip_type ip;
-	unsigned short port;
-	proxy_type pt;
-	proxy_state ps;
-	char user[256];
-	char pass[256];
+    ip_type ip;
+    unsigned short port;
+    proxy_type pt;
+    proxy_state ps;
+    char user[256];
+    char pass[256];
 } proxy_data;
 
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
-			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
-			 unsigned int max_chain );
+             proxy_data * pd, unsigned int proxy_count, chain_type ct,
+             unsigned int max_chain );
 
 void proxychains_write_log(char *str, ...);
 
@@ -106,14 +107,14 @@ typedef struct hostent* (*gethostbyname_t)(const char *);
 typedef void (*freeaddrinfo_t)(struct addrinfo *);
 typedef struct hostent *(*gethostbyaddr_t) (const void *, socklen_t, int);
 
-typedef int (*getaddrinfo_t)(const char *, const char *, const struct addrinfo *, 
-			     struct addrinfo **);
+typedef int (*getaddrinfo_t)(const char *, const char *, const struct addrinfo *,
+                 struct addrinfo **);
 
-typedef int (*getnameinfo_t) (const struct sockaddr *, socklen_t, char *, 
-			      GN_NODELEN_T, char *, GN_SERVLEN_T, GN_FLAGS_T);
+typedef int (*getnameinfo_t) (const struct sockaddr *, socklen_t, char *,
+                  GN_NODELEN_T, char *, GN_SERVLEN_T, GN_FLAGS_T);
 
 typedef ssize_t (*sendto_t) (int sockfd, const void *buf, size_t len, int flags,
-			     const struct sockaddr *dest_addr, socklen_t addrlen);
+                 const struct sockaddr *dest_addr, socklen_t addrlen);
 
 
 
@@ -125,17 +126,17 @@ extern getnameinfo_t true_getnameinfo;
 extern gethostbyaddr_t true_gethostbyaddr;
 
 struct gethostbyname_data {
-	struct hostent hostent_space;
-	in_addr_t resolved_addr;
-	char *resolved_addr_p[2];
-	char addr_name[256];
+    struct hostent hostent_space;
+    in_addr_t resolved_addr;
+    char *resolved_addr_p[2];
+    char addr_name[256];
 };
 
 struct hostent* proxy_gethostbyname(const char *name, struct gethostbyname_data *data);
 struct hostent* proxy_gethostbyname_old(const char *name);
 
-int proxy_getaddrinfo(const char *node, const char *service, 
-		      const struct addrinfo *hints, struct addrinfo **res);
+int proxy_getaddrinfo(const char *node, const char *service,
+              const struct addrinfo *hints, struct addrinfo **res);
 void proxy_freeaddrinfo(struct addrinfo *res);
 
 void core_initialize(void);
