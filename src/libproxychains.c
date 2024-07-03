@@ -1,8 +1,8 @@
 /***************************************************************************
                           libproxychains.c  -  description
                              -------------------
-    begin                 : Tue May 14 2002
-    copyright             : netcreature (C) 2002
+    begin                : Tue May 14 2002
+    copyright          :  netcreature (C) 2002
     email                 : netcreature@users.sourceforge.net
  ***************************************************************************/
  /*     GPL */
@@ -41,7 +41,7 @@
 #include "common.h"
 #include "rdns.h"
 
-#undef      satosin
+#undef 		satosin
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
 #define     SOCKADDR(x)     (satosin(x)->sin_addr.s_addr)
 #define     SOCKADDR_2(x)     (satosin(x)->sin_addr)
@@ -90,21 +90,21 @@ static int init_l = 0;
 static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct);
 
 static void* load_sym(char* symname, void* proxyfunc, int is_mandatory) {
-    void *funcptr = dlsym(RTLD_NEXT, symname);
+	void *funcptr = dlsym(RTLD_NEXT, symname);
 
-    if(is_mandatory && !funcptr) {
-        fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
-        exit(1);
-    } else if (!funcptr) {
-        return funcptr;
-    } else {
-        PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, funcptr, proxyfunc);
-    }
-    if(funcptr == proxyfunc) {
-        PDEBUG("circular reference detected, aborting!\n");
-        abort();
-    }
-    return funcptr;
+	if(is_mandatory && !funcptr) {
+		fprintf(stderr, "Cannot load symbol '%s' %s\n", symname, dlerror());
+		exit(1);
+	} else if (!funcptr) {
+		return funcptr;
+	} else {
+		PDEBUG("loaded symbol '%s'" " real addr %p  wrapped addr %p\n", symname, funcptr, proxyfunc);
+	}
+	if(funcptr == proxyfunc) {
+		PDEBUG("circular reference detected, aborting!\n");
+		abort();
+	}
+	return funcptr;
 }
 
 #include "allocator_thread.h"
@@ -114,7 +114,7 @@ const char *proxychains_get_version(void);
 static void setup_hooks(void);
 
 typedef struct {
-    unsigned int first, last, flags;
+	unsigned int first, last, flags;
 } close_range_args_t;
 
 /* If there is some `close` or `close_range` system call before do_init,
@@ -126,48 +126,48 @@ static int close_range_buffer_cnt = 0;
 
 static unsigned get_rand_seed(void) {
 #ifdef HAVE_CLOCK_GETTIME
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
-    return now.tv_sec ^ now.tv_nsec;
+	struct timespec now;
+	clock_gettime(CLOCK_REALTIME, &now);
+	return now.tv_sec ^ now.tv_nsec;
 #else
-    return time(NULL);
+	return time(NULL);
 #endif
 }
 
 static void do_init(void) {
-    char *env;
+	char *env;
 
-    srand(get_rand_seed());
-    core_initialize();
+	srand(get_rand_seed());
+	core_initialize();
 
-    env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
-    if(env && *env == '1')
-        proxychains_quiet_mode = 1;
+	env = getenv(PROXYCHAINS_QUIET_MODE_ENV_VAR);
+	if(env && *env == '1')
+		proxychains_quiet_mode = 1;
 
-    proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
+	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
-    setup_hooks();
+	setup_hooks();
 
-    /* read the config file */
-    get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
-    DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
+	/* read the config file */
+	get_chain_data(proxychains_pd, &proxychains_proxy_count, &proxychains_ct);
+	DUMP_PROXY_CHAIN(proxychains_pd, proxychains_proxy_count);
 
-    while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
-    while(close_range_buffer_cnt) {
-        int i = --close_range_buffer_cnt;
-        true_close_range(close_range_buffer[i].first, close_range_buffer[i].last, close_range_buffer[i].flags);
-    }
-    init_l = 1;
+	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
+	while(close_range_buffer_cnt) {
+		int i = --close_range_buffer_cnt;
+		true_close_range(close_range_buffer[i].first, close_range_buffer[i].last, close_range_buffer[i].flags);
+	}
+	init_l = 1;
 
-    rdns_init(proxychains_resolver);
+	rdns_init(proxychains_resolver);
 }
 
 static void init_lib_wrapper(const char* caller) {
 #ifndef DEBUG
-    (void) caller;
+	(void) caller;
 #endif
-    if(!init_l) PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
-    pthread_once(&init_once, do_init);
+	if(!init_l) PDEBUG("%s called from %s\n", __FUNCTION__,  caller);
+	pthread_once(&init_once, do_init);
 }
 
 /* if we use gcc >= 3, we can instruct the dynamic loader
@@ -178,7 +178,7 @@ static void init_lib_wrapper(const char* caller) {
 #if __GNUC__+0 > 2
 __attribute__((constructor))
 static void gcc_init(void) {
-    init_lib_wrapper(__FUNCTION__);
+	init_lib_wrapper(__FUNCTION__);
 }
 #define INIT() do {} while(0)
 #else
@@ -187,297 +187,297 @@ static void gcc_init(void) {
 
 
 typedef enum {
-    RS_PT_NONE = 0,
-    RS_PT_SOCKS4,
-    RS_PT_SOCKS5,
-    RS_PT_HTTP
+	RS_PT_NONE = 0,
+	RS_PT_SOCKS4,
+	RS_PT_SOCKS5,
+	RS_PT_HTTP
 } rs_proxyType;
 
 /*
   proxy_from_string() taken from rocksock network I/O library (C) rofl0r
   valid inputs:
-    socks5://user:password@proxy.domain.com:port
-    socks5://proxy.domain.com:port
-    socks4://proxy.domain.com:port
-    http://user:password@proxy.domain.com:port
-    http://proxy.domain.com:port
+	socks5://user:password@proxy.domain.com:port
+	socks5://proxy.domain.com:port
+	socks4://proxy.domain.com:port
+	http://user:password@proxy.domain.com:port
+	http://proxy.domain.com:port
 
-    supplying port number is obligatory.
-    user:pass@ part is optional for http and socks5.
-    however, user:pass authentication is currently not implemented for http proxies.
+	supplying port number is obligatory.
+	user:pass@ part is optional for http and socks5.
+	however, user:pass authentication is currently not implemented for http proxies.
   return 1 on success, 0 on error.
 */
 static int proxy_from_string(const char *proxystring,
-    char *type_buf,
-    char* host_buf,
-    int *port_n,
-    char *user_buf,
-    char* pass_buf)
+	char *type_buf,
+	char* host_buf,
+	int *port_n,
+	char *user_buf,
+	char* pass_buf)
 {
-    const char* p;
-    rs_proxyType proxytype;
+	const char* p;
+	rs_proxyType proxytype;
 
-    size_t next_token = 6, ul = 0, pl = 0, hl;
-    if(!proxystring[0] || !proxystring[1] || !proxystring[2] || !proxystring[3] || !proxystring[4] || !proxystring[5]) goto inv_string;
-    if(*proxystring == 's') {
-        switch(proxystring[5]) {
-            case '5': proxytype = RS_PT_SOCKS5; break;
-            case '4': proxytype = RS_PT_SOCKS4; break;
-            default: goto inv_string;
-        }
-    } else if(*proxystring == 'h') {
-        proxytype = RS_PT_HTTP;
-        next_token = 4;
-    } else goto inv_string;
-    if(
-       proxystring[next_token++] != ':' ||
-       proxystring[next_token++] != '/' ||
-       proxystring[next_token++] != '/') goto inv_string;
-    const char *at = strrchr(proxystring+next_token, '@');
-    if(at) {
-        if(proxytype == RS_PT_SOCKS4)
-            return 0;
-        p = strchr(proxystring+next_token, ':');
-        if(!p || p >= at) goto inv_string;
-        const char *u = proxystring+next_token;
-        ul = p-u;
-        p++;
-        pl = at-p;
-        if(proxytype == RS_PT_SOCKS5 && (ul > 255 || pl > 255))
-            return 0;
-        memcpy(user_buf, u, ul);
-        user_buf[ul]=0;
-        memcpy(pass_buf, p, pl);
-        pass_buf[pl]=0;
-        next_token += 2+ul+pl;
-    } else {
-        user_buf[0]=0;
-        pass_buf[0]=0;
-    }
-    const char* h = proxystring+next_token;
-    p = strchr(h, ':');
-    if(!p) goto inv_string;
-    hl = p-h;
-    if(hl > 255)
-        return 0;
-    memcpy(host_buf, h, hl);
-    host_buf[hl]=0;
-    *port_n = atoi(p+1);
-    switch(proxytype) {
-        case RS_PT_SOCKS4:
-            strcpy(type_buf, "socks4");
-            break;
-        case RS_PT_SOCKS5:
-            strcpy(type_buf, "socks5");
-            break;
-        case RS_PT_HTTP:
-            strcpy(type_buf, "http");
-            break;
-        default:
-            return 0;
-    }
-    return 1;
+	size_t next_token = 6, ul = 0, pl = 0, hl;
+	if(!proxystring[0] || !proxystring[1] || !proxystring[2] || !proxystring[3] || !proxystring[4] || !proxystring[5]) goto inv_string;
+	if(*proxystring == 's') {
+		switch(proxystring[5]) {
+			case '5': proxytype = RS_PT_SOCKS5; break;
+			case '4': proxytype = RS_PT_SOCKS4; break;
+			default: goto inv_string;
+		}
+	} else if(*proxystring == 'h') {
+		proxytype = RS_PT_HTTP;
+		next_token = 4;
+	} else goto inv_string;
+	if(
+	   proxystring[next_token++] != ':' ||
+	   proxystring[next_token++] != '/' ||
+	   proxystring[next_token++] != '/') goto inv_string;
+	const char *at = strrchr(proxystring+next_token, '@');
+	if(at) {
+		if(proxytype == RS_PT_SOCKS4)
+			return 0;
+		p = strchr(proxystring+next_token, ':');
+		if(!p || p >= at) goto inv_string;
+		const char *u = proxystring+next_token;
+		ul = p-u;
+		p++;
+		pl = at-p;
+		if(proxytype == RS_PT_SOCKS5 && (ul > 255 || pl > 255))
+			return 0;
+		memcpy(user_buf, u, ul);
+		user_buf[ul]=0;
+		memcpy(pass_buf, p, pl);
+		pass_buf[pl]=0;
+		next_token += 2+ul+pl;
+	} else {
+		user_buf[0]=0;
+		pass_buf[0]=0;
+	}
+	const char* h = proxystring+next_token;
+	p = strchr(h, ':');
+	if(!p) goto inv_string;
+	hl = p-h;
+	if(hl > 255)
+		return 0;
+	memcpy(host_buf, h, hl);
+	host_buf[hl]=0;
+	*port_n = atoi(p+1);
+	switch(proxytype) {
+		case RS_PT_SOCKS4:
+			strcpy(type_buf, "socks4");
+			break;
+		case RS_PT_SOCKS5:
+			strcpy(type_buf, "socks5");
+			break;
+		case RS_PT_HTTP:
+			strcpy(type_buf, "http");
+			break;
+		default:
+			return 0;
+	}
+	return 1;
 inv_string:
-    return 0;
+	return 0;
 }
 
 static const char* bool_str(int bool_val) {
-    if(bool_val) return "true";
-    return "false";
+	if(bool_val) return "true";
+	return "false";
 }
 
 #define STR_STARTSWITH(P, LIT) (!strncmp(P, LIT, sizeof(LIT)-1))
 /* get configuration from config file */
 static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
-    int count = 0, port_n = 0, list = 0;
-    char buf[1024], type[1024], host[1024], user[1024];
-    char *buff, *env, *p;
-    char local_addr_port[64], local_addr[64], local_netmask[32];
-    char remote_addr_port[64], remote_addr[64], remote_netmask[32];
-    char dnat_orig_addr_port[32], dnat_new_addr_port[32];
-    char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
-    char rdnsd_addr[32], rdnsd_port[8];
-    FILE *file = NULL;
+	int count = 0, port_n = 0, list = 0;
+	char buf[1024], type[1024], host[1024], user[1024];
+	char *buff, *env, *p;
+	char local_addr_port[64], local_addr[64], local_netmask[32];
+	char remote_addr_port[64], remote_addr[64], remote_netmask[32];
+	char dnat_orig_addr_port[32], dnat_new_addr_port[32];
+	char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
+	char rdnsd_addr[32], rdnsd_port[8];
+	FILE *file = NULL;
 
-    if(proxychains_got_chain_data)
-        return;
+	if(proxychains_got_chain_data)
+		return;
 
-    PFUNC();
+	PFUNC();
 
-    //Some defaults
-    tcp_read_time_out = 4 * 1000;
-    tcp_connect_time_out = 10 * 1000;
-    *ct = DYNAMIC_TYPE;
+	//Some defaults
+	tcp_read_time_out = 4 * 1000;
+	tcp_connect_time_out = 10 * 1000;
+	*ct = DYNAMIC_TYPE;
 
-    env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
-    if( ( file = fopen(env, "r") ) == NULL )
-    {
-            perror("couldnt read configuration file");
-            exit(1);
-    }
+	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
+	if( ( file = fopen(env, "r") ) == NULL )
+	{
+	        perror("couldnt read configuration file");
+        	exit(1);
+	}
 
-    while(fgets(buf, sizeof(buf), file)) {
-        buff = buf;
-        /* remove leading whitespace */
-        while(isspace(*buff)) buff++;
-        /* remove trailing '\n' */
-        if((p = strrchr(buff, '\n'))) *p = 0;
-        p = buff + strlen(buff)-1;
-        /* remove trailing whitespace */
-        while(p >= buff && isspace(*p)) *(p--) = 0;
-        if(!*buff || *buff == '#') continue; /* skip empty lines and comments */
-        if(1) {
-            /* proxylist has to come last */
-            if(list) {
-                if(count >= MAX_CHAIN)
-                    break;
+	while(fgets(buf, sizeof(buf), file)) {
+		buff = buf;
+		/* remove leading whitespace */
+		while(isspace(*buff)) buff++;
+		/* remove trailing '\n' */
+		if((p = strrchr(buff, '\n'))) *p = 0;
+		p = buff + strlen(buff)-1;
+		/* remove trailing whitespace */
+		while(p >= buff && isspace(*p)) *(p--) = 0;
+		if(!*buff || *buff == '#') continue; /* skip empty lines and comments */
+		if(1) {
+			/* proxylist has to come last */
+			if(list) {
+				if(count >= MAX_CHAIN)
+					break;
 
-                memset(&pd[count], 0, sizeof(proxy_data));
+				memset(&pd[count], 0, sizeof(proxy_data));
 
-                pd[count].ps = PLAY_STATE;
-                port_n = 0;
+				pd[count].ps = PLAY_STATE;
+				port_n = 0;
 
-                int ret = sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
-                if(ret < 3 || ret == EOF) {
-                    if(!proxy_from_string(buff, type, host, &port_n, pd[count].user, pd[count].pass)) {
-                        inv:
-                        fprintf(stderr, "error: invalid item in proxylist section: %s", buff);
-                        exit(1);
-                    }
-                }
+				int ret = sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
+				if(ret < 3 || ret == EOF) {
+					if(!proxy_from_string(buff, type, host, &port_n, pd[count].user, pd[count].pass)) {
+						inv:
+						fprintf(stderr, "error: invalid item in proxylist section: %s", buff);
+						exit(1);
+					}
+				}
 
-                memset(&pd[count].ip, 0, sizeof(pd[count].ip));
-                pd[count].ip.is_v6 = !!strchr(host, ':');
-                pd[count].port = htons((unsigned short) port_n);
-                ip_type* host_ip = &pd[count].ip;
-                if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
-                    if(*ct == STRICT_TYPE && proxychains_resolver >= DNSLF_RDNS_START && count > 0) {
-                        /* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
-                        rdns_init(proxychains_resolver);
-                        ip_type4 internal_ip = rdns_get_ip_for_host(host, strlen(host));
-                        pd[count].ip.is_v6 = 0;
-                        host_ip->addr.v4 = internal_ip;
-                        if(internal_ip.as_int == IPT4_INVALID.as_int)
-                            goto inv_host;
-                    } else {
+				memset(&pd[count].ip, 0, sizeof(pd[count].ip));
+				pd[count].ip.is_v6 = !!strchr(host, ':');
+				pd[count].port = htons((unsigned short) port_n);
+				ip_type* host_ip = &pd[count].ip;
+				if(1 != inet_pton(host_ip->is_v6 ? AF_INET6 : AF_INET, host, host_ip->addr.v6)) {
+					if(*ct == STRICT_TYPE && proxychains_resolver >= DNSLF_RDNS_START && count > 0) {
+						/* we can allow dns hostnames for all but the first proxy in the list if chaintype is strict, as remote lookup can be done */
+						rdns_init(proxychains_resolver);
+						ip_type4 internal_ip = rdns_get_ip_for_host(host, strlen(host));
+						pd[count].ip.is_v6 = 0;
+						host_ip->addr.v4 = internal_ip;
+						if(internal_ip.as_int == IPT4_INVALID.as_int)
+							goto inv_host;
+					} else {
 inv_host:
-                        fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
-                        fprintf(stderr, "non-numeric ips are only allowed under the following circumstances:\n");
-                        fprintf(stderr, "chaintype == strict (%s), proxy is not first in list (%s), proxy_dns active (%s)\n\n", bool_str(*ct == STRICT_TYPE), bool_str(count > 0), rdns_resolver_string(proxychains_resolver));
-                        exit(1);
-                    }
-                }
+						fprintf(stderr, "proxy %s has invalid value or is not numeric\n", host);
+						fprintf(stderr, "non-numeric ips are only allowed under the following circumstances:\n");
+						fprintf(stderr, "chaintype == strict (%s), proxy is not first in list (%s), proxy_dns active (%s)\n\n", bool_str(*ct == STRICT_TYPE), bool_str(count > 0), rdns_resolver_string(proxychains_resolver));
+						exit(1);
+					}
+				}
 
-                if(!strcmp(type, "http")) {
-                    pd[count].pt = HTTP_TYPE;
-                } else if(!strcmp(type, "raw")) {
-                    pd[count].pt = RAW_TYPE;
-                } else if(!strcmp(type, "socks4")) {
-                    pd[count].pt = SOCKS4_TYPE;
-                } else if(!strcmp(type, "socks5")) {
-                    pd[count].pt = SOCKS5_TYPE;
-                } else
-                    goto inv;
+				if(!strcmp(type, "http")) {
+					pd[count].pt = HTTP_TYPE;
+				} else if(!strcmp(type, "raw")) {
+					pd[count].pt = RAW_TYPE;
+				} else if(!strcmp(type, "socks4")) {
+					pd[count].pt = SOCKS4_TYPE;
+				} else if(!strcmp(type, "socks5")) {
+					pd[count].pt = SOCKS5_TYPE;
+				} else
+					goto inv;
 
-                if(port_n)
-                    count++;
-            } else {
-                if(!strcmp(buff, "[ProxyList]")) {
-                    list = 1;
-                } else if(!strcmp(buff, "random_chain")) {
-                    *ct = RANDOM_TYPE;
-                } else if(!strcmp(buff, "strict_chain")) {
-                    *ct = STRICT_TYPE;
-                } else if(!strcmp(buff, "dynamic_chain")) {
-                    *ct = DYNAMIC_TYPE;
-                } else if(!strcmp(buff, "round_robin_chain")) {
-                    *ct = ROUND_ROBIN_TYPE;
-                } else if(STR_STARTSWITH(buff, "tcp_read_time_out")) {
-                    sscanf(buff, "%s %d", user, &tcp_read_time_out);
-                } else if(STR_STARTSWITH(buff, "tcp_connect_time_out")) {
-                    sscanf(buff, "%s %d", user, &tcp_connect_time_out);
-                } else if(STR_STARTSWITH(buff, "remote_dns_subnet")) {
-                    sscanf(buff, "%s %u", user, &remote_dns_subnet);
-                    if(remote_dns_subnet >= 256) {
-                        fprintf(stderr,
-                            "remote_dns_subnet: invalid value. requires a number between 0 and 255.\n");
-                        exit(1);
-                    }
-                } else if(STR_STARTSWITH(buff, "localnet")) {
-                    char colon, extra, right_bracket[2];
-                    unsigned short local_port = 0, local_prefix;
-                    int local_family, n, valid;
-                    if(sscanf(buff, "%s %53[^/]/%15s%c", user, local_addr_port, local_netmask, &extra) != 3) {
-                        fprintf(stderr, "localnet format error");
-                        exit(1);
-                    }
-                    p = strchr(local_addr_port, ':');
-                    if(!p || p == strrchr(local_addr_port, ':')) {
-                        local_family = AF_INET;
-                        n = sscanf(local_addr_port, "%15[^:]%c%5hu%c", local_addr, &colon, &local_port, &extra);
-                        valid = n == 1 || (n == 3 && colon == ':');
-                    } else if(local_addr_port[0] == '[') {
-                        local_family = AF_INET6;
-                        n = sscanf(local_addr_port, "[%45[^][]%1[]]%c%5hu%c", local_addr, right_bracket, &colon, &local_port, &extra);
-                        valid = n == 2 || (n == 4 && colon == ':');
-                    } else {
-                        local_family = AF_INET6;
-                        valid = sscanf(local_addr_port, "%45[^][]%c", local_addr, &extra) == 1;
-                    }
-                    if(!valid) {
-                        fprintf(stderr, "localnet address or port error\n");
-                        exit(1);
-                    }
-                    if(local_port) {
-                        PDEBUG("added localnet: netaddr=%s, port=%u, netmask=%s\n",
-                               local_addr, local_port, local_netmask);
-                    } else {
-                        PDEBUG("added localnet: netaddr=%s, netmask=%s\n",
-                               local_addr, local_netmask);
-                    }
-                    if(num_localnet_addr < MAX_LOCALNET) {
-                        localnet_addr[num_localnet_addr].family = local_family;
-                        localnet_addr[num_localnet_addr].port = local_port;
-                        valid = 0;
-                        if (local_family == AF_INET) {
-                            valid =
-                                inet_pton(local_family, local_addr,
-                                          &localnet_addr[num_localnet_addr].in_addr) > 0;
-                        } else if(local_family == AF_INET6) {
-                            valid =
-                                inet_pton(local_family, local_addr,
-                                          &localnet_addr[num_localnet_addr].in6_addr) > 0;
-                        }
-                        if(!valid) {
-                            fprintf(stderr, "localnet address error\n");
-                            exit(1);
-                        }
-                        if(local_family == AF_INET && strchr(local_netmask, '.')) {
-                            valid =
-                                inet_pton(local_family, local_netmask,
-                                          &localnet_addr[num_localnet_addr].in_mask) > 0;
-                        } else {
-                            valid = sscanf(local_netmask, "%hu%c", &local_prefix, &extra) == 1;
-                            if (valid) {
-                                if(local_family == AF_INET && local_prefix <= 32) {
-                                    localnet_addr[num_localnet_addr].in_mask.s_addr =
-                                        htonl(0xFFFFFFFFu << (32u - local_prefix));
-                                } else if(local_family == AF_INET6 && local_prefix <= 128) {
-                                    localnet_addr[num_localnet_addr].in6_prefix =
-                                        local_prefix;
-                                } else {
-                                    valid = 0;
-                                }
-                            }
-                        }
-                        if(!valid) {
-                            fprintf(stderr, "localnet netmask error\n");
-                            exit(1);
-                        }
-                        ++num_localnet_addr;
-                    } else {
-                        fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
-                    }
+				if(port_n)
+					count++;
+			} else {
+				if(!strcmp(buff, "[ProxyList]")) {
+					list = 1;
+				} else if(!strcmp(buff, "random_chain")) {
+					*ct = RANDOM_TYPE;
+				} else if(!strcmp(buff, "strict_chain")) {
+					*ct = STRICT_TYPE;
+				} else if(!strcmp(buff, "dynamic_chain")) {
+					*ct = DYNAMIC_TYPE;
+				} else if(!strcmp(buff, "round_robin_chain")) {
+					*ct = ROUND_ROBIN_TYPE;
+				} else if(STR_STARTSWITH(buff, "tcp_read_time_out")) {
+					sscanf(buff, "%s %d", user, &tcp_read_time_out);
+				} else if(STR_STARTSWITH(buff, "tcp_connect_time_out")) {
+					sscanf(buff, "%s %d", user, &tcp_connect_time_out);
+				} else if(STR_STARTSWITH(buff, "remote_dns_subnet")) {
+					sscanf(buff, "%s %u", user, &remote_dns_subnet);
+					if(remote_dns_subnet >= 256) {
+						fprintf(stderr,
+							"remote_dns_subnet: invalid value. requires a number between 0 and 255.\n");
+						exit(1);
+					}
+				} else if(STR_STARTSWITH(buff, "localnet")) {
+					char colon, extra, right_bracket[2];
+					unsigned short local_port = 0, local_prefix;
+					int local_family, n, valid;
+					if(sscanf(buff, "%s %53[^/]/%15s%c", user, local_addr_port, local_netmask, &extra) != 3) {
+						fprintf(stderr, "localnet format error");
+						exit(1);
+					}
+					p = strchr(local_addr_port, ':');
+					if(!p || p == strrchr(local_addr_port, ':')) {
+						local_family = AF_INET;
+						n = sscanf(local_addr_port, "%15[^:]%c%5hu%c", local_addr, &colon, &local_port, &extra);
+						valid = n == 1 || (n == 3 && colon == ':');
+					} else if(local_addr_port[0] == '[') {
+						local_family = AF_INET6;
+						n = sscanf(local_addr_port, "[%45[^][]%1[]]%c%5hu%c", local_addr, right_bracket, &colon, &local_port, &extra);
+						valid = n == 2 || (n == 4 && colon == ':');
+					} else {
+						local_family = AF_INET6;
+						valid = sscanf(local_addr_port, "%45[^][]%c", local_addr, &extra) == 1;
+					}
+					if(!valid) {
+						fprintf(stderr, "localnet address or port error\n");
+						exit(1);
+					}
+					if(local_port) {
+						PDEBUG("added localnet: netaddr=%s, port=%u, netmask=%s\n",
+						       local_addr, local_port, local_netmask);
+					} else {
+						PDEBUG("added localnet: netaddr=%s, netmask=%s\n",
+						       local_addr, local_netmask);
+					}
+					if(num_localnet_addr < MAX_LOCALNET) {
+						localnet_addr[num_localnet_addr].family = local_family;
+						localnet_addr[num_localnet_addr].port = local_port;
+						valid = 0;
+						if (local_family == AF_INET) {
+							valid =
+							    inet_pton(local_family, local_addr,
+							              &localnet_addr[num_localnet_addr].in_addr) > 0;
+						} else if(local_family == AF_INET6) {
+							valid =
+							    inet_pton(local_family, local_addr,
+							              &localnet_addr[num_localnet_addr].in6_addr) > 0;
+						}
+						if(!valid) {
+							fprintf(stderr, "localnet address error\n");
+							exit(1);
+						}
+						if(local_family == AF_INET && strchr(local_netmask, '.')) {
+							valid =
+							    inet_pton(local_family, local_netmask,
+							              &localnet_addr[num_localnet_addr].in_mask) > 0;
+						} else {
+							valid = sscanf(local_netmask, "%hu%c", &local_prefix, &extra) == 1;
+							if (valid) {
+								if(local_family == AF_INET && local_prefix <= 32) {
+									localnet_addr[num_localnet_addr].in_mask.s_addr =
+										htonl(0xFFFFFFFFu << (32u - local_prefix));
+								} else if(local_family == AF_INET6 && local_prefix <= 128) {
+									localnet_addr[num_localnet_addr].in6_prefix =
+										local_prefix;
+								} else {
+									valid = 0;
+								}
+							}
+						}
+						if(!valid) {
+							fprintf(stderr, "localnet netmask error\n");
+							exit(1);
+						}
+						++num_localnet_addr;
+					} else {
+						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
+					}
                 } else if(STR_STARTSWITH(buff, "remotenet")) {
                     char colon, extra, right_bracket[2];
                     unsigned short remote_port = 0, remote_prefix;
@@ -553,101 +553,101 @@ inv_host:
                     } else {
                         fprintf(stderr, "# of remotenet exceed %d.\n", MAX_REMOTENET);
                     }
-                } else if(STR_STARTSWITH(buff, "chain_len")) {
-                    char *pc;
-                    int len;
-                    pc = strchr(buff, '=');
-                    if(!pc) {
-                        fprintf(stderr, "error: missing equals sign '=' in chain_len directive.\n");
-                        exit(1);
-                    }
-                    len = atoi(++pc);
-                    proxychains_max_chain = (len ? len : 1);
-                } else if(!strcmp(buff, "quiet_mode")) {
-                    proxychains_quiet_mode = 1;
-                } else if(!strcmp(buff, "proxy_dns_old")) {
-                    proxychains_resolver = DNSLF_FORKEXEC;
-                } else if(!strcmp(buff, "proxy_dns")) {
-                    proxychains_resolver = DNSLF_RDNS_THREAD;
-                } else if(STR_STARTSWITH(buff, "proxy_dns_daemon")) {
-                    struct sockaddr_in rdns_server_buffer;
+				} else if(STR_STARTSWITH(buff, "chain_len")) {
+					char *pc;
+					int len;
+					pc = strchr(buff, '=');
+					if(!pc) {
+						fprintf(stderr, "error: missing equals sign '=' in chain_len directive.\n");
+						exit(1);
+					}
+					len = atoi(++pc);
+					proxychains_max_chain = (len ? len : 1);
+				} else if(!strcmp(buff, "quiet_mode")) {
+					proxychains_quiet_mode = 1;
+				} else if(!strcmp(buff, "proxy_dns_old")) {
+					proxychains_resolver = DNSLF_FORKEXEC;
+				} else if(!strcmp(buff, "proxy_dns")) {
+					proxychains_resolver = DNSLF_RDNS_THREAD;
+				} else if(STR_STARTSWITH(buff, "proxy_dns_daemon")) {
+					struct sockaddr_in rdns_server_buffer;
 
-                    if(sscanf(buff, "%s %15[^:]:%5s", user, rdnsd_addr, rdnsd_port) < 3) {
-                        fprintf(stderr, "proxy_dns_daemon format error\n");
-                        exit(1);
-                    }
-                    rdns_server_buffer.sin_family = AF_INET;
-                    int error = inet_pton(AF_INET, rdnsd_addr, &rdns_server_buffer.sin_addr);
-                    if(error <= 0) {
-                        fprintf(stderr, "bogus proxy_dns_daemon address\n");
-                        exit(1);
-                    }
-                    rdns_server_buffer.sin_port = htons(atoi(rdnsd_port));
-                    proxychains_resolver = DNSLF_RDNS_DAEMON;
-                    rdns_set_daemon(&rdns_server_buffer);
-                } else if(STR_STARTSWITH(buff, "dnat")) {
-                    if(sscanf(buff, "%s %21[^ ] %21s\n", user, dnat_orig_addr_port, dnat_new_addr_port) < 3) {
-                        fprintf(stderr, "dnat format error");
-                        exit(1);
-                    }
-                    /* clean previously used buffer */
-                    memset(dnat_orig_port, 0, sizeof(dnat_orig_port) / sizeof(dnat_orig_port[0]));
-                    memset(dnat_new_port, 0, sizeof(dnat_new_port) / sizeof(dnat_new_port[0]));
+					if(sscanf(buff, "%s %15[^:]:%5s", user, rdnsd_addr, rdnsd_port) < 3) {
+						fprintf(stderr, "proxy_dns_daemon format error\n");
+						exit(1);
+					}
+					rdns_server_buffer.sin_family = AF_INET;
+					int error = inet_pton(AF_INET, rdnsd_addr, &rdns_server_buffer.sin_addr);
+					if(error <= 0) {
+						fprintf(stderr, "bogus proxy_dns_daemon address\n");
+						exit(1);
+					}
+					rdns_server_buffer.sin_port = htons(atoi(rdnsd_port));
+					proxychains_resolver = DNSLF_RDNS_DAEMON;
+					rdns_set_daemon(&rdns_server_buffer);
+				} else if(STR_STARTSWITH(buff, "dnat")) {
+					if(sscanf(buff, "%s %21[^ ] %21s\n", user, dnat_orig_addr_port, dnat_new_addr_port) < 3) {
+						fprintf(stderr, "dnat format error");
+						exit(1);
+					}
+					/* clean previously used buffer */
+					memset(dnat_orig_port, 0, sizeof(dnat_orig_port) / sizeof(dnat_orig_port[0]));
+					memset(dnat_new_port, 0, sizeof(dnat_new_port) / sizeof(dnat_new_port[0]));
 
-                    (void)sscanf(dnat_orig_addr_port, "%15[^:]:%5s", dnat_orig_addr, dnat_orig_port);
-                    (void)sscanf(dnat_new_addr_port, "%15[^:]:%5s", dnat_new_addr, dnat_new_port);
+					(void)sscanf(dnat_orig_addr_port, "%15[^:]:%5s", dnat_orig_addr, dnat_orig_port);
+					(void)sscanf(dnat_new_addr_port, "%15[^:]:%5s", dnat_new_addr, dnat_new_port);
 
-                    if(num_dnats < MAX_DNAT) {
-                        int error;
-                        error =
-                            inet_pton(AF_INET, dnat_orig_addr,
-                                  &dnats[num_dnats].orig_dst);
-                        if(error <= 0) {
-                            fprintf(stderr, "dnat original destination address error\n");
-                            exit(1);
-                        }
+					if(num_dnats < MAX_DNAT) {
+						int error;
+						error =
+						    inet_pton(AF_INET, dnat_orig_addr,
+							      &dnats[num_dnats].orig_dst);
+						if(error <= 0) {
+							fprintf(stderr, "dnat original destination address error\n");
+							exit(1);
+						}
 
-                        error =
-                            inet_pton(AF_INET, dnat_new_addr,
-                                  &dnats[num_dnats].new_dst);
-                        if(error <= 0) {
-                            fprintf(stderr, "dnat effective destination address error\n");
-                            exit(1);
-                        }
+						error =
+						    inet_pton(AF_INET, dnat_new_addr,
+							      &dnats[num_dnats].new_dst);
+						if(error <= 0) {
+							fprintf(stderr, "dnat effective destination address error\n");
+							exit(1);
+						}
 
-                        if(dnat_orig_port[0]) {
-                            dnats[num_dnats].orig_port =
-                                (short) atoi(dnat_orig_port);
-                        } else {
-                            dnats[num_dnats].orig_port = 0;
-                        }
+						if(dnat_orig_port[0]) {
+							dnats[num_dnats].orig_port =
+							    (short) atoi(dnat_orig_port);
+						} else {
+							dnats[num_dnats].orig_port = 0;
+						}
 
-                        if(dnat_new_port[0]) {
-                            dnats[num_dnats].new_port =
-                                (short) atoi(dnat_new_port);
-                        } else {
-                            dnats[num_dnats].new_port = 0;
-                        }
+						if(dnat_new_port[0]) {
+							dnats[num_dnats].new_port =
+							    (short) atoi(dnat_new_port);
+						} else {
+							dnats[num_dnats].new_port = 0;
+						}
 
-                        PDEBUG("added dnat: orig-dst=%s orig-port=%d new-dst=%s new-port=%d\n", dnat_orig_addr, dnats[num_dnats].orig_port, dnat_new_addr, dnats[num_dnats].new_port);
-                        ++num_dnats;
-                    } else {
-                        fprintf(stderr, "# of dnat exceed %d.\n", MAX_DNAT);
-                    }
-                }
-            }
-        }
-    }
+						PDEBUG("added dnat: orig-dst=%s orig-port=%d new-dst=%s new-port=%d\n", dnat_orig_addr, dnats[num_dnats].orig_port, dnat_new_addr, dnats[num_dnats].new_port);
+						++num_dnats;
+					} else {
+						fprintf(stderr, "# of dnat exceed %d.\n", MAX_DNAT);
+					}
+				}
+			}
+		}
+	}
 #ifndef BROKEN_FCLOSE
-    fclose(file);
+	fclose(file);
 #endif
-    if(!count) {
-        fprintf(stderr, "error: no valid proxy found in config\n");
-        exit(1);
-    }
-    *proxy_count = count;
-    proxychains_got_chain_data = 1;
-    PDEBUG("proxy_dns: %s\n", rdns_resolver_string(proxychains_resolver));
+	if(!count) {
+		fprintf(stderr, "error: no valid proxy found in config\n");
+		exit(1);
+	}
+	*proxy_count = count;
+	proxychains_got_chain_data = 1;
+	PDEBUG("proxy_dns: %s\n", rdns_resolver_string(proxychains_resolver));
 }
 
 /*******  HOOK FUNCTIONS  *******/
@@ -660,172 +660,172 @@ inv_host:
 #endif
 
 HOOKFUNC(int, close, int fd) {
-    if(!init_l) {
-        if(close_fds_cnt>=(sizeof close_fds/sizeof close_fds[0])) goto err;
-        close_fds[close_fds_cnt++] = fd;
-        errno = 0;
-        return 0;
-    }
-    if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close(fd);
+	if(!init_l) {
+		if(close_fds_cnt>=(sizeof close_fds/sizeof close_fds[0])) goto err;
+		close_fds[close_fds_cnt++] = fd;
+		errno = 0;
+		return 0;
+	}
+	if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close(fd);
 
-    /* prevent rude programs (like ssh) from closing our pipes */
-    if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
-       fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
-        return true_close(fd);
-    }
-    err:
-    errno = EBADF;
-    return -1;
+	/* prevent rude programs (like ssh) from closing our pipes */
+	if(fd != req_pipefd[0]  && fd != req_pipefd[1] &&
+	   fd != resp_pipefd[0] && fd != resp_pipefd[1]) {
+		return true_close(fd);
+	}
+	err:
+	errno = EBADF;
+	return -1;
 }
 static int is_v4inv6(const struct in6_addr *a) {
-    return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
+	return !memcmp(a->s6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12);
 }
 
 static void intsort(int *a, int n) {
-    int i, j, s;
-    for(i=0; i<n; ++i)
-        for(j=i+1; j<n; ++j)
-            if(a[j] < a[i]) {
-                s = a[i];
-                a[i] = a[j];
-                a[j] = s;
-            }
+	int i, j, s;
+	for(i=0; i<n; ++i)
+		for(j=i+1; j<n; ++j)
+			if(a[j] < a[i]) {
+				s = a[i];
+				a[i] = a[j];
+				a[j] = s;
+			}
 }
 
 /* Warning: Linux manual says the third arg is `unsigned int`, but unistd.h says `int`. */
 HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
-    if(true_close_range == NULL) {
-        fprintf(stderr, "Calling close_range, but this platform does not provide this system call. ");
-        return -1;
-    }
-    if(!init_l) {
-        /* push back to cache, and delay the execution. */
-        if(close_range_buffer_cnt >= (sizeof close_range_buffer / sizeof close_range_buffer[0])) {
-            errno = ENOMEM;
-            return -1;
-        }
-        int i = close_range_buffer_cnt++;
-        close_range_buffer[i].first = first;
-        close_range_buffer[i].last = last;
-        close_range_buffer[i].flags = flags;
-        return errno = 0;
-    }
-    if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close_range(first, last, flags);
+	if(true_close_range == NULL) {
+		fprintf(stderr, "Calling close_range, but this platform does not provide this system call. ");
+		return -1;
+	}
+	if(!init_l) {
+		/* push back to cache, and delay the execution. */
+		if(close_range_buffer_cnt >= (sizeof close_range_buffer / sizeof close_range_buffer[0])) {
+			errno = ENOMEM;
+			return -1;
+		}
+		int i = close_range_buffer_cnt++;
+		close_range_buffer[i].first = first;
+		close_range_buffer[i].last = last;
+		close_range_buffer[i].flags = flags;
+		return errno = 0;
+	}
+	if(proxychains_resolver != DNSLF_RDNS_THREAD) return true_close_range(first, last, flags);
 
-    /* prevent rude programs (like ssh) from closing our pipes */
-    int res = 0, uerrno = 0, i;
-    int protected_fds[] = {req_pipefd[0], req_pipefd[1], resp_pipefd[0], resp_pipefd[1]};
-    intsort(protected_fds, 4);
-    /* We are skipping protected_fds while calling true_close_range()
-     * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop.
-     * [first, cut1-1] , [cut1+1, cut2-1] , [cut2+1, cut3-1]
-     * Finally, we delete the remaining sub-range, outside the loop. [cut3+1, tail]
-     */
-    int next_fd_to_close = first;
-    for(i = 0; i < 4; ++i) {
-        if(protected_fds[i] < first || protected_fds[i] > last)
-            continue;
-        int prev = (i == 0 || protected_fds[i-1] < first) ? first : protected_fds[i-1]+1;
-        if(prev != protected_fds[i]) {
-            if(-1 == true_close_range(prev, protected_fds[i]-1, flags)) {
-                res = -1;
-                uerrno = errno;
-            }
-        }
-        next_fd_to_close = protected_fds[i]+1;
-    }
-    if(next_fd_to_close <= last) {
-        if(-1 == true_close_range(next_fd_to_close, last, flags)) {
-            res = -1;
-            uerrno = errno;
-        }
-    }
-    errno = uerrno;
-    return res;
+	/* prevent rude programs (like ssh) from closing our pipes */
+	int res = 0, uerrno = 0, i;
+	int protected_fds[] = {req_pipefd[0], req_pipefd[1], resp_pipefd[0], resp_pipefd[1]};
+	intsort(protected_fds, 4);
+	/* We are skipping protected_fds while calling true_close_range()
+	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop.
+	 * [first, cut1-1] , [cut1+1, cut2-1] , [cut2+1, cut3-1]
+	 * Finally, we delete the remaining sub-range, outside the loop. [cut3+1, tail]
+	 */
+	int next_fd_to_close = first;
+	for(i = 0; i < 4; ++i) {
+		if(protected_fds[i] < first || protected_fds[i] > last)
+			continue;
+		int prev = (i == 0 || protected_fds[i-1] < first) ? first : protected_fds[i-1]+1;
+		if(prev != protected_fds[i]) {
+			if(-1 == true_close_range(prev, protected_fds[i]-1, flags)) {
+				res = -1;
+				uerrno = errno;
+			}
+		}
+		next_fd_to_close = protected_fds[i]+1;
+	}
+	if(next_fd_to_close <= last) {
+		if(-1 == true_close_range(next_fd_to_close, last, flags)) {
+			res = -1;
+			uerrno = errno;
+		}
+	}
+	errno = uerrno;
+	return res;
 }
 
 HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) {
-    INIT();
-    PFUNC();
+	INIT();
+	PFUNC();
 
-    int socktype = 0, flags = 0, ret = 0;
-    socklen_t optlen = 0;
-    ip_type dest_ip;
-    DEBUGDECL(char str[256]);
+	int socktype = 0, flags = 0, ret = 0;
+	socklen_t optlen = 0;
+	ip_type dest_ip;
+	DEBUGDECL(char str[256]);
 
-    struct in_addr *p_addr_in;
-    struct in6_addr *p_addr_in6;
-    dnat_arg *dnat = NULL;
-    unsigned short port;
-    size_t i;
-    int remote_dns_connect = 0;
-    optlen = sizeof(socktype);
-    sa_family_t fam = SOCKFAMILY(*addr);
-    getsockopt(sock, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
-    if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_STREAM))
-        return true_connect(sock, addr, len);
+	struct in_addr *p_addr_in;
+	struct in6_addr *p_addr_in6;
+	dnat_arg *dnat = NULL;
+	unsigned short port;
+	size_t i;
+	int remote_dns_connect = 0;
+	optlen = sizeof(socktype);
+	sa_family_t fam = SOCKFAMILY(*addr);
+	getsockopt(sock, SOL_SOCKET, SO_TYPE, &socktype, &optlen);
+	if(!((fam  == AF_INET || fam == AF_INET6) && socktype == SOCK_STREAM))
+		return true_connect(sock, addr, len);
 
-    int v6 = dest_ip.is_v6 = fam == AF_INET6;
+	int v6 = dest_ip.is_v6 = fam == AF_INET6;
 
-    p_addr_in = &((struct sockaddr_in *) addr)->sin_addr;
-    p_addr_in6 = &((struct sockaddr_in6 *) addr)->sin6_addr;
-    port = !v6 ? ntohs(((struct sockaddr_in *) addr)->sin_port)
-               : ntohs(((struct sockaddr_in6 *) addr)->sin6_port);
-    struct in_addr v4inv6;
-    if(v6 && is_v4inv6(p_addr_in6)) {
-        memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr[12], 4);
-        v6 = dest_ip.is_v6 = 0;
-        p_addr_in = &v4inv6;
-    }
-    if(!v6 && !memcmp(p_addr_in, "\0\0\0\0", 4)) {
-        errno = ECONNREFUSED;
-        return -1;
-    }
+	p_addr_in = &((struct sockaddr_in *) addr)->sin_addr;
+	p_addr_in6 = &((struct sockaddr_in6 *) addr)->sin6_addr;
+	port = !v6 ? ntohs(((struct sockaddr_in *) addr)->sin_port)
+	           : ntohs(((struct sockaddr_in6 *) addr)->sin6_port);
+	struct in_addr v4inv6;
+	if(v6 && is_v4inv6(p_addr_in6)) {
+		memcpy(&v4inv6.s_addr, &p_addr_in6->s6_addr[12], 4);
+		v6 = dest_ip.is_v6 = 0;
+		p_addr_in = &v4inv6;
+	}
+	if(!v6 && !memcmp(p_addr_in, "\0\0\0\0", 4)) {
+		errno = ECONNREFUSED;
+		return -1;
+	}
 
 //      PDEBUG("localnet: %s; ", inet_ntop(AF_INET,&in_addr_localnet, str, sizeof(str)));
 //      PDEBUG("netmask: %s; " , inet_ntop(AF_INET, &in_addr_netmask, str, sizeof(str)));
-    PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
-    PDEBUG("port: %d\n", port);
+	PDEBUG("target: %s\n", inet_ntop(v6 ? AF_INET6 : AF_INET, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, str, sizeof(str)));
+	PDEBUG("port: %d\n", port);
 
-    // check if connect called from proxydns
+	// check if connect called from proxydns
         remote_dns_connect = !v6 && (ntohl(p_addr_in->s_addr) >> 24 == remote_dns_subnet);
 
-    // more specific first
-    if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
-        if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
-            if(dnats[i].orig_port && (dnats[i].orig_port == port))
-                dnat = &dnats[i];
+	// more specific first
+	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
+			if(dnats[i].orig_port && (dnats[i].orig_port == port))
+				dnat = &dnats[i];
 
-    if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
-        if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
-            if(!dnats[i].orig_port)
-                dnat = &dnats[i];
+	if (!v6) for(i = 0; i < num_dnats && !remote_dns_connect && !dnat; i++)
+		if(dnats[i].orig_dst.s_addr == p_addr_in->s_addr)
+			if(!dnats[i].orig_port)
+				dnat = &dnats[i];
 
-    if (dnat) {
-        p_addr_in = &dnat->new_dst;
-        if (dnat->new_port)
-            port = dnat->new_port;
-    }
+	if (dnat) {
+		p_addr_in = &dnat->new_dst;
+		if (dnat->new_port)
+			port = dnat->new_port;
+	}
 
-    for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
-        if (localnet_addr[i].port && localnet_addr[i].port != port)
-            continue;
-        if (localnet_addr[i].family != (v6 ? AF_INET6 : AF_INET))
-            continue;
-        if (v6) {
-            size_t prefix_bytes = localnet_addr[i].in6_prefix / CHAR_BIT;
-            size_t prefix_bits = localnet_addr[i].in6_prefix % CHAR_BIT;
-            if (prefix_bytes && memcmp(p_addr_in6->s6_addr, localnet_addr[i].in6_addr.s6_addr, prefix_bytes) != 0)
-                continue;
-            if (prefix_bits && (p_addr_in6->s6_addr[prefix_bytes] ^ localnet_addr[i].in6_addr.s6_addr[prefix_bytes]) >> (CHAR_BIT - prefix_bits))
-                continue;
-        } else {
-            if((p_addr_in->s_addr ^ localnet_addr[i].in_addr.s_addr) & localnet_addr[i].in_mask.s_addr)
-                continue;
-        }
-        PDEBUG("accessing localnet using true_connect\n");
-        return true_connect(sock, addr, len);
-    }
+	for(i = 0; i < num_localnet_addr && !remote_dns_connect; i++) {
+		if (localnet_addr[i].port && localnet_addr[i].port != port)
+			continue;
+		if (localnet_addr[i].family != (v6 ? AF_INET6 : AF_INET))
+			continue;
+		if (v6) {
+			size_t prefix_bytes = localnet_addr[i].in6_prefix / CHAR_BIT;
+			size_t prefix_bits = localnet_addr[i].in6_prefix % CHAR_BIT;
+			if (prefix_bytes && memcmp(p_addr_in6->s6_addr, localnet_addr[i].in6_addr.s6_addr, prefix_bytes) != 0)
+				continue;
+			if (prefix_bits && (p_addr_in6->s6_addr[prefix_bytes] ^ localnet_addr[i].in6_addr.s6_addr[prefix_bytes]) >> (CHAR_BIT - prefix_bits))
+				continue;
+		} else {
+			if((p_addr_in->s_addr ^ localnet_addr[i].in_addr.s_addr) & localnet_addr[i].in_mask.s_addr)
+				continue;
+		}
+		PDEBUG("accessing localnet using true_connect\n");
+		return true_connect(sock, addr, len);
+	}
 
     int remote_connect = (remote_dns_connect||num_remotenet_addr==0);
     for(i = 0; i < num_remotenet_addr && !remote_connect; i++) {
@@ -852,138 +852,138 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
         return true_connect(sock, addr, len);
     }
 
-    flags = fcntl(sock, F_GETFL, 0);
-    if(flags & O_NONBLOCK)
-        fcntl(sock, F_SETFL, !O_NONBLOCK);
+	flags = fcntl(sock, F_GETFL, 0);
+	if(flags & O_NONBLOCK)
+		fcntl(sock, F_SETFL, !O_NONBLOCK);
 
-    memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
+	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
 
-    ret = connect_proxy_chain(sock,
-                  dest_ip,
-                  htons(port),
-                  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
+	ret = connect_proxy_chain(sock,
+				  dest_ip,
+				  htons(port),
+				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
 
-    fcntl(sock, F_SETFL, flags);
-    if(ret != SUCCESS)
-        errno = ECONNREFUSED;
-    return ret;
+	fcntl(sock, F_SETFL, flags);
+	if(ret != SUCCESS)
+		errno = ECONNREFUSED;
+	return ret;
 }
 
 #ifdef IS_SOLARIS
 HOOKFUNC(int, __xnet_connect, int sock, const struct sockaddr *addr, unsigned int len)
-    return connect(sock, addr, len);
+	return connect(sock, addr, len);
 }
 #endif
 
 static struct gethostbyname_data ghbndata;
 HOOKFUNC(struct hostent*, gethostbyname, const char *name) {
-    INIT();
-    PDEBUG("gethostbyname: %s\n", name);
+	INIT();
+	PDEBUG("gethostbyname: %s\n", name);
 
-    if(proxychains_resolver == DNSLF_FORKEXEC)
-        return proxy_gethostbyname_old(name);
-    else if(proxychains_resolver == DNSLF_LIBC)
-        return true_gethostbyname(name);
-    else
-        return proxy_gethostbyname(name, &ghbndata);
+	if(proxychains_resolver == DNSLF_FORKEXEC)
+		return proxy_gethostbyname_old(name);
+	else if(proxychains_resolver == DNSLF_LIBC)
+		return true_gethostbyname(name);
+	else
+		return proxy_gethostbyname(name, &ghbndata);
 
-    return NULL;
+	return NULL;
 }
 
 HOOKFUNC(int, getaddrinfo, const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) {
-    INIT();
-    PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
+	INIT();
+	PDEBUG("getaddrinfo: %s %s\n", node ? node : "null", service ? service : "null");
 
-    if(proxychains_resolver != DNSLF_LIBC)
-        return proxy_getaddrinfo(node, service, hints, res);
-    else
-        return true_getaddrinfo(node, service, hints, res);
+	if(proxychains_resolver != DNSLF_LIBC)
+		return proxy_getaddrinfo(node, service, hints, res);
+	else
+		return true_getaddrinfo(node, service, hints, res);
 }
 
 HOOKFUNC(void, freeaddrinfo, struct addrinfo *res) {
-    INIT();
-    PDEBUG("freeaddrinfo %p \n", (void *) res);
+	INIT();
+	PDEBUG("freeaddrinfo %p \n", (void *) res);
 
-    if(proxychains_resolver == DNSLF_LIBC)
-        true_freeaddrinfo(res);
-    else
-        proxy_freeaddrinfo(res);
+	if(proxychains_resolver == DNSLF_LIBC)
+		true_freeaddrinfo(res);
+	else
+		proxy_freeaddrinfo(res);
 }
 
 HOOKFUNC(int, getnameinfo, const struct sockaddr *sa, socklen_t salen,
-               char *host, GN_NODELEN_T hostlen, char *serv,
-               GN_SERVLEN_T servlen, GN_FLAGS_T flags)
+	           char *host, GN_NODELEN_T hostlen, char *serv,
+	           GN_SERVLEN_T servlen, GN_FLAGS_T flags)
 {
-    INIT();
-    PFUNC();
+	INIT();
+	PFUNC();
 
-    if(proxychains_resolver == DNSLF_LIBC) {
-        return true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
-    } else {
-        if(!salen || !(SOCKFAMILY(*sa) == AF_INET || SOCKFAMILY(*sa) == AF_INET6))
-            return EAI_FAMILY;
-        int v6 = SOCKFAMILY(*sa) == AF_INET6;
-        if(salen < (v6?sizeof(struct sockaddr_in6):sizeof(struct sockaddr_in)))
-            return EAI_FAMILY;
-        if(hostlen) {
-            unsigned char v4inv6buf[4];
-            const void *ip = v6 ? (void*)&((struct sockaddr_in6*)sa)->sin6_addr
-                                : (void*)&((struct sockaddr_in*)sa)->sin_addr;
-            unsigned scopeid = 0;
-            if(v6) {
-                if(is_v4inv6(&((struct sockaddr_in6*)sa)->sin6_addr)) {
-                    memcpy(v4inv6buf, &((struct sockaddr_in6*)sa)->sin6_addr.s6_addr[12], 4);
-                    ip = v4inv6buf;
-                    v6 = 0;
-                } else
-                    scopeid = ((struct sockaddr_in6 *)sa)->sin6_scope_id;
-            }
-            if(!inet_ntop(v6?AF_INET6:AF_INET,ip,host,hostlen))
-                return EAI_OVERFLOW;
-            if(scopeid) {
-                size_t l = strlen(host);
-                if(snprintf(host+l, hostlen-l, "%%%u", scopeid) >= hostlen-l)
-                    return EAI_OVERFLOW;
-            }
-        }
-        if(servlen) {
-            if(snprintf(serv, servlen, "%d", ntohs(SOCKPORT(*sa))) >= servlen)
-                return EAI_OVERFLOW;
-        }
-    }
-    return 0;
+	if(proxychains_resolver == DNSLF_LIBC) {
+		return true_getnameinfo(sa, salen, host, hostlen, serv, servlen, flags);
+	} else {
+		if(!salen || !(SOCKFAMILY(*sa) == AF_INET || SOCKFAMILY(*sa) == AF_INET6))
+			return EAI_FAMILY;
+		int v6 = SOCKFAMILY(*sa) == AF_INET6;
+		if(salen < (v6?sizeof(struct sockaddr_in6):sizeof(struct sockaddr_in)))
+			return EAI_FAMILY;
+		if(hostlen) {
+			unsigned char v4inv6buf[4];
+			const void *ip = v6 ? (void*)&((struct sockaddr_in6*)sa)->sin6_addr
+			                    : (void*)&((struct sockaddr_in*)sa)->sin_addr;
+			unsigned scopeid = 0;
+			if(v6) {
+				if(is_v4inv6(&((struct sockaddr_in6*)sa)->sin6_addr)) {
+					memcpy(v4inv6buf, &((struct sockaddr_in6*)sa)->sin6_addr.s6_addr[12], 4);
+					ip = v4inv6buf;
+					v6 = 0;
+				} else
+					scopeid = ((struct sockaddr_in6 *)sa)->sin6_scope_id;
+			}
+			if(!inet_ntop(v6?AF_INET6:AF_INET,ip,host,hostlen))
+				return EAI_OVERFLOW;
+			if(scopeid) {
+				size_t l = strlen(host);
+				if(snprintf(host+l, hostlen-l, "%%%u", scopeid) >= hostlen-l)
+					return EAI_OVERFLOW;
+			}
+		}
+		if(servlen) {
+			if(snprintf(serv, servlen, "%d", ntohs(SOCKPORT(*sa))) >= servlen)
+				return EAI_OVERFLOW;
+		}
+	}
+	return 0;
 }
 
 HOOKFUNC(struct hostent*, gethostbyaddr, const void *addr, socklen_t len, int type) {
-    INIT();
-    PDEBUG("TODO: proper gethostbyaddr hook\n");
+	INIT();
+	PDEBUG("TODO: proper gethostbyaddr hook\n");
 
-    static char buf[16];
-    static char ipv4[4];
-    static char *list[2];
-    static char *aliases[1];
-    static struct hostent he;
+	static char buf[16];
+	static char ipv4[4];
+	static char *list[2];
+	static char *aliases[1];
+	static struct hostent he;
 
-    if(proxychains_resolver == DNSLF_LIBC)
-        return true_gethostbyaddr(addr, len, type);
-    else {
+	if(proxychains_resolver == DNSLF_LIBC)
+		return true_gethostbyaddr(addr, len, type);
+	else {
 
-        PDEBUG("len %u\n", len);
-        if(len != 4)
-            return NULL;
-        he.h_name = buf;
-        memcpy(ipv4, addr, 4);
-        list[0] = ipv4;
-        list[1] = NULL;
-        he.h_addr_list = list;
-        he.h_addrtype = AF_INET;
-        aliases[0] = NULL;
-        he.h_aliases = aliases;
-        he.h_length = 4;
-        pc_stringfromipv4((unsigned char *) addr, buf);
-        return &he;
-    }
-    return NULL;
+		PDEBUG("len %u\n", len);
+		if(len != 4)
+			return NULL;
+		he.h_name = buf;
+		memcpy(ipv4, addr, 4);
+		list[0] = ipv4;
+		list[1] = NULL;
+		he.h_addr_list = list;
+		he.h_addrtype = AF_INET;
+		aliases[0] = NULL;
+		he.h_aliases = aliases;
+		he.h_length = 4;
+		pc_stringfromipv4((unsigned char *) addr, buf);
+		return &he;
+	}
+	return NULL;
 }
 
 #ifndef MSG_FASTOPEN
@@ -991,18 +991,18 @@ HOOKFUNC(struct hostent*, gethostbyaddr, const void *addr, socklen_t len, int ty
 #endif
 
 HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
-           const struct sockaddr *dest_addr, socklen_t addrlen) {
-    INIT();
-    PFUNC();
-    if (flags & MSG_FASTOPEN) {
-        if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
-            return -1;
-        }
-        dest_addr = NULL;
-        addrlen = 0;
-        flags &= ~MSG_FASTOPEN;
-    }
-    return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
+	       const struct sockaddr *dest_addr, socklen_t addrlen) {
+	INIT();
+	PFUNC();
+	if (flags & MSG_FASTOPEN) {
+		if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
+			return -1;
+		}
+		dest_addr = NULL;
+		addrlen = 0;
+		flags &= ~MSG_FASTOPEN;
+	}
+	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
 #ifdef MONTEREY_HOOKING
@@ -1015,18 +1015,18 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 #endif
 
 static void setup_hooks(void) {
-    SETUP_SYM(connect);
-    SETUP_SYM(sendto);
-    SETUP_SYM(gethostbyname);
-    SETUP_SYM(getaddrinfo);
-    SETUP_SYM(freeaddrinfo);
-    SETUP_SYM(gethostbyaddr);
-    SETUP_SYM(getnameinfo);
+	SETUP_SYM(connect);
+	SETUP_SYM(sendto);
+	SETUP_SYM(gethostbyname);
+	SETUP_SYM(getaddrinfo);
+	SETUP_SYM(freeaddrinfo);
+	SETUP_SYM(gethostbyaddr);
+	SETUP_SYM(getnameinfo);
 #ifdef IS_SOLARIS
-    SETUP_SYM(__xnet_connect);
+	SETUP_SYM(__xnet_connect);
 #endif
-    SETUP_SYM(close);
-    SETUP_SYM_OPTIONAL(close_range);
+	SETUP_SYM(close);
+	SETUP_SYM_OPTIONAL(close_range);
 }
 
 #ifdef MONTEREY_HOOKING
