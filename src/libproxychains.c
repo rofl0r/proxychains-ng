@@ -75,8 +75,10 @@ int proxychains_got_chain_data = 0;
 unsigned int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
 enum dns_lookup_flavor proxychains_resolver = DNSLF_LIBC;
-localaddr_arg localnet_addr[MAX_LOCALNET];
+addr_arg localnet_addr[MAX_LOCALNET];
+addr_arg remotenet_addr[MAX_REMOTENET];
 size_t num_localnet_addr = 0;
+size_t num_remotenet_addr = 0;
 dnat_arg dnats[MAX_DNAT];
 size_t num_dnats = 0;
 unsigned int remote_dns_subnet = 224;
@@ -115,7 +117,7 @@ typedef struct {
 	unsigned int first, last, flags;
 } close_range_args_t;
 
-/* If there is some `close` or `close_range` system call before do_init, 
+/* If there is some `close` or `close_range` system call before do_init,
    we buffer it, and actually execute them in do_init. */
 static int close_fds[16];
 static int close_fds_cnt = 0;
@@ -291,10 +293,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	char buf[1024], type[1024], host[1024], user[1024];
 	char *buff, *env, *p;
 	char local_addr_port[64], local_addr[64], local_netmask[32];
-<<<<<<< Updated upstream
 	char remote_addr_port[64], remote_addr[64], remote_netmask[32];
-=======
->>>>>>> Stashed changes
 	char dnat_orig_addr_port[32], dnat_new_addr_port[32];
 	char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
 	char rdnsd_addr[32], rdnsd_port[8];
@@ -479,7 +478,6 @@ inv_host:
 					} else {
 						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
 					}
-<<<<<<< Updated upstream
                 } else if(STR_STARTSWITH(buff, "remotenet")) {
                     char colon, extra, right_bracket[2];
                     unsigned short remote_port = 0, remote_prefix;
@@ -555,8 +553,6 @@ inv_host:
                     } else {
                         fprintf(stderr, "# of remotenet exceed %d.\n", MAX_REMOTENET);
                     }
-=======
->>>>>>> Stashed changes
 				} else if(STR_STARTSWITH(buff, "chain_len")) {
 					char *pc;
 					int len;
@@ -721,11 +717,7 @@ HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
 	int protected_fds[] = {req_pipefd[0], req_pipefd[1], resp_pipefd[0], resp_pipefd[1]};
 	intsort(protected_fds, 4);
 	/* We are skipping protected_fds while calling true_close_range()
-<<<<<<< Updated upstream
 	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop.
-=======
-	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop. 
->>>>>>> Stashed changes
 	 * [first, cut1-1] , [cut1+1, cut2-1] , [cut2+1, cut3-1]
 	 * Finally, we delete the remaining sub-range, outside the loop. [cut3+1, tail]
 	 */
@@ -835,13 +827,31 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 		return true_connect(sock, addr, len);
 	}
 
-	flags = fcntl(sock, F_GETFL, 0);
-	if(flags & O_NONBLOCK)
-		fcntl(sock, F_SETFL, !O_NONBLOCK);
+    int remote_connect = (remote_dns_connect||num_remotenet_addr==0);
+    for(i = 0; i < num_remotenet_addr && !remote_connect; i++) {
+        if (remotenet_addr[i].port && remotenet_addr[i].port != port)
+            continue;
+        if (remotenet_addr[i].family != (v6 ? AF_INET6 : AF_INET))
+            continue;
+        if (v6) {
+            size_t prefix_bytes = remotenet_addr[i].in6_prefix / CHAR_BIT;
+            size_t prefix_bits = remotenet_addr[i].in6_prefix % CHAR_BIT;
+            if (prefix_bytes && memcmp(p_addr_in6->s6_addr, remotenet_addr[i].in6_addr.s6_addr, prefix_bytes) != 0)
+                continue;
+            if (prefix_bits && (p_addr_in6->s6_addr[prefix_bytes] ^ remotenet_addr[i].in6_addr.s6_addr[prefix_bytes]) >> (CHAR_BIT - prefix_bits))
+                continue;
+        } else {
+            if((p_addr_in->s_addr ^ remotenet_addr[i].in_addr.s_addr) & remotenet_addr[i].in_mask.s_addr)
+                continue;
+        }
+        remote_connect = 1;
+    }
 
-	memcpy(dest_ip.addr.v6, v6 ? (void*)p_addr_in6 : (void*)p_addr_in, v6?16:4);
+    if( !remote_connect ) {
+        PDEBUG("accessing non-remotenet using true_connect\n");
+        return true_connect(sock, addr, len);
+    }
 
-<<<<<<< Updated upstream
 	flags = fcntl(sock, F_GETFL, 0);
 	if(flags & O_NONBLOCK)
 		fcntl(sock, F_SETFL, !O_NONBLOCK);
@@ -853,13 +863,6 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 				  htons(port),
 				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
 
-=======
-	ret = connect_proxy_chain(sock,
-				  dest_ip,
-				  htons(port),
-				  proxychains_pd, proxychains_proxy_count, proxychains_ct, proxychains_max_chain);
-
->>>>>>> Stashed changes
 	fcntl(sock, F_SETFL, flags);
 	if(ret != SUCCESS)
 		errno = ECONNREFUSED;
