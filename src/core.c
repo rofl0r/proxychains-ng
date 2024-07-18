@@ -986,7 +986,7 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	proxychains_write_log(TP " timeout\n");
 	error:
 	if(*fd != -1) {
-		close(*fd);
+		true_close(*fd);
 		*fd = -1;
 	}
 	return SOCKET_ERROR;
@@ -1087,7 +1087,7 @@ static int chain_step(int *ns, proxy_data * pfrom, proxy_data * pto) {
 	return retcode;
 err:
 	if(errmsg) proxychains_write_log(errmsg);
-	if(*ns != -1) close(*ns);
+	if(*ns != -1) true_close(*ns);
 	*ns = -1;
 	return retcode;
 }
@@ -1310,7 +1310,7 @@ int add_node_to_chain(proxy_data * pd, udp_relay_chain * chain){
 	}
 	//   Connect to the rest of the chain
 	while(tmp->next != NULL){
-		if(SUCCESS != chain_step(new_node->tcp_sockfd, &(tmp->pd), &(tmp->next->pd))){
+		if(SUCCESS != chain_step(&(new_node->tcp_sockfd), &(tmp->pd), &(tmp->next->pd))){
 			PDEBUG("chain step failed\n");
 			new_node->tcp_sockfd = -1;
 			goto err;
