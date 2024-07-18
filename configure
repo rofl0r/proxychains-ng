@@ -87,6 +87,7 @@ usage() {
 	echo "	to preload from current dir (possibly insecure, but handy)"
 	echo "--fat-binary : build for both i386 and x86_64 architectures on 64-bit Macs"
 	echo "--fat-binary-m1 : build for both arm64e and x86_64 architectures on M1 Macs"
+	echo "--fat-binary-m2 : build for arm64, arm64e and x86_64 architectures on M2+ Macs"
 	echo "--hookmethod=dlsym|dyld   hook method for osx. default: auto"
 	echo "  if OSX >= 12 is detected, dyld method will be used if auto."
 	echo "--help : show this text"
@@ -102,6 +103,7 @@ spliteq() {
 
 fat_binary=
 fat_binary_m1=
+fat_binary_m2=
 ignore_cve=no
 hookmethod=auto
 
@@ -118,6 +120,7 @@ parsearg() {
 	--hookmethod=*) hookmethod=`spliteq $1`;;
 	--fat-binary) fat_binary=1;;
 	--fat-binary-m1) fat_binary_m1=1;;
+	--fat-binary-m2) fat_binary_m2=1;;
 	--help) usage;;
 	esac
 }
@@ -289,6 +292,12 @@ if ismac ; then
 		echo "FAT_LDFLAGS=-arch arm64 -arch arm64e -arch x86_64">>config.mak
 		echo "FAT_BIN_LDFLAGS=-arch arm64 -arch x86_64">>config.mak
 	fi
+	if [ "$fat_binary_m2" = 1 ] ; then
+		echo "Configuring a fat binary for arm64[e] and x86_64"
+		echo "MAC_CFLAGS+=-arch arm64 -arch arm64e -arch x86_64">>config.mak
+		echo "FAT_LDFLAGS=-arch arm64 -arch arm64e -arch x86_64">>config.mak
+		echo "FAT_BIN_LDFLAGS=-arch arm64 -arch arm64e -arch x86_64">>config.mak
+	fi
 elif isbsd ; then
 	echo LIBDL=>>config.mak
 	echo "CFLAGS+=-DIS_BSD">>config.mak
@@ -302,3 +311,6 @@ elif ishaiku ; then
 fi
 
 echo "Done, now run $make_cmd && $make_cmd install"
+if [ "$fat_binary_m2" = 1 ] ; then
+echo "Don't forget to run csrutil disable and sudo nvram boot-args=-arm64e_preview_abi"
+fi

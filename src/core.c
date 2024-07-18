@@ -985,8 +985,10 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	error1:
 	proxychains_write_log(TP " timeout\n");
 	error:
-	if(*fd != -1)
-		true_close(*fd);
+	if(*fd != -1) {
+		close(*fd);
+		*fd = -1;
+	}
 	return SOCKET_ERROR;
 }
 
@@ -1044,9 +1046,9 @@ static unsigned int calc_alive(proxy_data * pd, unsigned int proxy_count) {
 }
 
 
-static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
+static int chain_step(int *ns, proxy_data * pfrom, proxy_data * pto) {
 	int retcode = -1;
-	char *hostname;
+	char *hostname, *errmsg = 0;
 	char hostname_buf[MSG_LEN_MAX];
 	char ip_buf[INET6_ADDRSTRLEN];
 	int v6 = pto->ip.is_v6;
@@ -1060,30 +1062,33 @@ static int chain_step(int ns, proxy_data * pfrom, proxy_data * pto) {
 	usenumericip:
 		if(!inet_ntop(v6?AF_INET6:AF_INET,pto->ip.addr.v6,ip_buf,sizeof ip_buf)) {
 			pto->ps = DOWN_STATE;
-			proxychains_write_log("<--ip conversion error!\n");
-			true_close(ns);
-			return SOCKET_ERROR;
+			errmsg = "<--ip conversion error!\n";
+			retcode = SOCKET_ERROR;
+			goto err;
 		}
 		hostname = ip_buf;
 	}
 
 	proxychains_write_log(TP " %s:%d ", hostname, htons(pto->port));
-	retcode = tunnel_to(ns, pto->ip, pto->port, pfrom->pt, pfrom->user, pfrom->pass);
+	retcode = tunnel_to(*ns, pto->ip, pto->port, pfrom->pt, pfrom->user, pfrom->pass);
 	switch (retcode) {
 		case SUCCESS:
 			pto->ps = BUSY_STATE;
 			break;
 		case BLOCKED:
 			pto->ps = BLOCKED_STATE;
-			proxychains_write_log("<--denied\n");
-			true_close(ns);
-			break;
+			errmsg = "<--denied\n";
+			goto err;
 		case SOCKET_ERROR:
 			pto->ps = DOWN_STATE;
-			proxychains_write_log("<--socket error or timeout!\n");
-			true_close(ns);
-			break;
+			errmsg = "<--socket error or timeout!\n";
+			goto err;
 	}
+	return retcode;
+err:
+	if(errmsg) proxychains_write_log(errmsg);
+	if(*ns != -1) close(*ns);
+	*ns = -1;
 	return retcode;
 }
 
@@ -1120,7 +1125,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				p2 = select_proxy(FIFOLY, pd, proxy_count, &offset);
 				if(!p2)
 					break;
-				if(SUCCESS != chain_step(ns, p1, p2)) {
+				if(SUCCESS != chain_step(&ns, p1, p2)) {
 					PDEBUG("GOTO AGAIN 1\n");
 					goto again;
 				}
@@ -1129,7 +1134,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
-			if(SUCCESS != chain_step(ns, p1, p3))
+			if(SUCCESS != chain_step(&ns, p1, p3))
 				goto error;
 			break;
 
@@ -1167,7 +1172,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 					/* Try from the beginning to where we started */
 					offset = 0;
 					continue;
-				} else if(SUCCESS != chain_step(ns, p1, p2)) {
+				} else if(SUCCESS != chain_step(&ns, p1, p2)) {
 					PDEBUG("GOTO AGAIN 1\n");
 					goto again;
 				} else
@@ -1179,7 +1184,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			p3->port = target_port;
 			proxychains_proxy_offset = offset+1;
 			PDEBUG("pd_offset = %d, curr_len = %d\n", proxychains_proxy_offset, curr_len);
-			if(SUCCESS != chain_step(ns, p1, p3))
+			if(SUCCESS != chain_step(&ns, p1, p3))
 				goto error;
 			break;
 
@@ -1197,7 +1202,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			while(offset < proxy_count) {
 				if(!(p2 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
 					break;
-				if(SUCCESS != chain_step(ns, p1, p2)) {
+				if(SUCCESS != chain_step(&ns, p1, p2)) {
 					PDEBUG("chain_step failed\n");
 					goto error_strict;
 				}
@@ -1206,7 +1211,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
-			if(SUCCESS != chain_step(ns, p1, p3))
+			if(SUCCESS != chain_step(&ns, p1, p3))
 				goto error;
 			break;
 
@@ -1222,7 +1227,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			while(++curr_len < max_chain) {
 				if(!(p2 = select_proxy(RANDOMLY, pd, proxy_count, &offset)))
 					goto error_more;
-				if(SUCCESS != chain_step(ns, p1, p2)) {
+				if(SUCCESS != chain_step(&ns, p1, p2)) {
 					PDEBUG("GOTO AGAIN 2\n");
 					goto again;
 				}
@@ -1231,7 +1236,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
 			p3->port = target_port;
-			if(SUCCESS != chain_step(ns, p1, p3))
+			if(SUCCESS != chain_step(&ns, p1, p3))
 				goto error;
 
 	}
