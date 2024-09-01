@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <uv.h> //Needed to hook uv_close()
 
 #ifndef __CORE_HEADER
 #define __CORE_HEADER
@@ -64,6 +65,7 @@ typedef enum {
 	FIFOLY
 } select_type;
 
+
 typedef struct {
 	sa_family_t family;
 	unsigned short port;
@@ -93,6 +95,55 @@ typedef struct {
 	char pass[256];
 } proxy_data;
 
+
+
+typedef enum {
+	ATYP_V4 = 0x01,
+	ATYP_V6 = 0x04,
+	ATYP_DOM = 0x03
+} ATYP;
+
+typedef struct{
+	union {
+		ip_type4 v4;
+		unsigned char v6[16];
+		struct {
+			char len;
+			char name[255];
+		} dom;
+	} addr ;
+	ATYP atyp;
+} socks5_addr;
+
+/* A structure to hold necessary information about an UDP relay server that has been set up 
+with a UDP_ASSOCIATE command issued on the tcp_sockfd */
+typedef struct s_udp_relay_node {
+	int tcp_sockfd;	// the tcp socket on which the UDP_ASSOCIATE command has been issued. Closing this fd closes the udp relay.
+	proxy_data pd; // the associated SOCKS5 server
+	ip_type bnd_addr; // the BND_ADDR returned by the udp relay server in the response to the UDP_ASSOCIATE command. 
+	unsigned short bnd_port; // the BND_PORT returned by the udp relay server in the response to the UDP_ASSOCIATE command.
+	ip_type dst_addr; // ?? the DST_ADDR sent in the UDP_ASSOCIATE command.
+	unsigned short dst_port; // ?? the DST_PORT sent in the UDP_ASSOCIATE command.
+	struct s_udp_relay_node * prev;
+	struct s_udp_relay_node * next;
+} udp_relay_node;
+
+
+/* A structure to hold the chain of udp relay servers assiociated with a client socket */
+typedef struct s_udp_relay_chain {
+	int sockfd; // the client socket for which the chain of relays has been set up
+	udp_relay_node * head; // head of the linked list of udp_relay_node
+	struct sockaddr* connected_peer_addr; // used to store the address of the peer which the sockfd is connected to (in case connect() is used on the socket)
+	socklen_t connected_peer_addr_len;
+	struct s_udp_relay_chain * prev;
+	struct s_udp_relay_chain * next;
+} udp_relay_chain;
+
+typedef struct {
+	udp_relay_chain * head;
+	udp_relay_chain * tail;
+} udp_relay_chain_list;
+
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
 			 proxy_data * pd, unsigned int proxy_count, chain_type ct,
 			 unsigned int max_chain );
@@ -101,6 +152,7 @@ void proxychains_write_log(char *str, ...);
 
 typedef int (*close_t)(int);
 typedef int (*close_range_t)(unsigned, unsigned, int);
+typedef void (*uv_close_t)(uv_handle_t* , uv_close_cb);
 typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
 typedef struct hostent* (*gethostbyname_t)(const char *);
 typedef void (*freeaddrinfo_t)(struct addrinfo *);
@@ -115,6 +167,19 @@ typedef int (*getnameinfo_t) (const struct sockaddr *, socklen_t, char *,
 typedef ssize_t (*sendto_t) (int sockfd, const void *buf, size_t len, int flags,
 			     const struct sockaddr *dest_addr, socklen_t addrlen);
 
+typedef ssize_t (*send_t) (int sockfd, const void *buf, size_t len, int flags);
+
+typedef ssize_t (*recv_t) (int sockfd, void *buf, size_t len, int flags);
+
+typedef ssize_t (*recvfrom_t) (int sockfd, void *buf, size_t len, int flags, 
+			struct sockaddr *src_addr, socklen_t *addrlen);
+
+typedef ssize_t (*sendmsg_t) (int sockfd, const struct msghdr *msg, int flags);
+typedef int (*sendmmsg_t) (int sockfd, struct mmsghdr* msgvec, unsigned int vlen, int flags);
+typedef ssize_t (*recvmsg_t) (int sockfd, struct msghdr *msg, int flags);
+typedef int (*getpeername_t) (int sockfd, struct sockaddr *restrict addr, socklen_t *restrict addrlen);
+typedef ssize_t (*read_t)(int fd, void* buf, size_t count);
+typedef ssize_t (*write_t)(int fd, const void* buf, size_t count);
 
 
 extern connect_t true_connect;
@@ -123,6 +188,18 @@ extern getaddrinfo_t true_getaddrinfo;
 extern freeaddrinfo_t true_freeaddrinfo;
 extern getnameinfo_t true_getnameinfo;
 extern gethostbyaddr_t true_gethostbyaddr;
+extern sendto_t true_sendto;
+extern recvfrom_t true_recvfrom;
+extern recv_t true_recv;
+extern send_t true_send;
+extern sendmsg_t true_sendmsg;
+extern sendmmsg_t true_sendmmsg;
+extern recvmsg_t true_recvmsg;
+extern getpeername_t true_getpeername;
+extern read_t true_read;
+extern write_t true_write;
+extern close_t true_close;
+extern uv_close_t true_uv_close;
 
 struct gethostbyname_data {
 	struct hostent hostent_space;
@@ -140,6 +217,23 @@ void proxy_freeaddrinfo(struct addrinfo *res);
 
 void core_initialize(void);
 void core_unload(void);
+
+static int udp_associate(int sock, ip_type * dst_addr, unsigned short dst_port, ip_type *bnd_addr, unsigned short *bnd_port, char *user, char *pass);
+udp_relay_chain* get_relay_chain(udp_relay_chain_list chains_list, int sockfd);
+void del_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* chain);
+void add_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* new_chain);
+int free_relay_chain_contents(udp_relay_chain* chain);
+udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, chain_type ct, unsigned int max_chains);
+int send_udp_packet(int sockfd, udp_relay_chain chain, ip_type target_ip, unsigned short target_port, char frag, char * data, unsigned int data_len, int flags);
+int receive_udp_packet(int sockfd, udp_relay_chain chain, ip_type* src_addr, unsigned short* src_port, char* data, unsigned int data_len  );
+size_t get_msg_iov_total_len(struct iovec* iov, size_t iov_len);
+size_t write_buf_to_iov(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len);
+size_t write_iov_to_buf(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len);
+int is_from_chain_head(udp_relay_chain chain, struct sockaddr* src_addr);
+int unsocksify_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void** udp_data);
+int socksify_udp_packet(void* udp_data, size_t udp_data_len, udp_relay_chain chain, ip_type dst_ip, unsigned short dst_port, void* buffer, size_t* buffer_len);
+int encapsulate_udp_packet(udp_relay_chain chain, socks5_addr dst_addr, unsigned short dst_port, void* buffer, size_t* buffer_len);
+void set_connected_peer_addr(udp_relay_chain* chain, struct sockaddr* addr, socklen_t addrlen);
 
 #include "debug.h"
 

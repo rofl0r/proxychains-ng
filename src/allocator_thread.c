@@ -174,7 +174,7 @@ static int trywrite(int fd, void* buf, size_t bytes) {
 	ssize_t ret;
 	unsigned char *out = buf;
 again:
-	ret = write(fd, out, bytes);
+	ret = true_write(fd, out, bytes);
 	switch(ret) {
 		case -1:
 			if(errno == EINTR) goto again;
@@ -200,7 +200,7 @@ static int tryread(int fd, void* buf, size_t bytes) {
 	ssize_t ret;
 	unsigned char *out = buf;
 again:
-	ret = read(fd, out, bytes);
+	ret = true_read(fd, out, bytes);
 	switch(ret) {
 		case -1:
 			if(errno == EINTR) goto again;
@@ -350,11 +350,11 @@ void at_init(void) {
 void at_close(void) {
 	PFUNC();
 	const int msg = ATM_EXIT;
-	write(req_pipefd[1], &msg, sizeof(int));
+	true_write(req_pipefd[1], &msg, sizeof(int));
 	pthread_join(allocator_thread, NULL);
-	close(req_pipefd[0]);
-	close(req_pipefd[1]);
-	close(resp_pipefd[0]);
-	close(resp_pipefd[1]);
+	true_close(req_pipefd[0]);
+	true_close(req_pipefd[1]);
+	true_close(resp_pipefd[0]);
+	true_close(resp_pipefd[1]);
 	MUTEX_DESTROY(internal_ips_lock);
 }
