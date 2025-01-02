@@ -767,7 +767,7 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 }
 
 #ifdef IS_SOLARIS
-HOOKFUNC(int, __xnet_connect, int sock, const struct sockaddr *addr, unsigned int len)
+HOOKFUNC(int, __xnet_connect, int sock, const struct sockaddr *addr, unsigned int len) {
 	return connect(sock, addr, len);
 }
 #endif
