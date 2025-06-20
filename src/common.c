@@ -81,52 +81,45 @@ static int check_path(char *path) {
 }
 
 char *get_config_path(char* default_path, char* pbuf, size_t bufsize) {
-	char buf[512];
-	// top priority: user defined path
-	char *path = default_path;
-	if(check_path(path))
-		goto have;
+    char buf[512];
+    char *path = NULL;
 
-	// priority 1: env var PROXYCHAINS_CONF_FILE
-	path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
-	if(check_path(path))
-		goto have;
+    // top priority: user-defined path
+    if (default_path && check_path(default_path)) {
+        return default_path;
+    }
 
-	// priority 2; proxychains conf in actual dir
-	path = getcwd(buf, sizeof(buf));
-	snprintf(pbuf, bufsize, "%s/%s", path, PROXYCHAINS_CONF_FILE);
-	path = pbuf;
-	if(check_path(path))
-		goto have;
+    // priority 1: environment override
+    path = getenv(PROXYCHAINS_CONF_FILE_ENV_VAR);
+    if (check_path(path)) {
+        return path;
+    }
 
-	// priority 3; $HOME/.proxychains/proxychains.conf
-	path = getenv("HOME");
-	snprintf(pbuf, bufsize, "%s/.proxychains/%s", path, PROXYCHAINS_CONF_FILE);
-	path = pbuf;
-	if(check_path(path))
-		goto have;
-    
-    // priority 3b: ~/config/settings/proxychains.conf (for haiku)
-	path = getenv("HOME");
-	snprintf(pbuf, bufsize, "%s/config/settings/%s", path, PROXYCHAINS_CONF_FILE);
-	path = pbuf;
-	if(check_path(path))
-		goto have;
+    // priority 2: XDG_CONFIG_HOME or fallback to ~/.config
+    const char *xdg_config_home = getenv("XDG_CONFIG_HOME");
+    const char *home = getenv("HOME");
+    if (xdg_config_home) {
+        snprintf(pbuf, bufsize, "%s/proxychains/%s", xdg_config_home, PROXYCHAINS_CONF_FILE);
+        if (check_path(pbuf)) return pbuf;
+    } else if (home) {
+        snprintf(pbuf, bufsize, "%s/.config/proxychains/%s", home, PROXYCHAINS_CONF_FILE);
+        if (check_path(pbuf)) return pbuf;
+    }
 
-	// priority 4: $SYSCONFDIR/proxychains.conf
-	path = SYSCONFDIR "/" PROXYCHAINS_CONF_FILE;
-	if(check_path(path))
-		goto have;
+    // priority 3: Haiku-style config location
+    if (home) {
+        snprintf(pbuf, bufsize, "%s/config/settings/%s", home, PROXYCHAINS_CONF_FILE);
+        if (check_path(pbuf)) return pbuf;
+    }
 
-	// priority 5: /etc/proxychains.conf
-	path = "/etc/" PROXYCHAINS_CONF_FILE;
-	if(check_path(path))
-		goto have;
+    // priority 4: system config via build-time sysconfdir
+    path = SYSCONFDIR "/" PROXYCHAINS_CONF_FILE;
+    if (check_path(path)) return path;
 
-	perror("couldnt find configuration file");
-	exit(1);
+    // priority 5: final fallback
+    path = "/etc/" PROXYCHAINS_CONF_FILE;
+    if (check_path(path)) return path;
 
-	return NULL;
-	have:
-	return path;
+    perror("could not find configuration file");
+    exit(1);
 }
