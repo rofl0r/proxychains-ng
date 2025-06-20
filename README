@@ -210,12 +210,15 @@ Some cool features:
 Configuration:
 --------------
 
-proxychains looks for config file in following order:
-1)	file listed in environment variable PROXYCHAINS_CONF_FILE or
-	provided as a -f argument to proxychains script or binary.
-2)	./proxychains.conf
-3)	$(HOME)/.proxychains/proxychains.conf
-4)	$(sysconfdir)/proxychains.conf  **
+ProxyChains looks for the configuration file in the following order:
+
+1) The path specified via the `PROXYCHAINS_CONF_FILE` environment variable,  
+   or provided with the `-f` argument to the proxychains script or binary.
+2) `$XDG_CONFIG_HOME/proxychains/proxychains.conf`  
+   If `XDG_CONFIG_HOME` is not set, fallback to:  
+   `$HOME/.config/proxychains/proxychains.conf`
+3) (Haiku only) `$HOME/config/settings/proxychains.conf`
+4) `$(sysconfdir)/proxychains.conf`  
 
 ** usually /etc/proxychains.conf
 
