@@ -241,7 +241,7 @@ static int proxy_from_string(const char *proxystring,
 		ul = p-u;
 		p++;
 		pl = at-p;
-		if(proxytype == RS_PT_SOCKS5 && (ul > 255 || pl > 255))
+		if(ul > 255 || pl > 255)
 			return 0;
 		memcpy(user_buf, u, ul);
 		user_buf[ul]=0;
