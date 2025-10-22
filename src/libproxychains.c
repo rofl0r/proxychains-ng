@@ -243,7 +243,7 @@ static int proxy_from_string(const char *proxystring,
 		ul = p-u;
 		p++;
 		pl = at-p;
-		if(proxytype == RS_PT_SOCKS5 && (ul > 255 || pl > 255))
+		if(ul > 255 || pl > 255)
 			return 0;
 		memcpy(user_buf, u, ul);
 		user_buf[ul]=0;
@@ -870,7 +870,7 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 }
 
 #ifdef IS_SOLARIS
-HOOKFUNC(int, __xnet_connect, int sock, const struct sockaddr *addr, unsigned int len)
+HOOKFUNC(int, __xnet_connect, int sock, const struct sockaddr *addr, unsigned int len) {
 	return connect(sock, addr, len);
 }
 #endif

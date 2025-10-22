@@ -999,7 +999,7 @@ err_nn:
 	} else if(!node && !(hints->ai_flags & AI_PASSIVE)) {
 		af = ((struct sockaddr_in *) &space->sockaddr_space)->sin_family = AF_INET;
 		memcpy(&((struct sockaddr_in *) &space->sockaddr_space)->sin_addr,
-		       (char[]){127,0,0,1}, 4);
+		       "\177\0\0\1", 4);
 	}
 	if(service) mygetservbyname_r(service, NULL, &se_buf, buf, sizeof(buf), &se);
 
