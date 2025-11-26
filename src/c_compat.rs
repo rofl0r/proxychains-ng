@@ -68,8 +68,8 @@ fn init_compat_pipes() {
 pub extern "C" fn proxychains_get_version() -> *const c_char {
     // Keep a static, null-terminated C string. Match the C project's
     // VERSION so runtime logs show the same version (proxychains-C uses
-    // the top-level VERSION file which currently contains "4.17").
-    static VER: &[u8] = b"4.17\0";
+    // the top-level VERSION file which currently contains "5.0.0").
+    static VER: &[u8] = b"5.0.0\0";
     VER.as_ptr() as *const c_char
 }
 
