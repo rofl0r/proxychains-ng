@@ -16,7 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+    - name: Install Toolchain
+      run: rustup toolchain install nightly
+    - name: Build release
+      run: rustup run nightly cargo build -p proxychains_rs --release
     - name: Run tests
       run: cargo test --verbose
