@@ -1,5 +1,3 @@
-proxychains4
-proxychains4-daemon
 *.bz2
 *.xz
 *.o
@@ -13,8 +11,3 @@ proxychains4-daemon
 *~
 *.patch
 version.h
-
-# Autoconf stuff 
-libtool
-config.*
-stamp-h
