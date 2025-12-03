@@ -123,11 +123,6 @@ static void append_to_list(char *list, size_t max_size, const char *item) {
 	strncat(list, item, max_size - strlen(list) - 1);
 }
 
-/* Helper to check if arg starts with prefix */
-static int arg_starts_with(const char *arg, const char *prefix) {
-	return strncmp(arg, prefix, strlen(prefix)) == 0;
-}
-
 /**
  * Parse command line arguments and return CLI options
  * Returns: 0 on success, 1 on error (usage shown), 2 on help
