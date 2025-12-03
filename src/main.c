@@ -67,7 +67,8 @@ static int usage(char **argv) {
 	printf("  -q, --quiet                  Quiet mode (no output)\n");
 	printf("      --no-quiet               Disable quiet mode\n");
 	printf("  -D, --debug-level <N>        Debug level (0=silent, 1=basic, "
-			 "2=verbose)\n\n");
+			 "2=verbose)\n");
+	printf("      --show-config            Print effective configuration then exit. Program/args optional\n\n");
 
 	printf("Help:\n");
 	printf("  -h, --help                   Show this help\n\n");
@@ -164,6 +165,13 @@ static int parse_arguments(int argc, char *argv[], cli_options *opts,
 			*start_argv += 2;
 		} else if (!strcmp(arg, "--ignore-config-file")) {
 			opts->ignore_config_file = 1;
+			(*start_argv)++;
+		}
+
+		/* Show config */
+		else if (!strcmp(arg, "--show-config")) {
+			opts->has_show_config = 1;
+			opts->show_config = 1;
 			(*start_argv)++;
 		}
 
@@ -271,8 +279,12 @@ static int parse_arguments(int argc, char *argv[], cli_options *opts,
 		}
 	}
 
-	/* Check if program name is provided */
+	/* Check if program name is provided; allow missing program if --show-config */
 	if (*start_argv >= argc) {
+		if (opts->has_show_config && opts->show_config) {
+			/* show-config only mode; we accept no program */
+			return 0;
+		}
 		return 1;
 	}
 
@@ -365,6 +377,43 @@ int main(int argc, char *argv[]) {
 			/* append previous LD_PRELOAD content, if existent */
 			old_val ? LD_PRELOAD_SEP : "", old_val ? old_val : "");
 	putenv(buf);
+		/* If no program was provided, but --show-config was set, execute a helper to load the
+			 preloaded library so it can print the configuration and exit.
+
+			 Rationale and behavior:
+			 - We try to exec the standard helper `true` (which is usually present in PATH). This
+				 runs a short binary that immediately exits; the LD_PRELOAD (or equivalent) will
+				 run the library constructor before the helper executes, ensuring the config is
+				 printed by the library.
+			 - If `true` isn't available (path might be minimal or on POSIX systems where it's missing),
+				 we fall back to exec'ing the current program (argv[0]) with no arguments. This also
+				 causes the runtime to load our shared library (via LD_PRELOAD) and the constructor will
+				 print the configuration. The exec will only return if it fails.
+
+			 Note: Executing the current program again (no args) is safe because the library constructor
+			 will print the config and exit; main won't be run (or will exit quickly) because the
+			 constructor calls _exit(0) in `get_chain_data()` when --show-config is set.
+		*/
+		if (start_argv >= argc && opts.has_show_config && opts.show_config) {
+				/* Try the common helper 'true' first */
+				char *true_argv[2] = {"true", NULL};
+				execvp(true_argv[0], true_argv);
+				/* If we get here, execvp failed; try exec'ing this program itself with no args */
+				if (errno != ENOENT) {
+						/* If the exec of 'true' failed for any reason other than missing binary, report it */
+						fprintf(stderr, "proxychains: helper exec failed ('%s'): ", true_argv[0]);
+						perror("");
+				}
+				/* Try to run the launcher itself with argc==1 (argv[0] only). This will still run the
+					 library constructor (LD_PRELOAD) and print the config as requested. */
+				char *self_argv[2] = {argv[0], NULL};
+				execvp(self_argv[0], self_argv);
+				/* If we reach here, exec failed; print a helpful error and exit */
+				fprintf(stderr, "proxychains: can't load helper or re-exec self ('%s').", self_argv[0]);
+				perror(" (hint: check PATH and that the executable exists)");
+				return EXIT_FAILURE;
+		}
+
 	execvp(argv[start_argv], &argv[start_argv]);
 	fprintf(stderr, "proxychains: can't load process '%s'.", argv[start_argv]);
 	perror(" (hint: it's probably a typo)");

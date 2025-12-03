@@ -433,6 +433,79 @@ static int proxy_parse_callback(const char *token, void *ctx) {
 	return 0;
 }
 
+/* If library is preloaded but no network call occurs, ensure --show-config still triggers.
+ * Use constructor to run early in the process startup. */
+static void __attribute__((constructor)) show_config_constructor(void) {
+	cli_options cli_opts;
+	proxy_data pd_local[MAX_CHAIN];
+	unsigned count_local = 0;
+	chain_type ct_local = DYNAMIC_TYPE;
+
+	/* Read the CLI env options */
+	deserialize_cli_options_from_env(&cli_opts);
+	if(cli_opts.has_show_config && cli_opts.show_config) {
+		/* call get_chain_data which will handle printing and exiting */
+		get_chain_data(pd_local, &count_local, &ct_local);
+		/* if for some reason we returned here, exit */
+		_exit(0);
+	}
+}
+
+/* Print the effective configuration (merged file + CLI) */
+static void print_effective_config(const cli_options *cli_opts, proxy_data *pd, unsigned int count, chain_type ct) {
+	unsigned i;
+	const char *mode_str = "unknown";
+	switch(ct) {
+		case STRICT_TYPE: mode_str = "strict"; break;
+		case DYNAMIC_TYPE: mode_str = "dynamic"; break;
+		case RANDOM_TYPE: mode_str = "random"; break;
+		case ROUND_ROBIN_TYPE: mode_str = "round_robin"; break;
+	}
+	printf("=== proxychains-ng effective configuration ===\n");
+	printf("chain: %s\n", mode_str);
+	printf("chain_len: %u (max)\n", proxychains_max_chain);
+	printf("dns: %s\n", rdns_resolver_string(proxychains_resolver));
+	printf("quiet: %s\n", proxychains_quiet_mode ? "true" : "false");
+	printf("tcp_read_timeout: %d ms\n", tcp_read_time_out);
+	printf("tcp_connect_timeout: %d ms\n", tcp_connect_time_out);
+	printf("remote_dns_subnet: %u\n", remote_dns_subnet);
+	printf("localnets: %zu entries\n", num_localnet_addr);
+	for(i=0;i<num_localnet_addr;i++) {
+		if(localnet_addr[i].family == AF_INET) {
+			char buf[64], maskbuf[64];
+			inet_ntop(AF_INET, &localnet_addr[i].in_addr, buf, sizeof(buf));
+			inet_ntop(AF_INET, &localnet_addr[i].in_mask, maskbuf, sizeof(maskbuf));
+			if(localnet_addr[i].port) {
+				printf("  - %s:%u/%s\n", buf, localnet_addr[i].port, maskbuf);
+			} else {
+				printf("  - %s/%s\n", buf, maskbuf);
+			}
+		} else {
+			char buf[128];
+			inet_ntop(AF_INET6, &localnet_addr[i].in6_addr, buf, sizeof(buf));
+			if(localnet_addr[i].port) {
+				printf("  - [%s]:%u/%u\n", buf, localnet_addr[i].port, localnet_addr[i].in6_prefix);
+			} else {
+				printf("  - [%s]/%u\n", buf, localnet_addr[i].in6_prefix);
+			}
+		}
+	}
+	printf("dnat rules: %zu entries\n", num_dnats);
+	for(i=0;i<num_dnats;i++) {
+		char src[32], dst[32];
+		inet_ntop(AF_INET, &dnats[i].orig_dst, src, sizeof(src));
+		inet_ntop(AF_INET, &dnats[i].new_dst, dst, sizeof(dst));
+		printf("  - %s:%d -> %s:%d\n", src, dnats[i].orig_port, dst, dnats[i].new_port);
+	}
+	printf("proxies: %u entries\n", count);
+	for(i=0;i<count;i++) {
+		char hostbuf[128];
+		inet_ntop(pd[i].ip.is_v6 ? AF_INET6 : AF_INET, pd[i].ip.is_v6 ? (void*)&pd[i].ip.addr.v6 : (void*)&pd[i].ip.addr.v4, hostbuf, sizeof(hostbuf));
+		printf("  - %s %s:%u user=%s\n", pd[i].pt == SOCKS5_TYPE ? "socks5" : pd[i].pt == SOCKS4_TYPE ? "socks4" : pd[i].pt == HTTP_TYPE ? "http" : pd[i].pt == RAW_TYPE ? "raw" : "unknown", hostbuf, ntohs(pd[i].port), pd[i].user[0] ? pd[i].user : "(none)");
+	}
+	printf("=============================================\n");
+}
+
 /* get configuration from config file */
 static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
 	int count = 0, port_n = 0, list = 0;
@@ -1030,6 +1103,14 @@ apply_cli_overrides:
 	*proxy_count = count;
 	proxychains_got_chain_data = 1;
 	PDEBUG("proxy_dns: %s\n", rdns_resolver_string(proxychains_resolver));
+	/* Print effective configuration if requested and exit */
+	if(cli_opts.has_show_config && cli_opts.show_config) {
+		print_effective_config(&cli_opts, pd, count, *ct);
+		/* Avoid running the target program; exit here in the child process */
+		fflush(stdout);
+		fflush(stderr);
+		_exit(0);
+	}
 }
 
 /*******  HOOK FUNCTIONS  *******/

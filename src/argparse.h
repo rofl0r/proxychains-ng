@@ -32,6 +32,7 @@ typedef enum {
 #define PROXYCHAINS_CLI_LOCALNET "PROXYCHAINS_CLI_LOCALNET"
 #define PROXYCHAINS_CLI_DNAT "PROXYCHAINS_CLI_DNAT"
 #define PROXYCHAINS_CLI_PROXY "PROXYCHAINS_CLI_PROXY"
+#define PROXYCHAINS_CLI_SHOW_CONFIG "PROXYCHAINS_CLI_SHOW_CONFIG"
 
 /* Maximum lengths for string buffers */
 #define MAX_CLI_STRING 4096
@@ -79,6 +80,10 @@ typedef struct {
 
   int has_proxy;
   char proxy_list[MAX_CLI_STRING];
+
+  /* Show config flag */
+  int has_show_config;
+  int show_config;
 } cli_options;
 
 /* Function declarations */

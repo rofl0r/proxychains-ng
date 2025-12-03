@@ -82,6 +82,11 @@ void serialize_cli_options_to_env(const cli_options *opts) {
   if (opts->has_proxy) {
     setenv(PROXYCHAINS_CLI_PROXY, opts->proxy_list, 1);
   }
+
+  /* Show config */
+  if (opts->has_show_config) {
+    setenv(PROXYCHAINS_CLI_SHOW_CONFIG, opts->show_config ? "1" : "0", 1);
+  }
 }
 
 /* Deserialize CLI options from environment variables */
@@ -172,6 +177,11 @@ void deserialize_cli_options_from_env(cli_options *opts) {
   if (env) {
     opts->has_proxy = 1;
     strncpy(opts->proxy_list, env, sizeof(opts->proxy_list) - 1);
+  }
+  env = getenv(PROXYCHAINS_CLI_SHOW_CONFIG);
+  if (env) {
+    opts->has_show_config = 1;
+    opts->show_config = (*env == '1');
   }
 }
 
