@@ -14,7 +14,7 @@ libdir = $(prefix)/lib
 sysconfdir = $(prefix)/etc
 zshcompletiondir = $(prefix)/share/zsh/site-functions
 
-OBJS = src/common.o src/main.o
+OBJS = src/common.o src/main.o src/argparse.o
 
 DOBJS = src/daemon/hsearch.o \
         src/daemon/sblist.o src/daemon/sblist_delete.o \
@@ -23,7 +23,7 @@ DOBJS = src/daemon/hsearch.o \
 LOBJS = src/version.o \
         src/core.o src/common.o src/libproxychains.o \
         src/allocator_thread.o src/rdns.o \
-        src/hostsreader.o src/hash.o src/debug.o
+        src/hostsreader.o src/hash.o src/debug.o src/argparse.o
 
 
 GENH = src/version.h
