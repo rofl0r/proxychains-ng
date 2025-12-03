@@ -1,5 +1,6 @@
 proxychains4
 proxychains4-daemon
+libproxychains4.dylib
 *.bz2
 *.xz
 *.o
@@ -18,3 +19,6 @@ version.h
 libtool
 config.*
 stamp-h
+.DS_Store
+.idea
+.vscode
