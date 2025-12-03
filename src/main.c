@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 
 #include "argparse.h"
+#include "version.h"
 #include "common.h"
 
 static int usage(char **argv) {
@@ -68,6 +69,7 @@ static int usage(char **argv) {
 	printf("      --no-quiet               Disable quiet mode\n");
 	printf("  -D, --debug-level <N>        Debug level (0=silent, 1=basic, "
 			 "2=verbose)\n");
+	printf("  -v, --version                Print version and exit\n");
 	printf("      --show-config            Print effective configuration then exit. Program/args optional\n\n");
 
 	printf("Help:\n");
@@ -144,6 +146,11 @@ static int parse_arguments(int argc, char *argv[], cli_options *opts,
 		/* Help */
 		if (!strcmp(arg, "-h") || !strcmp(arg, "--help")) {
 			return 2; /* Help requested */
+		}
+
+		/* Version */
+		else if (!strcmp(arg, "-v") || !strcmp(arg, "--version")) {
+			return 3; /* Version requested */
 		}
 
 		/* Quiet mode */
@@ -310,6 +317,11 @@ int main(int argc, char *argv[]) {
 	parse_result = parse_arguments(argc, argv, &opts, &start_argv);
 	if (parse_result == 2) {
 		return usage(argv); /* Help requested */
+	}
+	if (parse_result == 3) {
+		/* Version was requested; print and exit */
+		printf("%s\n", VERSION);
+		return EXIT_SUCCESS;
 	}
 	if (parse_result != 0) {
 		return usage(argv); /* Parse error */
