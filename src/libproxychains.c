@@ -40,6 +40,7 @@
 #include "core.h"
 #include "common.h"
 #include "rdns.h"
+#include "argparse.h"
 
 #undef 		satosin
 #define     satosin(x)      ((struct sockaddr_in *) &(x))
@@ -285,6 +286,153 @@ static const char* bool_str(int bool_val) {
 }
 
 #define STR_STARTSWITH(P, LIT) (!strncmp(P, LIT, sizeof(LIT)-1))
+
+/* Helper: detect if any proxy in list uses socks5h protocol */
+static int detect_socks5h_in_list(const char *proxy_list) {
+	if(!proxy_list || !*proxy_list) return 0;
+	return (strstr(proxy_list, "socks5h://") != NULL);
+}
+
+/* Helper: parse proxy URL and add to proxy data array
+   Returns 1 on success, 0 on error */
+static int parse_proxy_url_to_pd(const char *url, proxy_data *pd) {
+	char type[32], host[256], user[256], pass[256];
+	int port_n = 0;
+	const char *p;
+	size_t next_token = 0, ul = 0, pl = 0, hl;
+	int is_socks5h = 0;
+
+	memset(pd, 0, sizeof(*pd));
+	pd->ps = PLAY_STATE;
+
+	/* Check protocol prefix */
+	if(STR_STARTSWITH(url, "socks5h://")) {
+		strcpy(type, "socks5");
+		is_socks5h = 1;
+		next_token = 10;
+	} else if(STR_STARTSWITH(url, "socks5://")) {
+		strcpy(type, "socks5");
+		next_token = 9;
+	} else if(STR_STARTSWITH(url, "socks4://")) {
+		strcpy(type, "socks4");
+		next_token = 9;
+	} else if(STR_STARTSWITH(url, "http://")) {
+		strcpy(type, "http");
+		next_token = 7;
+	} else if(STR_STARTSWITH(url, "raw://")) {
+		strcpy(type, "raw");
+		next_token = 6;
+	} else {
+		return 0;
+	}
+
+	/* Parse user:pass@host:port */
+	const char *at = strrchr(url + next_token, '@');
+	if(at) {
+		if(!strcmp(type, "socks4")) return 0; /* socks4 doesn't support auth */
+		p = strchr(url + next_token, ':');
+		if(!p || p >= at) return 0;
+		const char *u = url + next_token;
+		ul = p - u;
+		p++;
+		pl = at - p;
+		if(ul > 255 || pl > 255) return 0;
+		memcpy(pd->user, u, ul);
+		pd->user[ul] = 0;
+		memcpy(pd->pass, p, pl);
+		pd->pass[pl] = 0;
+		next_token = (at - url) + 1;
+	}
+
+	/* Parse host:port */
+	const char *h = url + next_token;
+	p = strchr(h, ':');
+	if(!p) return 0;
+	hl = p - h;
+	if(hl > 255) return 0;
+	memcpy(host, h, hl);
+	host[hl] = 0;
+	port_n = atoi(p + 1);
+	if(port_n <= 0 || port_n > 65535) return 0;
+
+	/* Set proxy type */
+	if(!strcmp(type, "http")) {
+		pd->pt = HTTP_TYPE;
+	} else if(!strcmp(type, "raw")) {
+		pd->pt = RAW_TYPE;
+	} else if(!strcmp(type, "socks4")) {
+		pd->pt = SOCKS4_TYPE;
+	} else if(!strcmp(type, "socks5")) {
+		pd->pt = SOCKS5_TYPE;
+	} else {
+		return 0;
+	}
+
+	/* Parse host IP */
+	pd->ip.is_v6 = !!strchr(host, ':');
+	pd->port = htons((unsigned short)port_n);
+	if(1 != inet_pton(pd->ip.is_v6 ? AF_INET6 : AF_INET, host, pd->ip.addr.v6)) {
+		/* Non-numeric host - would need DNS resolution */
+		/* For now, we don't support hostnames in CLI proxies */
+		return 0;
+	}
+
+	return 1;
+}
+
+/* Helper: split string by comma or semicolon, call callback for each token */
+typedef int (*token_callback_t)(const char *token, void *ctx);
+static int split_and_process(const char *str, token_callback_t callback, void *ctx) {
+	char buffer[MAX_CLI_STRING];
+	char *token, *saveptr;
+	int count = 0;
+
+	if(!str || !*str) return 0;
+
+	strncpy(buffer, str, sizeof(buffer) - 1);
+	buffer[sizeof(buffer) - 1] = 0;
+
+	/* Replace semicolons with commas for uniform splitting */
+	for(char *p = buffer; *p; p++) {
+		if(*p == ';') *p = ',';
+	}
+
+	token = strtok_r(buffer, ",", &saveptr);
+	while(token) {
+		/* Trim whitespace */
+		while(*token && isspace(*token)) token++;
+		char *end = token + strlen(token) - 1;
+		while(end > token && isspace(*end)) *end-- = 0;
+
+		if(*token) {
+			if(callback(token, ctx) != 0) {
+				count++;
+			}
+		}
+		token = strtok_r(NULL, ",", &saveptr);
+	}
+	return count;
+}
+
+/* Callback context for proxy parsing */
+typedef struct {
+	proxy_data *pd;
+	int count;
+	int max_count;
+} proxy_parse_ctx_t;
+
+static int proxy_parse_callback(const char *token, void *ctx) {
+	proxy_parse_ctx_t *pctx = (proxy_parse_ctx_t *)ctx;
+	if(pctx->count >= pctx->max_count) return 0;
+
+	if(parse_proxy_url_to_pd(token, &pctx->pd[pctx->count])) {
+		pctx->count++;
+		return 1;
+	}
+	fprintf(stderr, "warning: invalid proxy URL: %s\n", token);
+	return 0;
+}
+
 /* get configuration from config file */
 static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_type * ct) {
 	int count = 0, port_n = 0, list = 0;
@@ -295,6 +443,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
 	char rdnsd_addr[32], rdnsd_port[8];
 	FILE *file = NULL;
+	cli_options cli_opts;
 
 	if(proxychains_got_chain_data)
 		return;
@@ -305,6 +454,17 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_read_time_out = 4 * 1000;
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
+
+	/* Deserialize CLI options from environment */
+	deserialize_cli_options_from_env(&cli_opts);
+
+	/* Handle ignore-config-file mode */
+	if(cli_opts.ignore_config_file) {
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "ignoring config file, using CLI options only\n");
+		}
+		goto apply_cli_overrides;
+	}
 
 	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
 	if( ( file = fopen(env, "r") ) == NULL )
@@ -563,6 +723,306 @@ inv_host:
 #ifndef BROKEN_FCLOSE
 	fclose(file);
 #endif
+
+apply_cli_overrides:
+	/* Apply CLI overrides - these have highest priority */
+
+	/* Chain mode override */
+	if(cli_opts.has_chain_mode) {
+		*ct = cli_opts.chain_mode;
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			const char *mode_str = "unknown";
+			switch(cli_opts.chain_mode) {
+				case STRICT_TYPE: mode_str = "strict"; break;
+				case DYNAMIC_TYPE: mode_str = "dynamic"; break;
+				case RANDOM_TYPE: mode_str = "random"; break;
+				case ROUND_ROBIN_TYPE: mode_str = "round_robin"; break;
+			}
+			fprintf(stderr, LOG_PREFIX "CLI override: chain_type=%s\n", mode_str);
+		}
+	}
+
+	/* Chain length override */
+	if(cli_opts.has_chain_len) {
+		proxychains_max_chain = cli_opts.chain_len;
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: chain_len=%u\n", cli_opts.chain_len);
+		}
+	}
+
+	/* DNS mode override */
+	if(cli_opts.has_dns_mode) {
+		if(!strcmp(cli_opts.dns_value, "proxy")) {
+			proxychains_resolver = DNSLF_RDNS_THREAD;
+		} else if(!strcmp(cli_opts.dns_value, "old")) {
+			proxychains_resolver = DNSLF_FORKEXEC;
+		} else if(!strcmp(cli_opts.dns_value, "off")) {
+			proxychains_resolver = DNSLF_LIBC;
+		} else {
+			/* Parse IP:PORT or [IPv6]:PORT for daemon mode */
+			char daemon_addr[64], daemon_port[8];
+			struct sockaddr_in rdns_server_buffer;
+			int parsed = 0;
+
+			if(cli_opts.dns_value[0] == '[') {
+				/* IPv6 format: [IPv6]:PORT - not fully implemented yet */
+				fprintf(stderr, LOG_PREFIX "IPv6 daemon address not yet supported\n");
+			} else if(sscanf(cli_opts.dns_value, "%63[^:]:%7s", daemon_addr, daemon_port) == 2) {
+				rdns_server_buffer.sin_family = AF_INET;
+				if(inet_pton(AF_INET, daemon_addr, &rdns_server_buffer.sin_addr) > 0) {
+					rdns_server_buffer.sin_port = htons(atoi(daemon_port));
+					proxychains_resolver = DNSLF_RDNS_DAEMON;
+					rdns_set_daemon(&rdns_server_buffer);
+					parsed = 1;
+				}
+			}
+			if(!parsed) {
+				fprintf(stderr, LOG_PREFIX "warning: invalid DNS daemon address: %s\n", cli_opts.dns_value);
+			}
+		}
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: dns=%s\n", cli_opts.dns_value);
+		}
+	}
+
+	/* Quiet mode override */
+	if(cli_opts.has_quiet) {
+		proxychains_quiet_mode = cli_opts.quiet_mode;
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: quiet=%d\n", cli_opts.quiet_mode);
+		}
+	}
+
+	/* Timeouts override */
+	if(cli_opts.has_tcp_read_timeout) {
+		tcp_read_time_out = cli_opts.tcp_read_timeout;
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: tcp_read_timeout=%d\n", cli_opts.tcp_read_timeout);
+		}
+	}
+	if(cli_opts.has_tcp_connect_timeout) {
+		tcp_connect_time_out = cli_opts.tcp_connect_timeout;
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: tcp_connect_timeout=%d\n", cli_opts.tcp_connect_timeout);
+		}
+	}
+
+	/* Remote DNS subnet override */
+	if(cli_opts.has_remote_dns_subnet) {
+		remote_dns_subnet = cli_opts.remote_dns_subnet;
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: remote_dns_subnet=%u\n", cli_opts.remote_dns_subnet);
+		}
+	}
+
+	/* Localnet list override - replaces file-loaded list */
+	if(cli_opts.has_localnet) {
+		/* Clear existing localnet entries */
+		num_localnet_addr = 0;
+
+		/* Parse each localnet spec from CLI */
+		char localnet_buffer[MAX_CLI_STRING];
+		char *token, *saveptr;
+		strncpy(localnet_buffer, cli_opts.localnet_list, sizeof(localnet_buffer) - 1);
+		localnet_buffer[sizeof(localnet_buffer) - 1] = 0;
+
+		/* Replace semicolons with commas */
+		for(char *cp = localnet_buffer; *cp; cp++) {
+			if(*cp == ';') *cp = ',';
+		}
+
+		token = strtok_r(localnet_buffer, ",", &saveptr);
+		while(token && num_localnet_addr < MAX_LOCALNET) {
+			/* Trim whitespace */
+			while(*token && isspace(*token)) token++;
+			char *end = token + strlen(token) - 1;
+			while(end > token && isspace(*end)) *end-- = 0;
+
+			if(*token) {
+				/* Parse localnet spec: addr/mask or addr:port/mask */
+				char ln_addr_port[64], ln_addr[64], ln_netmask[32];
+				char colon, extra, right_bracket[2];
+				unsigned short ln_port = 0, ln_prefix;
+				int ln_family, n, valid;
+
+				if(sscanf(token, "%53[^/]/%15s", ln_addr_port, ln_netmask) != 2) {
+					fprintf(stderr, LOG_PREFIX "warning: invalid localnet spec: %s\n", token);
+					token = strtok_r(NULL, ",", &saveptr);
+					continue;
+				}
+
+				char *pcolon = strchr(ln_addr_port, ':');
+				if(!pcolon || pcolon == strrchr(ln_addr_port, ':')) {
+					ln_family = AF_INET;
+					n = sscanf(ln_addr_port, "%15[^:]%c%5hu%c", ln_addr, &colon, &ln_port, &extra);
+					valid = n == 1 || (n == 3 && colon == ':');
+				} else if(ln_addr_port[0] == '[') {
+					ln_family = AF_INET6;
+					n = sscanf(ln_addr_port, "[%45[^][]%1[]]%c%5hu%c", ln_addr, right_bracket, &colon, &ln_port, &extra);
+					valid = n == 2 || (n == 4 && colon == ':');
+				} else {
+					ln_family = AF_INET6;
+					valid = sscanf(ln_addr_port, "%45[^][]%c", ln_addr, &extra) == 1;
+				}
+
+				if(!valid) {
+					fprintf(stderr, LOG_PREFIX "warning: invalid localnet address: %s\n", token);
+					token = strtok_r(NULL, ",", &saveptr);
+					continue;
+				}
+
+				localnet_addr[num_localnet_addr].family = ln_family;
+				localnet_addr[num_localnet_addr].port = ln_port;
+				valid = 0;
+
+				if(ln_family == AF_INET) {
+					valid = inet_pton(ln_family, ln_addr, &localnet_addr[num_localnet_addr].in_addr) > 0;
+				} else if(ln_family == AF_INET6) {
+					valid = inet_pton(ln_family, ln_addr, &localnet_addr[num_localnet_addr].in6_addr) > 0;
+				}
+
+				if(!valid) {
+					fprintf(stderr, LOG_PREFIX "warning: invalid localnet IP: %s\n", ln_addr);
+					token = strtok_r(NULL, ",", &saveptr);
+					continue;
+				}
+
+				/* Parse netmask */
+				if(ln_family == AF_INET && strchr(ln_netmask, '.')) {
+					valid = inet_pton(ln_family, ln_netmask, &localnet_addr[num_localnet_addr].in_mask) > 0;
+				} else {
+					valid = sscanf(ln_netmask, "%hu%c", &ln_prefix, &extra) == 1;
+					if(valid) {
+						if(ln_family == AF_INET && ln_prefix <= 32) {
+							localnet_addr[num_localnet_addr].in_mask.s_addr = htonl(0xFFFFFFFFu << (32u - ln_prefix));
+						} else if(ln_family == AF_INET6 && ln_prefix <= 128) {
+							localnet_addr[num_localnet_addr].in6_prefix = ln_prefix;
+						} else {
+							valid = 0;
+						}
+					}
+				}
+
+				if(!valid) {
+					fprintf(stderr, LOG_PREFIX "warning: invalid localnet netmask: %s\n", ln_netmask);
+					token = strtok_r(NULL, ",", &saveptr);
+					continue;
+				}
+
+				if(cli_opts.has_debug_level && cli_opts.debug_level >= 2) {
+					fprintf(stderr, LOG_PREFIX "CLI localnet: %s\n", token);
+				}
+				num_localnet_addr++;
+			}
+			token = strtok_r(NULL, ",", &saveptr);
+		}
+
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: localnet (%zu entries)\n", num_localnet_addr);
+		}
+	}
+
+	/* DNAT list override - replaces file-loaded list */
+	if(cli_opts.has_dnat) {
+		/* Clear existing dnat entries */
+		num_dnats = 0;
+
+		/* Parse each dnat spec from CLI - format: src-dst (dash separator) */
+		char dnat_buffer[MAX_CLI_STRING];
+		char *token, *saveptr;
+		strncpy(dnat_buffer, cli_opts.dnat_list, sizeof(dnat_buffer) - 1);
+		dnat_buffer[sizeof(dnat_buffer) - 1] = 0;
+
+		/* Replace semicolons with commas */
+		for(char *cp = dnat_buffer; *cp; cp++) {
+			if(*cp == ';') *cp = ',';
+		}
+
+		token = strtok_r(dnat_buffer, ",", &saveptr);
+		while(token && num_dnats < MAX_DNAT) {
+			/* Trim whitespace */
+			while(*token && isspace(*token)) token++;
+			char *end = token + strlen(token) - 1;
+			while(end > token && isspace(*end)) *end-- = 0;
+
+			if(*token) {
+				/* Parse dnat spec: src-dst (use dash as separator) */
+				char dnat_src[32], dnat_dst[32];
+				char *dash = strchr(token, '-');
+				if(!dash) {
+					fprintf(stderr, LOG_PREFIX "warning: invalid dnat spec (missing dash): %s\n", token);
+					token = strtok_r(NULL, ",", &saveptr);
+					continue;
+				}
+
+				size_t src_len = dash - token;
+				if(src_len >= sizeof(dnat_src)) src_len = sizeof(dnat_src) - 1;
+				memcpy(dnat_src, token, src_len);
+				dnat_src[src_len] = 0;
+				strncpy(dnat_dst, dash + 1, sizeof(dnat_dst) - 1);
+				dnat_dst[sizeof(dnat_dst) - 1] = 0;
+
+				/* Parse src address:port */
+				char dnat_src_addr[16], dnat_src_port[8] = {0};
+				char dnat_dst_addr[16], dnat_dst_port[8] = {0};
+
+				(void)sscanf(dnat_src, "%15[^:]:%5s", dnat_src_addr, dnat_src_port);
+				(void)sscanf(dnat_dst, "%15[^:]:%5s", dnat_dst_addr, dnat_dst_port);
+
+				if(inet_pton(AF_INET, dnat_src_addr, &dnats[num_dnats].orig_dst) <= 0) {
+					fprintf(stderr, LOG_PREFIX "warning: invalid dnat src address: %s\n", dnat_src_addr);
+					token = strtok_r(NULL, ",", &saveptr);
+					continue;
+				}
+				if(inet_pton(AF_INET, dnat_dst_addr, &dnats[num_dnats].new_dst) <= 0) {
+					fprintf(stderr, LOG_PREFIX "warning: invalid dnat dst address: %s\n", dnat_dst_addr);
+					token = strtok_r(NULL, ",", &saveptr);
+					continue;
+				}
+
+				dnats[num_dnats].orig_port = dnat_src_port[0] ? (short)atoi(dnat_src_port) : 0;
+				dnats[num_dnats].new_port = dnat_dst_port[0] ? (short)atoi(dnat_dst_port) : 0;
+
+				if(cli_opts.has_debug_level && cli_opts.debug_level >= 2) {
+					fprintf(stderr, LOG_PREFIX "CLI dnat: %s -> %s\n", dnat_src, dnat_dst);
+				}
+				num_dnats++;
+			}
+			token = strtok_r(NULL, ",", &saveptr);
+		}
+
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: dnat (%zu entries)\n", num_dnats);
+		}
+	}
+
+	/* Proxy list override - replaces file-loaded list */
+	if(cli_opts.has_proxy) {
+		/* Clear existing proxy entries */
+		count = 0;
+
+		/* Parse proxy URLs */
+		proxy_parse_ctx_t pctx = { pd, 0, MAX_CHAIN };
+		split_and_process(cli_opts.proxy_list, proxy_parse_callback, &pctx);
+		count = pctx.count;
+
+		/* Auto-detect socks5h and enable proxy_dns if not explicitly disabled */
+		if(detect_socks5h_in_list(cli_opts.proxy_list)) {
+			if(!cli_opts.has_dns_mode || strcmp(cli_opts.dns_value, "off") != 0) {
+				if(proxychains_resolver == DNSLF_LIBC) {
+					proxychains_resolver = DNSLF_RDNS_THREAD;
+					if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+						fprintf(stderr, LOG_PREFIX "socks5h detected, auto-enabling proxy_dns\n");
+					}
+				}
+			}
+		}
+
+		if(cli_opts.has_debug_level && cli_opts.debug_level >= 1) {
+			fprintf(stderr, LOG_PREFIX "CLI override: proxy (%d entries)\n", count);
+		}
+	}
+
 	if(!count) {
 		fprintf(stderr, "error: no valid proxy found in config\n");
 		exit(1);
