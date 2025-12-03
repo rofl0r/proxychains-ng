@@ -28,6 +28,7 @@
 static int usage(char **argv) {
 	printf("\nUsage: %s [options] program [arguments]\n\n", argv[0]);
 
+	printf("Options:\n");
 	printf("Config File:\n");
 	printf("  -f, --config-file <path>     Use alternative config file\n");
 	printf("      --ignore-config-file     Ignore config file completely\n\n");
@@ -76,14 +77,27 @@ static int usage(char **argv) {
 	printf("  -h, --help                   Show this help\n\n");
 
 	printf("Examples:\n");
+	printf("# Simple: run curl through the default config file\n");
 	printf("  %s curl https://example.com\n", argv[0]);
+	printf("# Use a specific config file and run quietly\n");
 	printf("  %s -q -f /etc/proxychains.conf curl https://example.com\n",
 			 argv[0]);
+	printf("# Force chain type and DNS via CLI\n");
 	printf("  %s -c strict -d proxy curl https://example.com\n", argv[0]);
-	printf("  %s -P socks5://127.0.0.1:1080 curl https://example.com\n", argv[0]);
-	printf("  %s --ignore-config-file -P socks5://tor:9050 curl "
-			 "https://example.com\n\n",
-			 argv[0]);
+	printf("# Add a proxy on the command-line (repeatable)\n");
+	printf("  %s -P socks5://127.0.0.1:1080 -P http://proxy.local:8080 curl https://example.com\n", argv[0]);
+	printf("# Ignore config file and provide proxy list via CLI\n");
+	printf("  %s --ignore-config-file -P socks5://tor:9050 curl https://example.com\n", argv[0]);
+	printf("# Show the merged configuration (no program needed) and exit\n");
+	printf("  %s --show-config\n", argv[0]);
+	printf("# Show configuration based on CLI and file and exit (program/args optional)\n");
+	printf("  %s --show-config -f /etc/proxychains.conf -P socks5://127.0.0.1:1080\n", argv[0]);
+	printf("# Print program version and exit\n");
+	printf("  %s -v\n", argv[0]);
+	printf("# Example with localnet and DNAT entries (override via CLI)\n");
+	printf("  %s --ignore-config-file -n 192.168.0.0/16 -n 10.0.0.0/8 --dnat 1.1.1.1:80-2.2.2.2:443 -P socks5://127.0.0.1:1080 curl http://1.1.1.1\n", argv[0]);
+	printf("# Configure timeouts and remote DNS subnet via CLI\n");
+	printf("  %s -R 5000 -T 3000 -S 224 -P socks5://127.0.0.1:1080 curl https://example.com\n\n", argv[0]);
 
 	printf("Priority: argv > env > config file\n\n");
 
