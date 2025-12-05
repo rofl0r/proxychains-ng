@@ -306,8 +306,17 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
 
-	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
-	if( ( file = fopen(env, "r") ) == NULL )
+	char *fd_env = getenv("PROXYCHAINS_CONFIG_FD");
+	if(fd_env && *fd_env) {
+		int config_fd = atoi(fd_env);
+		if(config_fd >= 0)
+			file = fdopen(config_fd, "r");
+	}
+	if(!file) {
+		env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
+		file = fopen(env, "r");
+	}
+	if(!file)
 	{
 	        perror("couldnt read configuration file");
         	exit(1);

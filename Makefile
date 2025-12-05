@@ -47,9 +47,10 @@ SHARED_LIBS = $(LDSO_PATHNAME)
 ALL_LIBS = $(SHARED_LIBS)
 PXCHAINS = proxychains4
 PXCHAINS_D = proxychains4-daemon
+PXCHAINS_CLI = src/proxychains-cli
 ALL_TOOLS = $(PXCHAINS) $(PXCHAINS_D)
 ALL_CONFIGS = src/proxychains.conf
-ZSH_COMPLETION = completions/zsh/_proxychains4
+ZSH_COMPLETION = completions/zsh/_proxychains4 completions/zsh/_proxychains-cli
 
 -include config.mak
 
@@ -74,9 +75,12 @@ $(DESTDIR)$(zshcompletiondir)/%: completions/zsh/%
 	$(INSTALL) -D -m 644 $< $@
 
 install-libs: $(ALL_LIBS:%=$(DESTDIR)$(libdir)/%)
-install-tools: $(ALL_TOOLS:%=$(DESTDIR)$(bindir)/%)
+install-tools: $(ALL_TOOLS:%=$(DESTDIR)$(bindir)/%) $(DESTDIR)$(bindir)/proxychains-cli
 install-config: $(ALL_CONFIGS:src/%=$(DESTDIR)$(sysconfdir)/%)
 install-zsh-completion: $(ZSH_COMPLETION:completions/zsh/%=$(DESTDIR)$(zshcompletiondir)/%)
+
+$(DESTDIR)$(bindir)/proxychains-cli: $(PXCHAINS_CLI)
+	$(INSTALL) -D -m 755 $< $@
 
 clean:
 	rm -f $(ALL_LIBS)
@@ -102,5 +106,13 @@ $(PXCHAINS): $(OBJS)
 $(PXCHAINS_D): $(DOBJS)
 	$(CC) $^ $(FAT_BIN_LDFLAGS) $(USER_LDFLAGS) -o $@
 
+uninstall:
+	rm -f $(DESTDIR)$(libdir)/$(LDSO_PATHNAME)
+	rm -f $(DESTDIR)$(bindir)/$(PXCHAINS)
+	rm -f $(DESTDIR)$(bindir)/$(PXCHAINS_D)
+	rm -f $(DESTDIR)$(bindir)/proxychains-cli
+	rm -f $(DESTDIR)$(sysconfdir)/proxychains.conf
+	rm -f $(DESTDIR)$(zshcompletiondir)/_proxychains4
+	rm -f $(DESTDIR)$(zshcompletiondir)/_proxychains-cli
 
-.PHONY: all clean install install-config install-libs install-tools install-zsh-completion
+.PHONY: all clean install install-config install-libs install-tools install-zsh-completion uninstall

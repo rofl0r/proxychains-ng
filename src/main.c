@@ -98,14 +98,21 @@ int main(int argc, char *argv[]) {
 	if(start_argv >= argc)
 		return usage(argv);
 
-	/* check if path of config file has not been passed via command line */
-	path = get_config_path(path, pbuf, sizeof(pbuf));
+	/* Skip config file lookup if PROXYCHAINS_CONFIG_FD is set */
+	if (!getenv("PROXYCHAINS_CONFIG_FD")) {
+		/* check if path of config file has not been passed via command line */
+		path = get_config_path(path, pbuf, sizeof(pbuf));
 
-	if(!quiet)
-		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
+		if(!quiet)
+			fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
 
-	/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
-	setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
+		/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
+		setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
+	} else {
+		if (!quiet) {
+			fprintf(stderr, LOG_PREFIX "using config from fd(%s)\n", getenv("PROXYCHAINS_CONFIG_FD"));
+		}
+	}
 
 	if(quiet)
 		setenv(PROXYCHAINS_QUIET_MODE_ENV_VAR, "1", 1);

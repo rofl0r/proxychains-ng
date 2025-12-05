@@ -1,0 +1,26 @@
+#compdef proxychains-cli
+
+_proxychains_cli() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  _arguments -C \
+    '(-c --chain)'{-c,--chain}'[Chain mode]:mode:(strict dynamic random round_robin)' \
+    '(-l --chain-len)'{-l,--chain-len}'[Chain length for random/round_robin]:length:' \
+    '(-q --quiet)'{-q,--quiet}'[Quiet mode]' \
+    '(-d --dns)'{-d,--dns}'[DNS mode]:mode:(proxy old off)' \
+    '(-S --dns-subnet)'{-S,--dns-subnet}'[Remote DNS subnet (0-255)]:subnet:' \
+    '(-R --read-timeout)'{-R,--read-timeout}'[TCP read timeout in ms]:ms:' \
+    '(-T --connect-timeout)'{-T,--connect-timeout}'[TCP connect timeout in ms]:ms:' \
+    '*'{-n,--localnet}'[Bypass proxy for CIDR]:cidr:' \
+    '*--dnat[DNAT mapping "SRC DST"]:mapping:' \
+    '*'{-P,--proxy}'[Add proxy "TYPE IP PORT [USER PASS]"]:proxy:' \
+    '--config[Print generated config and exit]' \
+    '--proxychains-path[Path to proxychains4]:path:_files' \
+    '(-h --help)'{-h,--help}'[Show help]' \
+    '(-v --version)'{-v,--version}'[Show version]' \
+    '(-):command:_command_names -e' \
+    '*::arguments:_normal'
+}
+
+_proxychains_cli "$@"
