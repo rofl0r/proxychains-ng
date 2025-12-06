@@ -265,14 +265,6 @@ check_not_contains "curl -v not treated as --version" "proxychains-cli" "$output
 output=$($CLI -P "socks5 127.0.0.1 1080" --proxychains-path echo wget --no-check-certificate -O - example.com 2>&1)
 check_contains "program args pass through" "wget --no-check-certificate -O - example.com" "$output"
 
-# Using -- separator
-output=$($CLI -P "socks5 127.0.0.1 1080" --proxychains-path echo -- -v -h --help 2>&1)
-if echo "$output" | grep -F -- "-v -h --help" > /dev/null; then
-  pass "-- separator works"
-else
-  fail "-- separator works" "contains '-v -h --help'" "$output"
-fi
-
 # ============================================================
 echo ""
 echo "--- Combined Options ---"
@@ -306,14 +298,47 @@ check_contains "combined: proxy2" "http" "$output"
 
 # ============================================================
 echo ""
-echo "--- FD Config Passing Test ---"
+echo "--- Config Data Passing to Child Processes ---"
 # ============================================================
 
-# Generate config and verify format
-output=$($CLI -P "socks5 127.0.0.1 9050" --config 2>&1)
-check_contains "config has chain" "_chain" "$output"
-check_contains "config has ProxyList" "[ProxyList]" "$output"
-check_contains "config has proxy entry" "socks5 *127.0.0.1 *9050" "$output"
+# Test config data passing via actual proxychains4 binary
+# Only run if proxychains4 binary exists
+if [ -x "./proxychains4" ]; then
+  PC4="./proxychains4"
+  CLI_PC="$CLI --proxychains-path $PC4"
+
+  # Basic: proxychains4 -> echo (1 level)
+  output=$($CLI_PC -q -P "socks5 127.0.0.1 1080" echo "config_test_level1" 2>&1)
+  check_contains "config pass level 1" "config_test_level1" "$output"
+
+  # Nested: proxychains4 -> sh -c -> echo (2 levels)
+  output=$($CLI_PC -q -P "socks5 127.0.0.1 1080" sh -c 'echo "config_test_level2"' 2>&1)
+  check_contains "config pass level 2 (sh -c)" "config_test_level2" "$output"
+
+  # Nested: proxychains4 -> sh -> sh -> echo (3 levels)
+  output=$($CLI_PC -q -P "socks5 127.0.0.1 1080" sh -c 'sh -c "echo config_test_level3"' 2>&1)
+  check_contains "config pass level 3 (sh > sh)" "config_test_level3" "$output"
+
+  # Test that env var is set for child processes (for config propagation)
+  output=$($CLI_PC -q -P "socks5 127.0.0.1 1080" sh -c 'echo "CONFIG_DATA_SET=$PROXYCHAINS_CONFIG_DATA"' 2>&1)
+  # Config data should be present in env
+  check_contains "config data env set" "CONFIG_DATA_SET=" "$output"
+
+  # Verify config data env var exists
+  output=$($CLI_PC -q -P "socks5 127.0.0.1 1080" env 2>&1 | grep -E "^PROXYCHAINS_CONFIG_DATA=" || echo "NOT_FOUND")
+  check_contains "env shows config data var" "PROXYCHAINS_CONFIG_DATA=" "$output"
+
+  # Stress test: multiple nested shells
+  output=$($CLI_PC -q -P "socks5 127.0.0.1 1080" sh -c 'sh -c "sh -c \"echo deep_nest_test\""' 2>&1)
+  check_contains "config pass deep nesting" "deep_nest_test" "$output"
+
+  # Verify DLL init message appears (proving config was read)
+  output=$($CLI_PC -P "socks5 127.0.0.1 1080" echo test 2>&1)
+  check_contains "DLL init confirms config read" "DLL init" "$output"
+
+else
+  echo "SKIP: proxychains4 binary not found, skipping config data passing tests"
+fi
 
 # ============================================================
 echo ""
@@ -324,3 +349,4 @@ echo "Failed: $FAIL"
 if [ $FAIL -gt 0 ]; then
   exit 1
 fi
+

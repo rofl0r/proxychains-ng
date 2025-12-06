@@ -187,7 +187,6 @@ if [ -n "$show_config" ]; then
   exit 0
 fi
 
-# Execute with config via FD
-PROXYCHAINS_CONFIG_FD=3 "$proxychains_path" "$@" 3<<EOF
-$config_content
-EOF
+# Execute with config via environment variable
+export PROXYCHAINS_CONFIG_DATA="$config_content"
+exec "$proxychains_path" "$@"

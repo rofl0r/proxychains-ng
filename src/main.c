@@ -98,9 +98,11 @@ int main(int argc, char *argv[]) {
 	if(start_argv >= argc)
 		return usage(argv);
 
-	/* Skip config file lookup if PROXYCHAINS_CONFIG_FD is set */
-	if (!getenv("PROXYCHAINS_CONFIG_FD")) {
-		/* check if path of config file has not been passed via command line */
+	/* Handle config: check if config data is already in env, otherwise read from file */
+	char *config_data = getenv(PROXYCHAINS_CONFIG_DATA_ENV_VAR);
+
+	if (!config_data || !*config_data) {
+		/* No config data in env - read from file */
 		path = get_config_path(path, pbuf, sizeof(pbuf));
 
 		if(!quiet)
@@ -108,10 +110,6 @@ int main(int argc, char *argv[]) {
 
 		/* Set PROXYCHAINS_CONF_FILE to get proxychains lib to use new config file. */
 		setenv(PROXYCHAINS_CONF_FILE_ENV_VAR, path, 1);
-	} else {
-		if (!quiet) {
-			fprintf(stderr, LOG_PREFIX "using config from fd(%s)\n", getenv("PROXYCHAINS_CONFIG_FD"));
-		}
 	}
 
 	if(quiet)

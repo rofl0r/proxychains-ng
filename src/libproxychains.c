@@ -306,21 +306,24 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
 
-	char *fd_env = getenv("PROXYCHAINS_CONFIG_FD");
-	if(fd_env && *fd_env) {
-		int config_fd = atoi(fd_env);
-		if(config_fd >= 0)
-			file = fdopen(config_fd, "r");
-	}
-	if(!file) {
-		env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
-		file = fopen(env, "r");
-	}
-	if(!file)
-	{
-	        perror("couldnt read configuration file");
-        	exit(1);
-	}
+  /* Try to get config from environment variable first */
+  char *config_data = getenv(PROXYCHAINS_CONFIG_DATA_ENV_VAR);
+  if (config_data && *config_data) {
+    /* Config data in env - use fmemopen to read it */
+    file = fmemopen(config_data, strlen(config_data), "r");
+    if (!file) {
+      fprintf(stderr, LOG_PREFIX "failed to open config from environment\n");
+      exit(1);
+    }
+  }
+  if (!file) {
+    env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
+    file = fopen(env, "r");
+  }
+  if (!file) {
+    perror("couldnt read configuration file");
+    exit(1);
+  }
 
 	while(fgets(buf, sizeof(buf), file)) {
 		buff = buf;
