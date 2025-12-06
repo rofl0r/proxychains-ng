@@ -106,13 +106,4 @@ $(PXCHAINS): $(OBJS)
 $(PXCHAINS_D): $(DOBJS)
 	$(CC) $^ $(FAT_BIN_LDFLAGS) $(USER_LDFLAGS) -o $@
 
-uninstall:
-	rm -f $(DESTDIR)$(libdir)/$(LDSO_PATHNAME)
-	rm -f $(DESTDIR)$(bindir)/$(PXCHAINS)
-	rm -f $(DESTDIR)$(bindir)/$(PXCHAINS_D)
-	rm -f $(DESTDIR)$(bindir)/proxychains-cli
-	rm -f $(DESTDIR)$(sysconfdir)/proxychains.conf
-	rm -f $(DESTDIR)$(zshcompletiondir)/_proxychains4
-	rm -f $(DESTDIR)$(zshcompletiondir)/_proxychains-cli
-
 .PHONY: all clean install install-config install-libs install-tools install-zsh-completion uninstall
