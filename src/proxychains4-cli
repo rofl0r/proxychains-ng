@@ -1,5 +1,5 @@
 #!/bin/sh
-# proxychains-cli - Dynamic config generation for proxychains4
+# proxychains4-cli - Dynamic config generation for proxychains4
 
 # Static variables
 # sync with proxychains4 version
@@ -21,7 +21,7 @@ show_config=""
 
 show_help() {
 cat <<EOF
-Usage: proxychains-cli [options] program [args...]
+Usage: proxychains4-cli [options] program [args...]
 
 Chain Options:
   -c, --chain MODE        Chain mode (strict/dynamic/random/round_robin)
@@ -57,14 +57,14 @@ Other:
   -v, --version           Show version
 
 Examples:
-  proxychains-cli -P "socks5 127.0.0.1 1080" curl example.com
-  proxychains-cli -P "socks5 127.0.0.1 1080" curl -v example.com
-  proxychains-cli -P "socks5 127.0.0.1 1080 user pass" wget file.tar.gz
+  proxychains4-cli -P "socks5 127.0.0.1 1080" curl example.com
+  proxychains4-cli -P "socks5 127.0.0.1 1080" curl -v example.com
+  proxychains4-cli -P "socks5 127.0.0.1 1080 user pass" wget file.tar.gz
 EOF
 }
 
 show_version() {
-  echo "proxychains-cli ${PROXYCHAINS_CLI_VERSION}"
+  echo "proxychains4-cli ${PROXYCHAINS_CLI_VERSION}"
 }
 
 # Parse arguments
