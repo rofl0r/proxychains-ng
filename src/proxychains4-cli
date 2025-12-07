@@ -43,28 +43,88 @@ Network:
   --dnat "SRC DST"        DNAT mapping (repeatable, quote required)
 
 Proxy:
-  -P, --proxy "TYPE IP PORT [USER PASS]"
-                          Add proxy to chain (repeatable, quote if has spaces)
-                          TYPE: http/socks4/socks5/raw
+  -P, --proxy URL         Add proxy to chain (repeatable)
+                          Format: protocol://[user:pass@]host:port
+                          Protocols: http, socks4, socks5, raw
+                          IPv6: socks5://[::1]:1080
 
 Debug:
   --config                Print generated config and exit
-  --proxychains-path PATH
-                          Path to proxychains4 (default: proxychains4 in PATH)
+  --proxychains-path PATH Path to proxychains4 (default: proxychains4 in PATH)
 
 Other:
   -h, --help              Show this help
   -v, --version           Show version
 
 Examples:
-  proxychains4-cli -P "socks5 127.0.0.1 1080" curl example.com
-  proxychains4-cli -P "socks5 127.0.0.1 1080" curl -v example.com
-  proxychains4-cli -P "socks5 127.0.0.1 1080 user pass" wget file.tar.gz
+  proxychains4-cli -P socks5://127.0.0.1:1080 curl example.com
+  proxychains4-cli -P socks5://user:pass@127.0.0.1:1080 wget file.tar.gz
+  proxychains4-cli -P "socks5://[::1]:1080" curl -v example.com
+  # Special chars in password: use URL encoding (%40=@ %3A=: %25=%)
+  proxychains4-cli -P 'socks5://user:p%40ss%3Aword@127.0.0.1:1080' curl example.com
 EOF
 }
 
 show_version() {
   echo "proxychains4-cli ${PROXYCHAINS_CLI_VERSION}"
+}
+
+# URL decode: %XX -> char
+url_decode() {
+  printf '%b' "$(echo "$1" | sed 's/+/ /g; s/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')"
+}
+
+# Parse proxy URL: protocol://[user:pass@]host:port
+# Output: protocol\thost\tport[\tuser\tpass]
+# Supports URL-encoded special chars in user/pass
+parse_proxy_url() {
+  url="$1"
+  
+  # Extract protocol
+  proto="${url%%://*}"
+  rest="${url#*://}"
+  
+  # Validate protocol
+  case "$proto" in
+    http|socks4|socks5|raw) ;;
+    *) echo "Error: Invalid proxy protocol '$proto'. Use http/socks4/socks5/raw" >&2; return 1 ;;
+  esac
+  
+  # Check for auth (user:pass@)
+  if echo "$rest" | grep -q '@'; then
+    auth="${rest%%@*}"
+    hostport="${rest#*@}"
+    user=$(url_decode "${auth%%:*}")
+    pass=$(url_decode "${auth#*:}")
+  else
+    hostport="$rest"
+    user=""
+    pass=""
+  fi
+  
+  # Handle IPv6: [::1]:port
+  if echo "$hostport" | grep -q '^\['; then
+    # IPv6 format: [addr]:port
+    host=$(echo "$hostport" | sed 's/^\[\([^]]*\)\].*/\1/')
+    port=$(echo "$hostport" | sed 's/.*\]://')
+  else
+    # IPv4 or hostname: addr:port
+    host="${hostport%%:*}"
+    port="${hostport##*:}"
+  fi
+  
+  # Validate port
+  if [ -z "$port" ] || ! echo "$port" | grep -qE '^[0-9]+$'; then
+    echo "Error: Invalid or missing port in '$url'" >&2
+    return 1
+  fi
+  
+  # Output in proxychains.conf format
+  if [ -n "$user" ]; then
+    printf '%s\t%s\t%s\t%s\t%s\n' "$proto" "$host" "$port" "$user" "$pass"
+  else
+    printf '%s\t%s\t%s\n' "$proto" "$host" "$port"
+  fi
 }
 
 # Parse arguments
@@ -104,16 +164,12 @@ case "$1" in
   shift 2
   ;;
 --dnat)
-  # Parse dnat string: "SRC DST" or "SRC:PORT DST:PORT"
   dnats="${dnats}${2}
 "
   shift 2
   ;;
 -P|--proxy)
-  # Parse proxy string: "TYPE IP PORT [USER PASS]"
-  proxy_str="$2"
-  # Convert spaces to tabs for .conf format
-  entry=$(echo "$proxy_str" | sed 's/  */ /g' | tr ' ' '\t')
+  entry=$(parse_proxy_url "$2") || exit 1
   proxies="${proxies}${entry}
 "
   shift 2
