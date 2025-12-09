@@ -245,4 +245,4 @@ fi
 
 # Execute with config via environment variable
 export PROXYCHAINS_CONFIG_DATA="$config_content"
-exec "$proxychains_path" "$@"
+exec "$proxychains_path" ${quiet:+-q} "$@"
