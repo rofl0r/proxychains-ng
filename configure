@@ -220,6 +220,7 @@ check_define __APPLE__ && {
 	fi
 }
 check_define __FreeBSD__ && bsd_detected=true
+check_define __NetBSD__ && bsd_detected=true
 check_define __OpenBSD__ && {
 bsd_detected=true
 echo "CFLAGS+=-DIS_OPENBSD">>config.mak
