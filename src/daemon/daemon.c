@@ -5,6 +5,7 @@
 
 */
 
+#undef _GNU_SOURCE
 #define _GNU_SOURCE
 #include <unistd.h>
 #define _POSIX_C_SOURCE 200809L
