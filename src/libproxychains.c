@@ -118,7 +118,7 @@ typedef struct {
 /* If there is some `close` or `close_range` system call before do_init, 
    we buffer it, and actually execute them in do_init. */
 static int close_fds[16];
-static int close_fds_cnt = 0;
+static unsigned int close_fds_cnt = 0;
 static close_range_args_t close_range_buffer[16];
 static int close_range_buffer_cnt = 0;
 
