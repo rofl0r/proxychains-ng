@@ -120,7 +120,7 @@ typedef struct {
 static int close_fds[16];
 static unsigned int close_fds_cnt = 0;
 static close_range_args_t close_range_buffer[16];
-static int close_range_buffer_cnt = 0;
+static unsigned int close_range_buffer_cnt = 0;
 
 static unsigned get_rand_seed(void) {
 #ifdef HAVE_CLOCK_GETTIME
@@ -152,7 +152,7 @@ static void do_init(void) {
 
 	while(close_fds_cnt) true_close(close_fds[--close_fds_cnt]);
 	while(close_range_buffer_cnt) {
-		int i = --close_range_buffer_cnt;
+		unsigned int i = --close_range_buffer_cnt;
 		true_close_range(close_range_buffer[i].first, close_range_buffer[i].last, close_range_buffer[i].flags);
 	}
 	init_l = 1;
@@ -626,7 +626,7 @@ HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
 			errno = ENOMEM;
 			return -1;
 		}
-		int i = close_range_buffer_cnt++;
+		unsigned int i = close_range_buffer_cnt++;
 		close_range_buffer[i].first = first;
 		close_range_buffer[i].last = last;
 		close_range_buffer[i].flags = flags;
