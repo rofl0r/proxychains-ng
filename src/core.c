@@ -122,7 +122,7 @@ static int write_n_bytes(int fd, char *buff, size_t size) {
 	int i = 0;
 	size_t wrote = 0;
 	for(;;) {
-		i = write(fd, &buff[wrote], size - wrote);
+		i = true_write(fd, &buff[wrote], size - wrote);
 		if(i <= 0)
 			return i;
 		wrote += i;
@@ -141,7 +141,7 @@ static int read_n_bytes(int fd, char *buff, size_t size) {
 	for(i = 0; i < size; i++) {
 		pfd[0].revents = 0;
 		ready = poll_retry(pfd, 1, tcp_read_time_out);
-		if(ready != 1 || !(pfd[0].revents & POLLIN) || 1 != read(fd, &buff[i], 1))
+		if(ready != 1 || !(pfd[0].revents & POLLIN) || 1 != true_read(fd, &buff[i], 1))
 			return -1;
 	}
 	return (int) size;
@@ -250,7 +250,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 			                ulen ? "Proxy-Authorization: Basic " : dst,
 			                dst, ulen ? "\r\n" : dst);
 
-			if(len < 0 || len != send(sock, buff, len, 0))
+			if(len < 0 || len != true_send(sock, buff, len, 0))
 				goto err;
 
 			len = 0;
@@ -423,13 +423,536 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 	return SOCKET_ERROR;
 }
 
+
+/* Given a socket connected to a SOCKS5 proxy server, performs a UDP_ASSOCIATE handshake and returns BND_ADDR and BND_PORT if successfull.
+Pass NULL dst_addr and dst_port to fill those fields with 0 if expected local addr and port for udp sending are unknown (see RFC1928) */
+static int udp_associate(int sock, ip_type* dst_addr, unsigned short dst_port, ip_type* bnd_addr, unsigned short* bnd_port, char* user, char* pass){
+
+	PFUNC();
+
+	size_t ulen = strlen(user);
+	size_t passlen = strlen(pass);
+
+	if(ulen > 0xFF || passlen > 0xFF) {
+		proxychains_write_log(LOG_PREFIX "error: maximum size of 255 for user/pass!\n");
+		goto err;
+	}
+
+	int len;
+	unsigned char buff[BUFF_SIZE];
+	char ip_buf[INET6_ADDRSTRLEN];
+	
+	int n_methods = ulen ? 2 : 1;
+	buff[0] = 5;	// version
+	buff[1] = n_methods ;	// number of methods
+	buff[2] = 0;	// no auth method
+	if(ulen) buff[3] = 2;    /// auth method -> username / password
+	if(2+n_methods != write_n_bytes(sock, (char *) buff, 2+n_methods))
+		goto err;
+
+	if(2 != read_n_bytes(sock, (char *) buff, 2))
+		goto err;
+
+	if(buff[0] != 5 || (buff[1] != 0 && buff[1] != 2)) {
+		if(buff[0] == 5 && buff[1] == 0xFF)
+			return BLOCKED;
+		else
+			goto err;
+	}
+
+	if(buff[1] == 2) {
+		// authentication
+		char in[2];
+		char out[515];
+		char *cur = out;
+		size_t c;
+		*cur++ = 1;	// version
+		c = ulen & 0xFF;
+		*cur++ = c;
+		memcpy(cur, user, c);
+		cur += c;
+		c = passlen & 0xFF;
+		*cur++ = c;
+		memcpy(cur, pass, c);
+		cur += c;
+
+		if((cur - out) != write_n_bytes(sock, out, cur - out))
+			goto err;
+
+
+		if(2 != read_n_bytes(sock, in, 2))
+			goto err;
+/* according to RFC 1929 the version field for the user/pass auth sub-
+negotiation should be 1, which is kinda counter-intuitive, so there
+are some socks5 proxies that return 5 instead. other programs like
+curl work fine when the version is 5, so let's do the same and accept
+either of them. */
+		if(!(in[0] == 5 || in[0] == 1))
+			goto err;
+		if(in[1] != 0)
+			return BLOCKED;
+	}
+	int buff_iter = 0;
+	buff[buff_iter++] = 5;	// version
+	buff[buff_iter++] = 3;	// udp_associate
+	buff[buff_iter++] = 0;	// reserved
+
+	if(dst_addr) {
+		int v6 = dst_addr->is_v6;
+		buff[buff_iter++] = v6 ? 4 : 1;	// ip v4/v6
+		memcpy(buff + buff_iter, dst_addr->addr.v6, v6?16:4);	// dest host
+		buff_iter += v6?16:4;
+		memcpy(buff + buff_iter, &dst_port, 2);	// dest port
+		buff_iter += 2;
+	} else {
+		buff[buff_iter++] = 1;	//we put atyp = 1, should we put 0 ?
+		buff[buff_iter++] = 0; // v4 byte1
+		buff[buff_iter++] = 0; // v4 byte2
+		buff[buff_iter++] = 0; // v4 byte3
+		buff[buff_iter++] = 0; // v4 byte4
+		buff[buff_iter++] = 0; // port byte1
+		buff[buff_iter++] = 0; // port byte2
+	}
+
+	if(buff_iter != write_n_bytes(sock, (char *) buff, buff_iter))
+		goto err;
+
+	if(4 != read_n_bytes(sock, (char *) buff, 4))
+		goto err;
+
+	if(buff[0] != 5 || buff[1] != 0)
+		goto err;
+
+
+	switch (buff[3]) {
+		case ATYP_V4:
+			bnd_addr->is_v6 = 0;
+			break;
+		case ATYP_V6:
+			bnd_addr->is_v6 = 1;
+			break;
+		case ATYP_DOM:
+			PDEBUG("BND_ADDR in UDP_ASSOCIATE response should not be a domain name!\n");
+			goto err;
+			break;
+		default:
+			goto err;
+	}
+	len = bnd_addr->is_v6?16:4;
+
+	if(len != read_n_bytes(sock, (char *) buff, len))
+		goto err;
+
+	memcpy(bnd_addr->addr.v6, buff,len);
+
+	if(2 != read_n_bytes(sock, (char *) buff, 2))
+		goto err;
+	
+	memcpy(bnd_port, buff, 2);
+
+	return SUCCESS;
+	
+	err:
+	return SOCKET_ERROR;
+}
+
+/* Fills buf with the SOCKS5 udp request header for the target dst_addr:dst_port*/
+static int write_udp_header(socks5_addr dst_addr, unsigned short dst_port , char frag, char * buf, size_t buflen) {
+
+	int size = 0;
+	int v6 = dst_addr.atyp == ATYP_V6;
+
+	if(dst_addr.atyp == ATYP_DOM){
+		size = dst_addr.addr.dom.len;
+	} else {
+		size = v6?16:4;
+	}
+
+	if (buflen <= size) {
+		return -1;
+	}
+
+	int buf_iter = 0;
+	buf[buf_iter++] = 0;	// reserved
+	buf[buf_iter++] = 0;	// reserved
+	buf[buf_iter++] = frag;	// frag
+	buf[buf_iter++] = dst_addr.atyp;	// atyp
+
+	
+	switch (dst_addr.atyp){
+		case ATYP_V6:
+		case ATYP_V4:
+			memcpy(buf + buf_iter, dst_addr.addr.v6, v6?16:4);
+			buf_iter += v6?16:4;
+			break;
+	
+		case ATYP_DOM:
+			buf[buf_iter++] = dst_addr.addr.dom.len;
+			memcpy(buf + buf_iter, dst_addr.addr.dom.name, dst_addr.addr.dom.len);
+			buf_iter += dst_addr.addr.dom.len;
+			break;
+	}
+
+	memcpy(buf + buf_iter, &dst_port, 2);	// dest port
+	buf_iter += 2;
+	
+	return buf_iter;
+}
+
+
+int read_udp_header(char * buf, size_t buflen, socks5_addr* src_addr, unsigned short* src_port, char* frag) {
+
+	PFUNC();
+	PDEBUG("buflen : %d\n", buflen);
+	if (buflen < 5){
+		PDEBUG("buffer too short to contain a UDP header\n");
+		return -1;
+	}
+
+	int buf_iter = 0;
+	buf_iter += 2; // first 2 bytes are reserved;
+	*frag = buf[buf_iter++];
+	src_addr->atyp = buf[buf_iter++];
+	int v6;
+	
+	switch (src_addr->atyp)
+	{
+	case ATYP_DOM:
+		PDEBUG("UDP header with ATYP_DOM addr type\n");
+		src_addr->addr.dom.len = buf[buf_iter++];
+		if(buflen < (5 + 2 + src_addr->addr.dom.len) ) {
+			PDEBUG("buffer too short to read the UDP header\n");
+			return -1;
+		}
+		memcpy(src_addr->addr.dom.name, buf + buf_iter, src_addr->addr.dom.len);
+		buf_iter +=  src_addr->addr.dom.len;
+		break;
+
+	case ATYP_V4:
+	case ATYP_V6:
+		PDEBUG("UDP header with ATYP_V4/6 addr type\n");
+		v6 = src_addr->atyp == ATYP_V6;
+		if(buflen < (4 + 2 + v6?16:4) ){
+			PDEBUG("buffer too short to read the UDP header\n");
+			return -1;			
+		}
+		memcpy(src_addr->addr.v6, buf + buf_iter, v6?16:4);
+		buf_iter += v6?16:4;
+		cast_socks5addr_v4inv6_to_v4(src_addr);
+		break;
+	default:
+		break;
+	}
+
+	memcpy(src_port, buf+buf_iter, 2);
+	buf_iter += 2;
+
+	return buf_iter;
+}
+
+size_t get_iov_total_len(struct iovec* iov, size_t iov_len){
+	size_t n = 0;
+	for(int i=0; i<iov_len; i++){
+		n += iov[i].iov_len;
+	}
+	return n;
+}
+
+//Tries to write buff_len bytes from buff into the scatter-gather location described by iov and iov_len.
+//Stops when all iov's buffers are full. Returns the number of bytes written 
+size_t write_buf_to_iov(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len){
+	size_t written = 0;
+	int i = 0;
+	size_t min = 0;
+	//size_t iov_total_len = get_iov_total_len(iov, iov_len);
+
+	while( (written < buff_len) && (i < iov_len)){
+		min = ((buff_len-written)<iov[i].iov_len)?(buff_len-written):iov[i].iov_len;
+		memcpy(iov[i].iov_base, buff+written, min);
+		written += min;
+		i += 1;
+	}
+	return written;
+}
+
+
+size_t write_iov_to_buf(void* buff, size_t buff_len, struct iovec* iov, size_t iov_len){
+	
+	size_t written = 0;
+	int i = 0;
+	size_t min = 0;
+	//size_t iov_total_len = get_iov_total_len(iov, iov_len);
+
+	while( (written < buff_len) && (i < iov_len)){
+		min = ((buff_len-written)<iov[i].iov_len)?(buff_len-written):iov[i].iov_len;
+		memcpy(buff+written, iov[i].iov_base, min);
+		written += min;
+		i += 1;
+	}
+	return written;
+}
+
+void cast_socks5addr_v4inv6_to_v4(socks5_addr* addr){
+	if( (addr->atyp == ATYP_V6) && !memcmp(addr->addr.v6, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12)){
+		PDEBUG("casting v4inv6 address to v4 address\n");
+		addr->atyp=ATYP_V4;
+		memcpy(addr->addr.v4.octet, addr->addr.v6+12, 4);
+	}
+}
+
+int compare_iptype_sockaddr(ip_type addr1, struct sockaddr* addr2){
+	if(addr1.is_v6 && (((struct sockaddr_in6 *)addr2)->sin6_family == AF_INET6)){
+		//Both are IPv6
+		return !memcmp(((struct sockaddr_in6 *)addr2)->sin6_addr.s6_addr, addr1.addr.v6, 16);
+	} else if(!addr1.is_v6 && (((struct sockaddr_in *)addr2)->sin_family == AF_INET)){
+		//Both are IPv4
+		return ((uint32_t)(((struct sockaddr_in *)addr2)->sin_addr.s_addr) == addr1.addr.v4.as_int);
+	} else {
+		// Not the same address type
+		return 0;
+	}
+}
+
+int compare_socks5_addr_iptype(socks5_addr addr1, ip_type addr2){
+	PFUNC();
+	if(addr1.atyp == ATYP_DOM){
+		//addr1 is a domain name
+		return 0;
+	}
+
+	if((addr1.atyp == ATYP_V6) && addr2.is_v6){
+		//Both are IPv6
+		return !memcmp(addr1.addr.v6, addr2.addr.v6, 16);
+	} else if((addr1.atyp == ATYP_V4) && !addr2.is_v6){
+		//Both are IPv4
+		return (addr1.addr.v4.as_int == addr2.addr.v4.as_int);
+	} else {
+		// Not the same address type
+		return 0;
+	}
+}
+
+int is_from_chain_head(udp_relay_chain chain, struct sockaddr* src_addr){
+
+	if(compare_iptype_sockaddr(chain.head->bnd_addr, src_addr)){
+		return (chain.head->bnd_port == ((struct sockaddr_in*)src_addr)->sin_port); 
+	}
+	return 0;
+}
+
+
+
+int decapsulate_check_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, socks5_addr* src_addr, unsigned short* src_port, void** udp_data){
+	
+	PFUNC();
+	// Go through the whole proxy chain, decapsulate each header and check that the addresses match
+
+	udp_relay_node * tmp = chain.head;
+	int read = 0;
+	int rc = 0;
+	socks5_addr header_addr;
+	unsigned short header_port;
+	char header_frag;
+	while (tmp->next != NULL)
+	{
+		rc = read_udp_header(in_buffer+read, in_buffer_len-read, &header_addr, &header_port, &header_frag );
+		if(-1 == rc){
+			PDEBUG("error reading UDP header\n");
+			return -1;
+		}
+		read += rc;
+
+		if(header_frag != 0x00){
+			printf("WARNING: received UDP packet with frag != 0 while fragmentation is unsupported.\n");
+		}
+
+		if(!compare_socks5_addr_iptype(header_addr, tmp->next->bnd_addr)){
+			PDEBUG("UDP header addr is not equal to proxy node addr, dropping packet\n");
+			return -1;
+		}
+
+		if(tmp->next->bnd_port != header_port){
+			PDEBUG("UDP header port is not equal to proxy node port, dropping packet\n");
+			return -1;
+		}
+
+		PDEBUG("UDP header's addr and port correspond to proxy node's addr and port\n");
+		tmp = tmp->next;
+	}
+
+	PDEBUG("all UDP headers validated\n");
+
+
+	// Decapsulate the last header. No checks needed here, just pass the source addr and port as return values
+	rc = read_udp_header(in_buffer+read, in_buffer_len-read, src_addr, src_port, &header_frag);
+	if(-1 == rc){
+		PDEBUG("error reading UDP header\n");
+		return -1;
+	}
+	read += rc;
+
+	if(header_frag != 0x00){
+		printf("WARNING: received UDP packet with frag != 0 while fragmentation is unsupported.\n");
+	}
+
+
+	// Point udp_data to the position of the UDP data inside in_buffer
+	*udp_data = in_buffer+read;
+	
+	return 0;
+}
+
+//Takes an in_buffer of size in_buffer_len, checks that all UDP headers are correct (against chain), fills src_ip and src_port with address of the peer sending the packet through the relay, and fills udp_data with the address of the udp data inside in_buff
+int unsocksify_udp_packet(void* in_buffer, size_t in_buffer_len, udp_relay_chain chain, ip_type* src_ip, unsigned short* src_port, void** udp_data){
+	PFUNC();
+	// Decapsulate all the UDP headers and check that the packet came from the right proxy nodes
+	int rc;
+	socks5_addr src_addr;
+	rc = decapsulate_check_udp_packet(in_buffer, in_buffer_len, chain, &src_addr, src_port, udp_data);
+	if(rc != SUCCESS){
+		PDEBUG("error decapsulating the packet\n");
+		return -1;
+	}
+	PDEBUG("all UDP headers decapsulated and validated\n");
+
+	// If the innermost UDP header (containing the address of the final target) is of type ATYP_DOM, perform a 
+	// reverse mapping to hand the 224.X.X.X IP to the client application
+	
+	if(src_addr.atyp == ATYP_DOM){ 
+		PDEBUG("Fetching matching IP for hostname\n");
+		DUMP_BUFFER(src_addr.addr.dom.name,src_addr.addr.dom.len);
+		ip_type4 tmp_ip = IPT4_INVALID;
+		char host_string[256];
+		memcpy(host_string, src_addr.addr.dom.name, src_addr.addr.dom.len);
+		host_string[src_addr.addr.dom.len] = 0x00;
+
+		tmp_ip = rdns_get_ip_for_host(host_string, src_addr.addr.dom.len);
+		if(tmp_ip.as_int == -1){
+			PDEBUG("error getting ip for host\n");
+			return -1;
+		}
+		src_addr.atyp = ATYP_V4;
+		src_addr.addr.v4.as_int = tmp_ip.as_int;
+	
+	}
+	
+	src_ip->is_v6 = (src_addr.atyp == ATYP_V6); 
+	if(src_ip->is_v6){
+		memcpy(src_ip->addr.v6, src_addr.addr.v6, 16);
+	} else{
+		src_ip->addr.v4.as_int = src_addr.addr.v4.as_int;
+	}
+	
+	return 0;
+}
+
+
+int encapsulate_udp_packet(udp_relay_chain chain, socks5_addr dst_addr, unsigned short dst_port, void* buffer, size_t* buffer_len){
+	
+	PFUNC();
+
+	unsigned int written = 0;
+	unsigned int offset = 0;
+	udp_relay_node * tmp = chain.head;
+	
+	while ((tmp->next != NULL) && (written < *buffer_len))
+	{
+		socks5_addr tmpaddr;
+		tmpaddr.atyp = (tmp->next)->bnd_addr.is_v6?ATYP_V6:ATYP_V4;
+		memcpy(tmpaddr.addr.v6, (tmp->next)->bnd_addr.addr.v6, (tmp->next)->bnd_addr.is_v6?16:4);
+
+		written = write_udp_header(tmpaddr, (tmp->next)->bnd_port, 0, buffer+offset, *buffer_len - offset);
+		if (written == -1){
+			PDEBUG("error write_udp_header\n");
+			return -1; 
+		}
+		offset += written;
+
+		tmp = tmp->next;
+	}
+
+	written = write_udp_header(dst_addr, dst_port, 0, buffer+offset, *buffer_len-offset);
+	if (written == -1){
+		PDEBUG("error write_udp_header\n");
+		return -1;
+	}
+	offset += written;
+
+	*buffer_len = offset;
+
+	return 0;
+}
+
+int socksify_udp_packet(void* udp_data, size_t udp_data_len, udp_relay_chain chain, ip_type dst_ip, unsigned short dst_port, void* buffer, size_t* buffer_len){
+	
+	PFUNC();
+	if (chain.head == NULL ){ 
+		PDEBUG("provided chain is empty\n");
+		return -1;
+	}
+
+	char *dns_name = NULL;
+	char hostnamebuf[MSG_LEN_MAX];
+	size_t dns_len = 0;
+	socks5_addr dst_addr;
+	// we use ip addresses with 224.* to lookup their dns name in our table, to allow remote DNS resolution
+	// the range 224-255.* is reserved, and it won't go outside (unless the app does some other stuff with
+	// the results returned from gethostbyname et al.)
+	// the hardcoded number 224 can now be changed using the config option remote_dns_subnet to i.e. 127
+	if(!dst_ip.is_v6 && proxychains_resolver >= DNSLF_RDNS_START && dst_ip.addr.v4.octet[0] == remote_dns_subnet) {
+		dst_addr.atyp = ATYP_DOM;
+		dns_len = rdns_get_host_for_ip(dst_ip.addr.v4, dst_addr.addr.dom.name);
+		PDEBUG("dnslen: %d\n", dns_len);
+		if(!dns_len) return -1;
+		else dns_name = dst_addr.addr.dom.name;
+		dst_addr.addr.dom.len = dns_len & 0xFF;
+		PDEBUG("dnslen in struct: %d\n", dst_addr.addr.dom.len);
+		
+	} else {
+		if(dst_ip.is_v6){
+			dst_addr.atyp =  ATYP_V6;
+			memcpy(dst_addr.addr.v6, dst_ip.addr.v6, 16);
+		 
+		} else {
+			dst_addr.atyp = ATYP_V4;
+			memcpy(dst_addr.addr.v4.octet, dst_ip.addr.v4.octet, 4);
+		}
+	}
+	
+	PDEBUG("host dns %s\n", dns_name ? dns_name : "<NULL>");
+
+
+	// Write all the UDP headers into the provided buffer
+	int rc;
+	size_t tmp_buffer_len = *buffer_len;
+	rc = encapsulate_udp_packet(chain, dst_addr, dst_port, buffer, &tmp_buffer_len);
+	if(rc != SUCCESS){
+		PDEBUG("error encapsulate_udp_packet()\n");
+		return -1;
+
+	}
+
+
+	// Append UDP data in the remaining space of the buffer
+	size_t min = (udp_data_len>(buffer_len-tmp_buffer_len))?(buffer_len-tmp_buffer_len):udp_data_len;
+	memcpy(buffer + tmp_buffer_len, udp_data, min);
+
+	*buffer_len = tmp_buffer_len + min;
+
+	return 0;
+
+}
+
+
 #define TP " ... "
 #define DT "Dynamic chain"
 #define ST "Strict chain"
 #define RT "Random chain"
 #define RRT "Round Robin chain"
+#define UDPC "UDP_ASSOCIATE tcp socket chain"
 
 static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
+	PFUNC();
 	int v6 = pd->ip.is_v6;
 
 	*fd = socket(v6?PF_INET6:PF_INET, SOCK_STREAM, 0);
@@ -463,13 +986,14 @@ static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	proxychains_write_log(TP " timeout\n");
 	error:
 	if(*fd != -1) {
-		close(*fd);
+		true_close(*fd);
 		*fd = -1;
 	}
 	return SOCKET_ERROR;
 }
 
 static proxy_data *select_proxy(select_type how, proxy_data * pd, unsigned int proxy_count, unsigned int *offset) {
+	PFUNC();
 	unsigned int i = 0, k = 0;
 	if(*offset >= proxy_count)
 		return NULL;
@@ -563,7 +1087,7 @@ static int chain_step(int *ns, proxy_data * pfrom, proxy_data * pto) {
 	return retcode;
 err:
 	if(errmsg) proxychains_write_log(errmsg);
-	if(*ns != -1) close(*ns);
+	if(*ns != -1) true_close(*ns);
 	*ns = -1;
 	return retcode;
 }
@@ -719,11 +1243,11 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 
 	proxychains_write_log(TP " OK\n");
 	dup2(ns, sock);
-	close(ns);
+	true_close(ns);
 	return 0;
 	error:
 	if(ns != -1)
-		close(ns);
+		true_close(ns);
 	errno = ECONNREFUSED;	// for nmap ;)
 	return -1;
 
@@ -734,9 +1258,274 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	
 	release_all(pd, proxy_count);
 	if(ns != -1)
-		close(ns);
+		true_close(ns);
 	errno = ETIMEDOUT;
 	return -1;
+}
+
+
+int add_node_to_chain(proxy_data * pd, udp_relay_chain * chain){
+	PFUNC();
+	// Allocate memory for the new node structure
+	udp_relay_node * new_node = NULL;
+	if(NULL == (new_node = (udp_relay_node *)malloc(sizeof(udp_relay_node)))){
+		PDEBUG("error malloc new node\n");
+		return -1;
+	}
+	new_node->next = NULL;
+
+	
+	udp_relay_node * tmp = chain->head;
+
+	if(tmp == NULL){ // Means new_node is the first node to be created
+		chain->head = new_node;
+		new_node->prev = NULL;
+	} else {
+		// Moving to the end of the current chain
+		while(tmp->next != NULL){
+			tmp = tmp->next;
+		}
+		// Adding the new node at the end
+		tmp->next = new_node;
+		new_node->prev = tmp;
+	}
+	
+
+	// Initializing the new node
+	new_node->pd.ip = pd->ip;
+	new_node->pd.port = pd->port;
+	new_node->pd.pt = pd->pt;
+	new_node->pd.ps = pd->ps;
+	strcpy(new_node->pd.user, pd->user);
+	strcpy(new_node->pd.pass, pd->pass);
+
+	// Connecting the new node tcp_socketfd to the associated proxy through the current chain
+	//
+	tmp = chain->head;
+	//    First connect to the chain head
+	if(SUCCESS != start_chain(&(new_node->tcp_sockfd), &(tmp->pd), UDPC)){
+		PDEBUG("start_chain failed\n");
+		new_node->tcp_sockfd = -1;
+		goto err;
+	}
+	//   Connect to the rest of the chain
+	while(tmp->next != NULL){
+		if(SUCCESS != chain_step(&(new_node->tcp_sockfd), &(tmp->pd), &(tmp->next->pd))){
+			PDEBUG("chain step failed\n");
+			new_node->tcp_sockfd = -1;
+			goto err;
+		}
+		tmp = tmp->next;
+	}
+
+	// Performing UDP_ASSOCIATE handshake in order to fill the new node BND_ADDR and BND_PORT
+	if(SUCCESS != udp_associate(new_node->tcp_sockfd, NULL, NULL, &(new_node->bnd_addr), &(new_node->bnd_port), new_node->pd.user, new_node->pd.pass)){
+		PDEBUG("udp_associate failed\n");
+		goto err;
+	}
+
+	char ip_buf[INET6_ADDRSTRLEN];
+	proxychains_write_log(" --> Node[%s:%i] open\n", inet_ntop(new_node->bnd_addr.is_v6?AF_INET6:AF_INET, new_node->bnd_addr.is_v6?(void*)new_node->bnd_addr.addr.v6:(void*)new_node->bnd_addr.addr.v4.octet, ip_buf, sizeof(ip_buf))  , ntohs(new_node->bnd_port));
+	PDEBUG("new node added and open to relay UDP packets\n");
+	return SUCCESS;
+
+	err:
+	// Ensure new node tcp socket is closed
+	if(new_node->tcp_sockfd != -1){
+		true_close(new_node->tcp_sockfd);
+	}
+
+	// Remove the new node from the chain
+	if(new_node->prev == NULL){ // means new_node is the only node in chain
+		chain->head = NULL;
+	} else{
+		(new_node->prev)->next  = NULL;
+	}
+	
+
+	// Free memory
+	free(new_node);
+
+	return -1;
+}
+
+int free_relay_chain_contents(udp_relay_chain* chain){
+	if(NULL != chain->connected_peer_addr){
+		free(chain->connected_peer_addr);
+		chain->connected_peer_addr = NULL; 
+	}
+
+	if(chain->head == NULL){
+		return SUCCESS;
+	}
+	
+	udp_relay_node * current = chain->head;
+	udp_relay_node * next = NULL;
+	
+	while(current != NULL){
+		next = current->next;
+
+		true_close(current->tcp_sockfd);
+		free(current);
+
+		current = next;
+	}
+	chain->head = NULL;
+
+	return SUCCESS;
+}
+
+udp_relay_chain * open_relay_chain(proxy_data *pd, unsigned int proxy_count, chain_type ct, unsigned int max_chains){
+	
+	PFUNC();
+	// Allocate memory for the new relay chain
+	udp_relay_chain * new_chain = NULL;
+	if(NULL == (new_chain = (udp_relay_chain *)malloc(sizeof(udp_relay_chain)))){
+		PDEBUG("error malloc new chain\n");
+		return NULL;
+	}
+
+	new_chain->head = NULL;
+	new_chain->sockfd = -1;
+	new_chain->connected_peer_addr = NULL;
+	new_chain->connected_peer_addr_len = -1;
+
+	
+	unsigned int alive_count = 0;
+	unsigned int offset = 0;
+	proxy_data *p1;
+
+
+	switch (ct)
+	{
+	case DYNAMIC_TYPE:
+		PDEBUG("DYNAMIC_TYPE not yet supported for UDP\n");
+		goto error; 
+		break;
+	case ROUND_ROBIN_TYPE:
+		PDEBUG("ROUND_ROBIN_TYPE not yet supported for UDP\n");
+		goto error; 
+		break;
+	case STRICT_TYPE:
+		alive_count = calc_alive(pd, proxy_count);
+		offset = 0;
+		PDEBUG("opening STRICT_TYPE relay chain, alive_count=%d, offset=%d\n", alive_count, offset);
+		while((p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
+			if(SUCCESS != add_node_to_chain(p1, new_chain)) {
+				PDEBUG("add_node_to_chain failed\n");
+				p1->ps = BLOCKED_STATE;
+				goto error;
+			}
+			p1->ps = BUSY_STATE;	
+		}
+		return new_chain;
+
+		break;
+	case RANDOM_TYPE:
+		PDEBUG("RANDOM_TYPE not yet supported for UDP\n");
+		goto error; 
+		break;
+	default:
+		break;
+	}
+
+	error:
+	PDEBUG("error\n");
+	release_all(pd, proxy_count);
+	free_relay_chain_contents(new_chain);
+	free(new_chain);
+	errno = ETIMEDOUT;
+	return NULL;
+}
+
+// Checks the address family of addr, allocates a matching structure and keeps a pointer to it in the chain structure to store the address of the connected peer
+void set_connected_peer_addr(udp_relay_chain* chain, struct sockaddr* addr, socklen_t addrlen){
+	
+	sa_family_t fam = ((struct sockaddr_in*)addr)->sin_family;
+	int v6 = fam == AF_INET6;
+
+
+
+	if(v6){
+		struct sockaddr_in6* old_addr6 = (struct sockaddr_in6*)addr;
+		struct sockaddr_in6* new_addr6 = NULL;
+		if(NULL == (new_addr6 = (struct sockaddr_in6*)malloc(sizeof(struct sockaddr_in6)))){
+			PDEBUG("error malloc\n");
+			return -1;
+		}
+
+		new_addr6->sin6_family = old_addr6->sin6_family;
+		new_addr6->sin6_port = old_addr6->sin6_port;
+		memcpy(new_addr6->sin6_addr.s6_addr, old_addr6->sin6_addr.s6_addr, 16);
+
+		chain->connected_peer_addr = (struct sockaddr*)new_addr6;
+		chain->connected_peer_addr_len = sizeof(struct sockaddr_in6);
+
+	} else{
+		struct sockaddr_in* old_addr = (struct sockaddr_in*)addr;
+		struct sockaddr_in* new_addr = NULL;
+		if(NULL == (new_addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in)))){
+			PDEBUG("error malloc\n"); 
+			return -1;
+		}
+
+		new_addr->sin_family = old_addr->sin_family;
+		new_addr->sin_port = old_addr->sin_port;
+		new_addr->sin_addr.s_addr = old_addr->sin_addr.s_addr;
+
+		chain->connected_peer_addr = (struct sockaddr*)new_addr;
+		chain->connected_peer_addr_len = sizeof(struct sockaddr_in);
+	}
+}
+
+
+void add_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* new_chain){
+
+	new_chain->next = NULL;
+
+	if(chains_list->tail == NULL){ // The current list is empty, set head and tail to the new chain
+		chains_list->head = new_chain;
+		chains_list->tail = new_chain;
+		new_chain->prev = NULL;
+	} else {
+		// Add the new chain at the end
+		(chains_list->tail)->next = new_chain;
+		new_chain->prev = chains_list->tail;
+		chains_list->tail = new_chain;
+	}
+}
+
+void del_relay_chain(udp_relay_chain_list* chains_list, udp_relay_chain* chain){
+	if(chain == chains_list->head){
+		if(chain->next == NULL){
+			free(chain);
+			chains_list->head = NULL;
+			chains_list->tail = NULL;
+		}else{
+			chains_list->head = chain->next;
+			chains_list->head->prev = NULL;
+			free(chain);
+		}
+	} else if (chain == chains_list->tail){
+		chains_list->tail = chain->prev;
+		chains_list->tail->next = NULL;
+		free(chain);
+	} else {
+		chain->next->prev = chain->prev;
+		chain->prev->next = chain->next;
+		free(chain);
+	}
+}
+
+udp_relay_chain* get_relay_chain(udp_relay_chain_list chains_list, int sockfd){
+	udp_relay_chain* tmp = chains_list.head;
+	while(tmp != NULL){
+		if(tmp->sockfd == sockfd){
+			break;
+		}
+		tmp = tmp->next;
+	}
+	return tmp;
 }
 
 static pthread_mutex_t servbyname_lock;
@@ -806,9 +1595,9 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 
 		case 0: // child
 			proxychains_write_log("|DNS-request| %s \n", name);
-			close(pipe_fd[0]);
+			true_close(pipe_fd[0]);
 			dup2(pipe_fd[1],1);
-			close(pipe_fd[1]);
+			true_close(pipe_fd[1]);
 
 		//	putenv("LD_PRELOAD=");
 			execlp("proxyresolv","proxyresolv",name,NULL);
@@ -816,17 +1605,17 @@ struct hostent* proxy_gethostbyname_old(const char *name)
 			exit(2);
 
 		case -1: //error
-			close(pipe_fd[0]);
-			close(pipe_fd[1]);
+			true_close(pipe_fd[0]);
+			true_close(pipe_fd[1]);
 			perror("can't fork");
 			goto err;
 
 		default:
-			close(pipe_fd[1]);
+			true_close(pipe_fd[1]);
 			waitpid(pid, &status, 0);
 			buff[0] = 0;
-			read(pipe_fd[0],&buff,sizeof(buff));
-			close(pipe_fd[0]);
+			true_read(pipe_fd[0],&buff,sizeof(buff));
+			true_close(pipe_fd[0]);
 got_buff:
 			l = strlen(buff);
 			if (!l) goto err_dns;
