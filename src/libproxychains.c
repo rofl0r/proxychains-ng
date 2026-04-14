@@ -142,7 +142,8 @@ static void do_init(void) {
 	if(env && *env == '1')
 		proxychains_quiet_mode = 1;
 
-	proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
+	if(!proxychains_quiet_mode)
+		proxychains_write_log(LOG_PREFIX "DLL init: proxychains-ng %s\n", proxychains_get_version());
 
 	setup_hooks();
 
