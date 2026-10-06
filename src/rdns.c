@@ -22,9 +22,9 @@ size_t rdns_daemon_get_host_for_ip(ip_type4 ip, char* readbuf) {
 		.m.ip = ip,
 	};
 	int fd = socket(AF_INET, SOCK_DGRAM|SOCK_CLOEXEC, 0);
-	sendto(fd, &msg, sizeof(msg.h)+4, 0, (void*)&rdns_server, sizeof(rdns_server));
-	recvfrom(fd, &msg, sizeof msg, 0, (void*)0, (void*)0);
-	close(fd);
+	true_sendto(fd, &msg, sizeof(msg.h)+4, 0, (void*)&rdns_server, sizeof(rdns_server));
+	true_recvfrom(fd, &msg, sizeof msg, 0, (void*)0, (void*)0);
+	true_close(fd);
 	msg.h.datalen = ntohs(msg.h.datalen);
 	if(!msg.h.datalen || msg.h.datalen > 256) return 0;
 	memcpy(readbuf, msg.m.host, msg.h.datalen);
@@ -39,9 +39,9 @@ static ip_type4 rdns_daemon_get_ip_for_host(char* host, size_t len) {
 	memcpy(msg.m.host, host, len+1);
 	msg.h.datalen = htons(len+1);
 	int fd = socket(AF_INET, SOCK_DGRAM|SOCK_CLOEXEC, 0);
-	sendto(fd, &msg, sizeof(msg.h)+len+1, 0, (void*)&rdns_server, sizeof(rdns_server));
-	recvfrom(fd, &msg, sizeof msg, 0, (void*)0, (void*)0);
-	close(fd);
+	true_sendto(fd, &msg, sizeof(msg.h)+len+1, 0, (void*)&rdns_server, sizeof(rdns_server));
+	true_recvfrom(fd, &msg, sizeof msg, 0, (void*)0, (void*)0);
+	true_close(fd);
 	if(ntohs(msg.h.datalen) != 4) return IPT4_INT(-1);
 	return msg.m.ip;
 }
