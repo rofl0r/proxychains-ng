@@ -24,9 +24,12 @@
 #include "common.h"
 
 static int usage(char **argv) {
-	printf("\nUsage:\t%s -q -f config_file program_name [arguments]\n"
+	printf("\nUsage:\t%s -q -f config_file -x proxy_url program_name [arguments]\n"
 	       "\t-q makes proxychains quiet - this overrides the config setting\n"
 	       "\t-f allows one to manually specify a configfile to use\n"
+	       "\t-x allows one to manually specify a proxy (e.g. socks5://127.0.0.1:1080)\n"
+	       "\t   proxy types: http, socks4, socks5, raw\n"
+	       "\t   syntax: type://[user:pass@]host:port\n"
 	       "\tfor example : proxychains telnet somehost.com\n" "More help in README file\n\n", argv[0]);
 	return EXIT_FAILURE;
 }
@@ -63,7 +66,7 @@ static void set_own_dir(const char *argv0) {
 	}
 }
 
-#define MAX_COMMANDLINE_FLAGS 2
+#define MAX_COMMANDLINE_FLAGS 3
 
 int main(int argc, char *argv[]) {
 	char *path = NULL;
@@ -90,7 +93,16 @@ int main(int argc, char *argv[]) {
 					return usage(argv);
 
 				start_argv += 2;
-			}
+			} else if(argv[start_argv][1] == 'x') {
+
+				if(start_argv + 1 < argc)
+					setenv("PROXYCHAINS_PROXY", argv[start_argv + 1], 1);
+				else
+					return usage(argv);
+
+				start_argv += 2;
+			} else
+				break;
 		} else
 			break;
 	}
@@ -99,7 +111,10 @@ int main(int argc, char *argv[]) {
 		return usage(argv);
 
 	/* check if path of config file has not been passed via command line */
-	path = get_config_path(path, pbuf, sizeof(pbuf));
+	if(getenv("PROXYCHAINS_PROXY"))
+		path = "./proxychains.conf";
+	else
+		path = get_config_path(path, pbuf, sizeof(pbuf));
 
 	if(!quiet)
 		fprintf(stderr, LOG_PREFIX "config file found: %s\n", path);
