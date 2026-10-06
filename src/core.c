@@ -403,9 +403,9 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 					len = 16;
 					break;
 				case 3:
-					len = 0;
-					if(1 != read_n_bytes(sock, (char *) &len, 1))
+					if(1 != read_n_bytes(sock, (char *) buff, 1))
 						goto err;
+					len = buff[0];
 					break;
 				default:
 					goto err;
