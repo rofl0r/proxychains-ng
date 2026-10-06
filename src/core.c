@@ -402,11 +402,13 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 				case 4:
 					len = 16;
 					break;
-				case 3:
-					len = 0;
-					if(1 != read_n_bytes(sock, (char *) &len, 1))
+				case 3: {
+					unsigned char blen;
+					if(1 != read_n_bytes(sock, (char *) &blen, 1))
 						goto err;
+					len = blen;
 					break;
+					}
 				default:
 					goto err;
 			}
