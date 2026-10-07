@@ -1,0 +1,248 @@
+#!/bin/sh
+# proxychains4-cli - Dynamic config generation for proxychains4
+
+# Static variables
+# sync with proxychains4 version
+PROXYCHAINS_CLI_VERSION="4.17"
+
+# Defaults
+chain_mode="strict"
+chain_len=""
+quiet=""
+dns_mode="proxy"
+dns_subnet="224"
+read_timeout="15000"
+connect_timeout="8000"
+localnets=""
+dnats=""
+proxies=""
+proxychains_path="proxychains4"
+show_config=""
+
+show_help() {
+cat <<EOF
+Usage: proxychains4-cli [options] program [args...]
+
+Chain Options:
+  -c, --chain MODE        Chain mode (strict/dynamic/random/round_robin)
+  -l, --chain-len N       Chain length for random/round_robin
+
+Output:
+  -q, --quiet             Quiet mode
+
+DNS Options:
+  -d, --dns MODE          DNS mode (proxy/old/off/IP:PORT)
+  -S, --dns-subnet N      Remote DNS subnet (0-255)
+
+Timeouts:
+  -R, --read-timeout MS   TCP read timeout in milliseconds
+  -T, --connect-timeout MS TCP connect timeout in milliseconds
+
+Network:
+  -n, --localnet CIDR     Bypass proxy for CIDR (repeatable)
+  --dnat "SRC DST"        DNAT mapping (repeatable, quote required)
+
+Proxy:
+  -P, --proxy URL         Add proxy to chain (repeatable)
+                          Format: protocol://[user:pass@]host:port
+                          Protocols: http, socks4, socks5, raw
+                          IPv6: socks5://[::1]:1080
+
+Debug:
+  --config                Print generated config and exit
+  --proxychains-path PATH Path to proxychains4 (default: proxychains4 in PATH)
+
+Other:
+  -h, --help              Show this help
+  -v, --version           Show version
+
+Examples:
+  proxychains4-cli -P socks5://127.0.0.1:1080 curl example.com
+  proxychains4-cli -P socks5://user:pass@127.0.0.1:1080 wget file.tar.gz
+  proxychains4-cli -P "socks5://[::1]:1080" curl -v example.com
+  # Special chars in password: use URL encoding (%40=@ %3A=: %25=%)
+  proxychains4-cli -P 'socks5://user:p%40ss%3Aword@127.0.0.1:1080' curl example.com
+EOF
+}
+
+show_version() {
+  echo "proxychains4-cli ${PROXYCHAINS_CLI_VERSION}"
+}
+
+# URL decode: %XX -> char
+url_decode() {
+  printf '%b' "$(echo "$1" | sed 's/+/ /g; s/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')"
+}
+
+# Parse proxy URL: protocol://[user:pass@]host:port
+# Output: protocol\thost\tport[\tuser\tpass]
+# Supports URL-encoded special chars in user/pass
+parse_proxy_url() {
+  url="$1"
+  
+  # Extract protocol
+  proto="${url%%://*}"
+  rest="${url#*://}"
+  
+  # Validate protocol
+  case "$proto" in
+    http|socks4|socks5|raw) ;;
+    *) echo "Error: Invalid proxy protocol '$proto'. Use http/socks4/socks5/raw" >&2; return 1 ;;
+  esac
+  
+  # Check for auth (user:pass@)
+  if echo "$rest" | grep -q '@'; then
+    auth="${rest%%@*}"
+    hostport="${rest#*@}"
+    user=$(url_decode "${auth%%:*}")
+    pass=$(url_decode "${auth#*:}")
+  else
+    hostport="$rest"
+    user=""
+    pass=""
+  fi
+  
+  # Handle IPv6: [::1]:port
+  if echo "$hostport" | grep -q '^\['; then
+    # IPv6 format: [addr]:port
+    host=$(echo "$hostport" | sed 's/^\[\([^]]*\)\].*/\1/')
+    port=$(echo "$hostport" | sed 's/.*\]://')
+  else
+    # IPv4 or hostname: addr:port
+    host="${hostport%%:*}"
+    port="${hostport##*:}"
+  fi
+  
+  # Validate port
+  if [ -z "$port" ] || ! echo "$port" | grep -qE '^[0-9]+$'; then
+    echo "Error: Invalid or missing port in '$url'" >&2
+    return 1
+  fi
+  
+  # Output in proxychains.conf format
+  if [ -n "$user" ]; then
+    printf '%s\t%s\t%s\t%s\t%s\n' "$proto" "$host" "$port" "$user" "$pass"
+  else
+    printf '%s\t%s\t%s\n' "$proto" "$host" "$port"
+  fi
+}
+
+# Parse arguments
+while [ $# -gt 0 ]; do
+case "$1" in
+-c|--chain)
+  chain_mode="$2"
+  shift 2
+  ;;
+-l|--chain-len)
+  chain_len="$2"
+  shift 2
+  ;;
+-q|--quiet)
+  quiet=1
+  shift
+  ;;
+-d|--dns)
+  dns_mode="$2"
+  shift 2
+  ;;
+-S|--dns-subnet)
+  dns_subnet="$2"
+  shift 2
+  ;;
+-R|--read-timeout)
+  read_timeout="$2"
+  shift 2
+  ;;
+-T|--connect-timeout)
+  connect_timeout="$2"
+  shift 2
+  ;;
+-n|--localnet)
+  localnets="${localnets}${2}
+"
+  shift 2
+  ;;
+--dnat)
+  dnats="${dnats}${2}
+"
+  shift 2
+  ;;
+-P|--proxy)
+  entry=$(parse_proxy_url "$2") || exit 1
+  proxies="${proxies}${entry}
+"
+  shift 2
+  ;;
+-h|--help)
+  show_help
+  exit 0
+  ;;
+-v|--version)
+  show_version
+  exit 0
+  ;;
+--config)
+  show_config=1
+  shift
+  ;;
+--proxychains-path)
+  proxychains_path="$2"
+  shift 2
+  ;;
+-*)
+  echo "Unknown option: $1" >&2
+  echo "Use -h for help" >&2
+  exit 1
+  ;;
+*)
+  # First non-option is program, stop parsing
+  break
+  ;;
+esac
+done
+
+# Check if program specified (unless --config)
+if [ $# -eq 0 ] && [ -z "$show_config" ]; then
+  echo "Error: No program specified" >&2
+  echo "Use -h for help" >&2
+  exit 1
+fi
+
+# Check if at least one proxy specified
+if [ -z "$proxies" ]; then
+  echo "Error: No proxy specified. Use -P to add proxy." >&2
+  exit 1
+fi
+
+# Build DNS config line
+dns_config=""
+case "$dns_mode" in
+  proxy) dns_config="proxy_dns";;
+  old) dns_config="proxy_dns_old";;
+  off|none|"") ;;
+  *) dns_config="proxy_dns_daemon $dns_mode";;
+esac
+
+# Generate config content
+config_content="${chain_mode}_chain
+${chain_len:+chain_len = $chain_len}
+${quiet:+quiet_mode}
+${dns_config}
+${dns_subnet:+remote_dns_subnet $dns_subnet}
+${read_timeout:+tcp_read_time_out $read_timeout}
+${connect_timeout:+tcp_connect_time_out $connect_timeout}
+$(printf '%s' "$localnets" | while IFS= read -r net; do [ -n "$net" ] && echo "localnet $net"; done)
+$(printf '%s' "$dnats" | while IFS= read -r m; do [ -n "$m" ] && echo "dnat $m"; done)
+[ProxyList]
+$(printf '%s' "$proxies")"
+
+# If --config, print and exit
+if [ -n "$show_config" ]; then
+  printf '%s\n' "$config_content"
+  exit 0
+fi
+
+# Execute with config via environment variable
+export PROXYCHAINS_CONFIG_DATA="$config_content"
+exec "$proxychains_path" ${quiet:+-q} "$@"
