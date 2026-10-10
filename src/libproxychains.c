@@ -115,7 +115,7 @@ typedef struct {
 	unsigned int first, last, flags;
 } close_range_args_t;
 
-/* If there is some `close` or `close_range` system call before do_init, 
+/* If there is some `close` or `close_range` system call before do_init,
    we buffer it, and actually execute them in do_init. */
 static int close_fds[16];
 static int close_fds_cnt = 0;
@@ -560,9 +560,7 @@ inv_host:
 			}
 		}
 	}
-#ifndef BROKEN_FCLOSE
 	fclose(file);
-#endif
 	if(!count) {
 		fprintf(stderr, "error: no valid proxy found in config\n");
 		exit(1);
@@ -639,7 +637,7 @@ HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
 	int protected_fds[] = {req_pipefd[0], req_pipefd[1], resp_pipefd[0], resp_pipefd[1]};
 	intsort(protected_fds, 4);
 	/* We are skipping protected_fds while calling true_close_range()
-	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop. 
+	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop.
 	 * [first, cut1-1] , [cut1+1, cut2-1] , [cut2+1, cut3-1]
 	 * Finally, we delete the remaining sub-range, outside the loop. [cut3+1, tail]
 	 */
