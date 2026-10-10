@@ -75,8 +75,10 @@ int proxychains_got_chain_data = 0;
 unsigned int proxychains_max_chain = 1;
 int proxychains_quiet_mode = 0;
 enum dns_lookup_flavor proxychains_resolver = DNSLF_LIBC;
-localaddr_arg localnet_addr[MAX_LOCALNET];
+addr_arg localnet_addr[MAX_LOCALNET];
+addr_arg remotenet_addr[MAX_REMOTENET];
 size_t num_localnet_addr = 0;
+size_t num_remotenet_addr = 0;
 dnat_arg dnats[MAX_DNAT];
 size_t num_dnats = 0;
 unsigned int remote_dns_subnet = 224;
@@ -115,7 +117,7 @@ typedef struct {
 	unsigned int first, last, flags;
 } close_range_args_t;
 
-/* If there is some `close` or `close_range` system call before do_init, 
+/* If there is some `close` or `close_range` system call before do_init,
    we buffer it, and actually execute them in do_init. */
 static int close_fds[16];
 static int close_fds_cnt = 0;
@@ -291,6 +293,7 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	char buf[1024], type[1024], host[1024], user[1024];
 	char *buff, *env, *p;
 	char local_addr_port[64], local_addr[64], local_netmask[32];
+	char remote_addr_port[64], remote_addr[64], remote_netmask[32];
 	char dnat_orig_addr_port[32], dnat_new_addr_port[32];
 	char dnat_orig_addr[32], dnat_orig_port[32], dnat_new_addr[32], dnat_new_port[32];
 	char rdnsd_addr[32], rdnsd_port[8];
@@ -475,6 +478,81 @@ inv_host:
 					} else {
 						fprintf(stderr, "# of localnet exceed %d.\n", MAX_LOCALNET);
 					}
+                } else if(STR_STARTSWITH(buff, "remotenet")) {
+                    char colon, extra, right_bracket[2];
+                    unsigned short remote_port = 0, remote_prefix;
+                    int remote_family, n, valid;
+                    if(sscanf(buff, "%s %53[^/]/%15s%c", user, remote_addr_port, remote_netmask, &extra) != 3) {
+                        fprintf(stderr, "remotenet format error");
+                        exit(1);
+                    }
+                    p = strchr(remote_addr_port, ':');
+                    if(!p || p == strrchr(remote_addr_port, ':')) {
+                        remote_family = AF_INET;
+                        n = sscanf(remote_addr_port, "%15[^:]%c%5hu%c", remote_addr, &colon, &remote_port, &extra);
+                        valid = n == 1 || (n == 3 && colon == ':');
+                    } else if(remote_addr_port[0] == '[') {
+                        remote_family = AF_INET6;
+                        n = sscanf(remote_addr_port, "[%45[^][]%1[]]%c%5hu%c", remote_addr, right_bracket, &colon, &remote_port, &extra);
+                        valid = n == 2 || (n == 4 && colon == ':');
+                    } else {
+                        remote_family = AF_INET6;
+                        valid = sscanf(remote_addr_port, "%45[^][]%c", remote_addr, &extra) == 1;
+                    }
+                    if(!valid) {
+                        fprintf(stderr, "remotenet address or port error\n");
+                        exit(1);
+                    }
+                    if(remote_port) {
+                        PDEBUG("added remotenet: netaddr=%s, port=%u, netmask=%s\n",
+                               remote_addr, remote_port, remote_netmask);
+                    } else {
+                        PDEBUG("added remotenet: netaddr=%s, netmask=%s\n",
+                               remote_addr, remote_netmask);
+                    }
+                    if(num_remotenet_addr < MAX_REMOTENET) {
+                        remotenet_addr[num_remotenet_addr].family = remote_family;
+                        remotenet_addr[num_remotenet_addr].port = remote_port;
+                        valid = 0;
+                        if (remote_family == AF_INET) {
+                            valid =
+                                inet_pton(remote_family, remote_addr,
+                                          &remotenet_addr[num_remotenet_addr].in_addr) > 0;
+                        } else if(remote_family == AF_INET6) {
+                            valid =
+                                inet_pton(remote_family, remote_addr,
+                                          &remotenet_addr[num_remotenet_addr].in6_addr) > 0;
+                        }
+                        if(!valid) {
+                            fprintf(stderr, "remotenet address error\n");
+                            exit(1);
+                        }
+                        if(remote_family == AF_INET && strchr(remote_netmask, '.')) {
+                            valid =
+                                inet_pton(remote_family, remote_netmask,
+                                          &remotenet_addr[num_remotenet_addr].in_mask) > 0;
+                        } else {
+                            valid = sscanf(remote_netmask, "%hu%c", &remote_prefix, &extra) == 1;
+                            if (valid) {
+                                if(remote_family == AF_INET && remote_prefix <= 32) {
+                                    remotenet_addr[num_remotenet_addr].in_mask.s_addr =
+                                        htonl(0xFFFFFFFFu << (32u - remote_prefix));
+                                } else if(remote_family == AF_INET6 && remote_prefix <= 128) {
+                                    remotenet_addr[num_remotenet_addr].in6_prefix =
+                                        remote_prefix;
+                                } else {
+                                    valid = 0;
+                                }
+                            }
+                        }
+                        if(!valid) {
+                            fprintf(stderr, "remotenet netmask error\n");
+                            exit(1);
+                        }
+                        ++num_remotenet_addr;
+                    } else {
+                        fprintf(stderr, "# of remotenet exceed %d.\n", MAX_REMOTENET);
+                    }
 				} else if(STR_STARTSWITH(buff, "chain_len")) {
 					char *pc;
 					int len;
@@ -639,7 +717,7 @@ HOOKFUNC(int, close_range, unsigned first, unsigned last, int flags) {
 	int protected_fds[] = {req_pipefd[0], req_pipefd[1], resp_pipefd[0], resp_pipefd[1]};
 	intsort(protected_fds, 4);
 	/* We are skipping protected_fds while calling true_close_range()
-	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop. 
+	 * If protected_fds cut the range into some sub-ranges, we close sub-ranges BEFORE cut point in the loop.
 	 * [first, cut1-1] , [cut1+1, cut2-1] , [cut2+1, cut3-1]
 	 * Finally, we delete the remaining sub-range, outside the loop. [cut3+1, tail]
 	 */
@@ -748,6 +826,31 @@ HOOKFUNC(int, connect, int sock, const struct sockaddr *addr, unsigned int len) 
 		PDEBUG("accessing localnet using true_connect\n");
 		return true_connect(sock, addr, len);
 	}
+
+    int remote_connect = (remote_dns_connect||num_remotenet_addr==0);
+    for(i = 0; i < num_remotenet_addr && !remote_connect; i++) {
+        if (remotenet_addr[i].port && remotenet_addr[i].port != port)
+            continue;
+        if (remotenet_addr[i].family != (v6 ? AF_INET6 : AF_INET))
+            continue;
+        if (v6) {
+            size_t prefix_bytes = remotenet_addr[i].in6_prefix / CHAR_BIT;
+            size_t prefix_bits = remotenet_addr[i].in6_prefix % CHAR_BIT;
+            if (prefix_bytes && memcmp(p_addr_in6->s6_addr, remotenet_addr[i].in6_addr.s6_addr, prefix_bytes) != 0)
+                continue;
+            if (prefix_bits && (p_addr_in6->s6_addr[prefix_bytes] ^ remotenet_addr[i].in6_addr.s6_addr[prefix_bytes]) >> (CHAR_BIT - prefix_bits))
+                continue;
+        } else {
+            if((p_addr_in->s_addr ^ remotenet_addr[i].in_addr.s_addr) & remotenet_addr[i].in_mask.s_addr)
+                continue;
+        }
+        remote_connect = 1;
+    }
+
+    if( !remote_connect ) {
+        PDEBUG("accessing non-remotenet using true_connect\n");
+        return true_connect(sock, addr, len);
+    }
 
 	flags = fcntl(sock, F_GETFL, 0);
 	if(flags & O_NONBLOCK)
