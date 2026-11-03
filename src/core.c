@@ -666,25 +666,30 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 				goto error;
 			break;
 
-		case STRICT_TYPE:
-			alive_count = calc_alive(pd, proxy_count);
-			offset = 0;
-			if(!(p1 = select_proxy(FIFOLY, pd, proxy_count, &offset))) {
+		case STRICT_TYPE: {
+			proxy_data strict_pd[2];
+			proxy_data *tmp;
+
+			if(!proxy_count) {
 				PDEBUG("select_proxy failed\n");
 				goto error_strict;
 			}
+			p1 = &strict_pd[0];
+			p2 = &strict_pd[1];
+			*p1 = pd[0];
 			if(SUCCESS != start_chain(&ns, p1, ST)) {
 				PDEBUG("start_chain failed\n");
 				goto error_strict;
 			}
-			while(offset < proxy_count) {
-				if(!(p2 = select_proxy(FIFOLY, pd, proxy_count, &offset)))
-					break;
+			for(offset = 1; offset < proxy_count; offset++) {
+				*p2 = pd[offset];
 				if(SUCCESS != chain_step(&ns, p1, p2)) {
 					PDEBUG("chain_step failed\n");
 					goto error_strict;
 				}
+				tmp = p1;
 				p1 = p2;
+				p2 = tmp;
 			}
 			//proxychains_write_log(TP);
 			p3->ip = target_ip;
@@ -692,6 +697,7 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 			if(SUCCESS != chain_step(&ns, p1, p3))
 				goto error;
 			break;
+		}
 
 		case RANDOM_TYPE:
 			alive_count = calc_alive(pd, proxy_count);
@@ -734,7 +740,8 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	error_strict:
 	PDEBUG("error\n");
 	
-	release_all(pd, proxy_count);
+	if(ct != STRICT_TYPE)
+		release_all(pd, proxy_count);
 	if(ns != -1)
 		close(ns);
 	errno = ETIMEDOUT;
