@@ -27,6 +27,7 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <poll.h>
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -431,8 +432,34 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 #define RT "Random chain"
 #define RRT "Round Robin chain"
 
+static int start_chain_unix(int *fd, proxy_data * pd, char *begin_mark) {
+	struct sockaddr_un addr = { .sun_family = AF_UNIX };
+
+	proxychains_write_log(LOG_PREFIX "%s " TP " unix:%s ", begin_mark, pd->unix_path);
+	pd->ps = PLAY_STATE;
+	*fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if(*fd == -1)
+		goto error;
+	strcpy(addr.sun_path, pd->unix_path);
+	if(timed_connect(*fd, (struct sockaddr *) &addr, sizeof(addr)))
+		goto error;
+	pd->ps = BUSY_STATE;
+	return SUCCESS;
+	error:
+	proxychains_write_log(TP " %s\n", strerror(errno));
+	pd->ps = DOWN_STATE;
+	if(*fd != -1) {
+		close(*fd);
+		*fd = -1;
+	}
+	return SOCKET_ERROR;
+}
+
 static int start_chain(int *fd, proxy_data * pd, char *begin_mark) {
 	int v6 = pd->ip.is_v6;
+
+	if(pd->unix_path)
+		return start_chain_unix(fd, pd, begin_mark);
 
 	*fd = socket(v6?PF_INET6:PF_INET, SOCK_STREAM, 0);
 	if(*fd == -1)

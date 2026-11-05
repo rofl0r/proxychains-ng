@@ -91,6 +91,7 @@ typedef struct {
 	proxy_state ps;
 	char user[256];
 	char pass[256];
+	char *unix_path; /* NULL, or path of the AF_UNIX socket of the first proxy */
 } proxy_data;
 
 int connect_proxy_chain (int sock, ip_type target_ip, unsigned short target_port,
@@ -102,6 +103,7 @@ void proxychains_write_log(char *str, ...);
 typedef int (*close_t)(int);
 typedef int (*close_range_t)(unsigned, unsigned, int);
 typedef int (*connect_t)(int, const struct sockaddr *, socklen_t);
+typedef int (*setsockopt_t)(int, int, int, const void *, socklen_t);
 typedef struct hostent* (*gethostbyname_t)(const char *);
 typedef void (*freeaddrinfo_t)(struct addrinfo *);
 typedef struct hostent *(*gethostbyaddr_t) (const void *, socklen_t, int);
