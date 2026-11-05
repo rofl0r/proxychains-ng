@@ -58,6 +58,7 @@ connect_t true___xnet_connect;
 close_t true_close;
 close_range_t true_close_range;
 connect_t true_connect;
+setsockopt_t true_setsockopt;
 gethostbyname_t true_gethostbyname;
 getaddrinfo_t true_getaddrinfo;
 freeaddrinfo_t true_freeaddrinfo;
@@ -69,6 +70,7 @@ int tcp_read_time_out;
 int tcp_connect_time_out;
 chain_type proxychains_ct;
 proxy_data proxychains_pd[MAX_CHAIN];
+static char pd0_unix_path[108]; /* sizeof(((struct sockaddr_un*)0)->sun_path) */
 unsigned int proxychains_proxy_count = 0;
 unsigned int proxychains_proxy_offset = 0;
 int proxychains_got_chain_data = 0;
@@ -334,6 +336,30 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 				pd[count].ps = PLAY_STATE;
 				port_n = 0;
 
+				/* type unix:/path/to/socket [user pass] */
+				if(sscanf(buff, "%s %s", type, host) == 2 && STR_STARTSWITH(host, "unix:")) {
+					char *path = host + sizeof("unix:") - 1;
+					sscanf(buff, "%*s %*s %255s %255s", pd[count].user, pd[count].pass);
+					/* the chain is built on the socket connected to the first proxy:
+					   an AF_UNIX proxy can not be reached through another proxy. */
+					if(count > 0) {
+						fprintf(stderr, "error: proxy unix:%s must be first in [ProxyList]\n", path);
+						exit(1);
+					}
+					if(*path != '/') {
+						fprintf(stderr, "error: unix socket path must be absolute: %s\n", path);
+						exit(1);
+					}
+					if(strlen(path) >= sizeof(pd0_unix_path)) {
+						fprintf(stderr, "error: unix socket path too long (max %zu chars): %s\n",
+							sizeof(pd0_unix_path) - 1, path);
+						exit(1);
+					}
+					strcpy(pd0_unix_path, path);
+					pd[count].unix_path = pd0_unix_path;
+					goto set_type;
+				}
+
 				int ret = sscanf(buff, "%s %s %d %s %s", type, host, &port_n, pd[count].user, pd[count].pass);
 				if(ret < 3 || ret == EOF) {
 					if(!proxy_from_string(buff, type, host, &port_n, pd[count].user, pd[count].pass)) {
@@ -365,6 +391,7 @@ inv_host:
 					}
 				}
 
+set_type:
 				if(!strcmp(type, "http")) {
 					pd[count].pt = HTTP_TYPE;
 				} else if(!strcmp(type, "raw")) {
@@ -376,7 +403,7 @@ inv_host:
 				} else
 					goto inv;
 
-				if(port_n)
+				if(port_n || pd[count].unix_path)
 					count++;
 			} else {
 				if(!strcmp(buff, "[ProxyList]")) {
@@ -565,6 +592,11 @@ inv_host:
 #endif
 	if(!count) {
 		fprintf(stderr, "error: no valid proxy found in config\n");
+		exit(1);
+	}
+	/* random_chain and round_robin_chain could put it in the middle of the chain */
+	if(pd[0].unix_path && count > 1 && (*ct == RANDOM_TYPE || *ct == ROUND_ROBIN_TYPE)) {
+		fprintf(stderr, "error: proxy unix:%s can not be used with random_chain or round_robin_chain\n", pd[0].unix_path);
 		exit(1);
 	}
 	*proxy_count = count;
@@ -902,6 +934,28 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	return true_sendto(sockfd, buf, len, flags, dest_addr, addrlen);
 }
 
+/* when the first proxy is an AF_UNIX socket, connect_proxy_chain() dup2()s
+   it over the application's TCP socket. TCP/IP level options do not apply
+   to it anymore: pretend they succeeded instead of failing the application. */
+HOOKFUNC(int, setsockopt, int sockfd, int level, int optname,
+	       const void *optval, socklen_t optlen) {
+	INIT();
+	PFUNC();
+	int ret = true_setsockopt(sockfd, level, optname, optval, optlen);
+	if(ret == -1 && (errno == EOPNOTSUPP || errno == ENOPROTOOPT) &&
+	   (level == IPPROTO_TCP || level == IPPROTO_IP || level == IPPROTO_IPV6)) {
+		struct sockaddr_storage ss;
+		socklen_t sslen = sizeof(ss);
+		int saved_errno = errno;
+		if(!getsockname(sockfd, (struct sockaddr *) &ss, &sslen) && ss.ss_family == AF_UNIX) {
+			PDEBUG("ignoring setsockopt(%d, %d) on AF_UNIX socket %d\n", level, optname, sockfd);
+			return 0;
+		}
+		errno = saved_errno;
+	}
+	return ret;
+}
+
 #ifdef MONTEREY_HOOKING
 #define SETUP_SYM(X) do { if (! true_ ## X ) true_ ## X = &X; } while(0)
 #define SETUP_SYM_OPTIONAL(X)
@@ -914,6 +968,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 static void setup_hooks(void) {
 	SETUP_SYM(connect);
 	SETUP_SYM(sendto);
+	SETUP_SYM(setsockopt);
 	SETUP_SYM(gethostbyname);
 	SETUP_SYM(getaddrinfo);
 	SETUP_SYM(freeaddrinfo);
@@ -935,6 +990,7 @@ static void setup_hooks(void) {
 
 DYLD_HOOK(connect);
 DYLD_HOOK(sendto);
+DYLD_HOOK(setsockopt);
 DYLD_HOOK(gethostbyname);
 DYLD_HOOK(getaddrinfo);
 DYLD_HOOK(freeaddrinfo);

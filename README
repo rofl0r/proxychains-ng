@@ -219,6 +219,18 @@ proxychains looks for config file in following order:
 
 ** usually /etc/proxychains.conf
 
+The first proxy of [ProxyList] may be reached through a unix domain socket
+instead of ip and port, e.g. the SOCKS proxy of an ssh tunnel bound to a
+socket only its owner can access:
+
+	$ ssh -N -o StreamLocalBindMask=0177 -D ~/.ssh/sock/socks.sock relay
+	[ProxyList]
+	socks5	unix:/home/user/.ssh/sock/socks.sock
+
+the path must be absolute and at most 107 characters long. such a proxy can
+only be the first one of the chain, and can not be combined with other proxies
+in random_chain or round_robin_chain mode.
+
 Usage Example:
 
 	$ proxychains telnet targethost.com
