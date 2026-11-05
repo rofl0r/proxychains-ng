@@ -306,6 +306,11 @@ static void get_chain_data(proxy_data * pd, unsigned int *proxy_count, chain_typ
 	tcp_connect_time_out = 10 * 1000;
 	*ct = DYNAMIC_TYPE;
 
+	if(getenv("PROXYCHAINS_PROXY")) {
+		proxychains_write_log(LOG_PREFIX "using -x proxy, no config file\n");
+		goto use_proxy_env;
+	}
+
 	env = get_config_path(getenv(PROXYCHAINS_CONF_FILE_ENV_VAR), buf, sizeof(buf));
 	if( ( file = fopen(env, "r") ) == NULL )
 	{
@@ -564,9 +569,41 @@ inv_host:
 	fclose(file);
 #endif
 	if(!count) {
+		if(getenv("PROXYCHAINS_PROXY"))
+			goto use_proxy_env;
 		fprintf(stderr, "error: no valid proxy found in config\n");
 		exit(1);
 	}
+	goto done;
+
+use_proxy_env:
+{
+	int port_n = 0;
+	char *proxy_env = getenv("PROXYCHAINS_PROXY");
+
+	if(!proxy_from_string(proxy_env, type, host, &port_n, pd[0].user, pd[0].pass)) {
+		fprintf(stderr, "error: invalid proxy specified in -x: %s\n", proxy_env);
+		exit(1);
+	}
+
+	pd[0].ip.is_v6 = !!strchr(host, ':');
+	pd[0].port = htons((unsigned short) port_n);
+	if(1 != inet_pton(pd[0].ip.is_v6 ? AF_INET6 : AF_INET, host, pd[0].ip.addr.v6)) {
+		fprintf(stderr, "error: proxy host must be a numeric ip: %s\n", host);
+		exit(1);
+	}
+
+	if(!strcmp(type, "http"))
+		pd[0].pt = HTTP_TYPE;
+	else if(!strcmp(type, "socks4"))
+		pd[0].pt = SOCKS4_TYPE;
+	else
+		pd[0].pt = SOCKS5_TYPE;
+
+	count = 1;
+}
+
+done:
 	*proxy_count = count;
 	proxychains_got_chain_data = 1;
 	PDEBUG("proxy_dns: %s\n", rdns_resolver_string(proxychains_resolver));
