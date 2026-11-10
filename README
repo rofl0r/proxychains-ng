@@ -1,6 +1,13 @@
 ProxyChains-NG ver 4.17 README
 =============================
 
+ *********** NOTICE ***********
+ 
+  ProxyChains-NG DOES NOT work with non-TCP (UDP types will not be routed. TCP will) packets like UDP which is used by commands/functions like `ping`.  
+  Do not open a ticket asking for support on related topic
+
+ *** END ***
+
   ProxyChains is a UNIX program, that hooks network-related libc functions
   in DYNAMICALLY LINKED programs via a preloaded DLL (dlsym(), LD_PRELOAD)
   and redirects the connections through SOCKS4a/5 or HTTP proxies.
