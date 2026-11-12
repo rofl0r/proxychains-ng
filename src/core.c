@@ -753,7 +753,11 @@ int connect_proxy_chain(int sock, ip_type target_ip,
 	}
 
 	proxychains_write_log(TP " OK\n");
+	/* dup2() resets FD_CLOEXEC of sock, keep what the app has set */
+	int fdflags = fcntl(sock, F_GETFD);
 	dup2(ns, sock);
+	if(fdflags != -1)
+		fcntl(sock, F_SETFD, fdflags);
 	close(ns);
 	return 0;
 	error:
