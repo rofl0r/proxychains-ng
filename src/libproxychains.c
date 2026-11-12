@@ -924,7 +924,7 @@ HOOKFUNC(ssize_t, sendto, int sockfd, const void *buf, size_t len, int flags,
 	INIT();
 	PFUNC();
 	if (flags & MSG_FASTOPEN) {
-		if (!connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
+		if (connect(sockfd, dest_addr, addrlen) && errno != EINPROGRESS) {
 			return -1;
 		}
 		dest_addr = NULL;
