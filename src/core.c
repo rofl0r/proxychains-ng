@@ -219,7 +219,7 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 
 	int len;
 	unsigned char buff[BUFF_SIZE];
-	char ip_buf[INET6_ADDRSTRLEN];
+	char ip_buf[INET6_ADDRSTRLEN + 2];
 	int v6 = ip.is_v6;
 	
 	switch (pt) {
@@ -229,10 +229,14 @@ static int tunnel_to(int sock, ip_type ip, unsigned short port, proxy_type pt, c
 		break;
 		case HTTP_TYPE:{
 			if(!dns_len) {
-				if(!inet_ntop(v6?AF_INET6:AF_INET,ip.addr.v6,ip_buf,sizeof ip_buf)) {
+				/* an ipv6 literal has to be put in brackets (RFC 3986) */
+				char *ip_str = ip_buf;
+				if(v6) *ip_str++ = '[';
+				if(!inet_ntop(v6?AF_INET6:AF_INET,ip.addr.v6,ip_str,INET6_ADDRSTRLEN)) {
 					proxychains_write_log(LOG_PREFIX "error: ip address conversion failed\n");
 					goto err;
 				}
+				if(v6) strcat(ip_str, "]");
 				dns_name = ip_buf;
 			}
 			#define HTTP_AUTH_MAX ((0xFF * 2) + 1 + 1) /* 2 * 0xff: username and pass, plus 1 for ':' and 1 for zero terminator. */
