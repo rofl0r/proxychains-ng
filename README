@@ -1,4 +1,4 @@
-ProxyChains-NG ver 4.17 README
+ProxyChains-NG ver 4.18 README
 =============================
 
   ProxyChains is a UNIX program, that hooks network-related libc functions
@@ -52,6 +52,17 @@ ProxyChains-NG ver 4.17 README
 
 Changelog:
 ----------
+Version 4.18
+- fix freeaddrinfo prototype
+- new --fat-binary-m2 configure option
+- fix solaris, netbsd build and netbsd runtime
+- fix getaddrinfo crash with node+hints=0
+- fix socks5 parsing on big endian
+- fix MT race in strict chain
+- support for unix domain sockets as first proxy
+- fix http connect for ipv6 targets
+- several minor correctness fixes
+
 Version 4.17
 - add hook for close_range function, fixing newer versions of openssh
 - fat-binary-m1 option for mac
